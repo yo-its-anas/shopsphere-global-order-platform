@@ -1,0 +1,1 @@
+"""ShopSphere service package."""

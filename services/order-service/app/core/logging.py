@@ -1,0 +1,52 @@
+"""Structured JSON logging configuration."""
+
+from __future__ import annotations
+
+import json
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+from app.core.request_context import correlation_id
+
+_LOG_RECORD_BUILTINS = frozenset(logging.makeLogRecord({}).__dict__)
+
+
+class JsonFormatter(logging.Formatter):
+    """Render one machine-readable JSON object per log record."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload: dict[str, Any] = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "correlation_id": correlation_id.get(),
+        }
+
+        for key, value in record.__dict__.items():
+            if key not in _LOG_RECORD_BUILTINS and key not in {"message", "asctime"}:
+                payload[key] = value
+
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+
+        return json.dumps(payload, default=str, separators=(",", ":"))
+
+
+def configure_logging(level_name: str) -> None:
+    """Configure application and Uvicorn loggers with the same JSON formatter."""
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+
+    level = getattr(logging, level_name)
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(level)
+
+    for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        logger = logging.getLogger(logger_name)
+        logger.handlers.clear()
+        logger.propagate = True

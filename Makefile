@@ -1,16 +1,40 @@
-.PHONY: help lint test build validate validate-shell validate-kubernetes doctor clean
+PYTHON ?= python3
+SERVICE_DIRS := \
+	services/customer-service \
+	services/catalogue-service \
+	services/order-service \
+	services/analytics-service \
+	services/api-gateway
+
+.PHONY: help format lint test build validate validate-shell validate-kubernetes doctor clean
 
 help: ## Show available foundation targets
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-lint: ## Placeholder for Ruff, Black, Bandit, Semgrep, and frontend lint checks
-	@echo "lint: placeholder; tooling will be wired in a later delivery day"
+format: ## Format and safely organize imports in every Python service
+	@set -e; for service in $(SERVICE_DIRS); do \
+		echo "== format: $$service =="; \
+		(cd "$$service" && $(PYTHON) -m ruff check --fix . && $(PYTHON) -m black --workers 1 .); \
+	done
 
-test: ## Placeholder for unit, integration, end-to-end, and performance tests
-	@echo "test: placeholder; test runners will be wired in a later delivery day"
+lint: ## Run Ruff, Black, and Bandit for every Python service
+	@set -e; for service in $(SERVICE_DIRS); do \
+		echo "== lint: $$service =="; \
+		(cd "$$service" && $(PYTHON) -m ruff check . && $(PYTHON) -m black --workers 1 --check . && $(PYTHON) -m bandit -q -r app); \
+	done
 
-build: ## Placeholder for reproducible application and container builds
-	@echo "build: placeholder; no artifacts were created"
+test: ## Run each service's independent Pytest suite
+	@set -e; for service in $(SERVICE_DIRS); do \
+		echo "== test: $$service =="; \
+		(cd "$$service" && $(PYTHON) -m pytest); \
+	done
+
+build: ## Build a Day 1 Docker image for every service
+	@set -e; for service in $(SERVICE_DIRS); do \
+		name="$${service##*/}"; \
+		echo "== build: $$name =="; \
+		docker build --tag "shopsphere/$$name:day1" "$$service"; \
+	done
 
 validate: validate-shell validate-kubernetes ## Run implemented static foundation validation
 	@echo "validation: implemented Day 1 shell and Kubernetes checks passed"
