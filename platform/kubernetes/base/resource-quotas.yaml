@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: shopsphere-apps-budget
+  namespace: shopsphere-apps
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    pods: "25"
+    services: "15"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+    configmaps: "30"
+    secrets: "30"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: shopsphere-data-budget
+  namespace: shopsphere-data
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 6Gi
+    limits.cpu: "4"
+    limits.memory: 10Gi
+    requests.storage: 180Gi
+    persistentvolumeclaims: "10"
+    pods: "15"
+    services: "15"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+    configmaps: "20"
+    secrets: "30"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: shopsphere-platform-budget
+  namespace: shopsphere-platform
+spec:
+  hard:
+    requests.cpu: 750m
+    requests.memory: 1536Mi
+    limits.cpu: 1500m
+    limits.memory: 3Gi
+    pods: "15"
+    services: "10"
+    services.loadbalancers: "0"
+    services.nodeports: "2"
+    configmaps: "25"
+    secrets: "25"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: shopsphere-monitoring-budget
+  namespace: shopsphere-monitoring
+spec:
+  hard:
+    requests.cpu: 750m
+    requests.memory: 2Gi
+    limits.cpu: 1500m
+    limits.memory: 4Gi
+    requests.storage: 40Gi
+    persistentvolumeclaims: "8"
+    pods: "15"
+    services: "12"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+    configmaps: "30"
+    secrets: "20"
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: shopsphere-security-budget
+  namespace: shopsphere-security
+spec:
+  hard:
+    requests.cpu: 500m
+    requests.memory: 1Gi
+    limits.cpu: "1"
+    limits.memory: 2Gi
+    requests.storage: 10Gi
+    persistentvolumeclaims: "4"
+    pods: "10"
+    services: "8"
+    services.loadbalancers: "0"
+    services.nodeports: "0"
+    configmaps: "20"
+    secrets: "20"

@@ -1,0 +1,24 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+
+# The cluster name is supplied by create-cluster.sh as shopsphere-poc because the
+# kind configuration schema does not carry a cluster-name field.
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true,shopsphere.io/environment=poc"
+    extraPortMappings:
+      # Reserved for a future ingress controller. No application is deployed yet.
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+
+# There is intentionally one control-plane node and no worker node. Multiple pod
+# replicas remain on one physical GCP VM and do not provide host-level availability.

@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# This overlay represents one kind node on one physical VM. It is not HA.
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      shopsphere.io/environment: poc

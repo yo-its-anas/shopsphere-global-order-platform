@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shopsphere-apps
+  labels:
+    app.kubernetes.io/part-of: shopsphere
+    shopsphere.io/tier: applications
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shopsphere-data
+  labels:
+    app.kubernetes.io/part-of: shopsphere
+    shopsphere.io/tier: data
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shopsphere-platform
+  labels:
+    app.kubernetes.io/part-of: shopsphere
+    shopsphere.io/tier: platform
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shopsphere-monitoring
+  labels:
+    app.kubernetes.io/part-of: shopsphere
+    shopsphere.io/tier: monitoring
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shopsphere-security
+  labels:
+    app.kubernetes.io/part-of: shopsphere
+    shopsphere.io/tier: security
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
