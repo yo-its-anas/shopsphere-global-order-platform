@@ -1,0 +1,104 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+.tox/
+
+# Node / React
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/cache/
+.parcel-cache/
+.next/
+frontend/dist/
+frontend/build/
+coverage/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+*.tfvars
+*.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+secrets/
+credentials/
+kubeconfig*
+!kubeconfig.example
+
+# Kubernetes and Helm temporary/generated files
+*.kubeconfig
+*.rendered.yaml
+*.generated.yaml
+charts/**/charts/
+charts/**/tmpcharts/
+
+# Test and quality artefacts
+junit.xml
+test-results/
+allure-results/
+playwright-report/
+test-results.xml
+.hypothesis/
+.bandit
+.semgrep-cache/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# OS and temporary files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+*.bak
+*.log
+.cache/
+
+# Generated documentation and diagrams
+docs/**/generated/
+*.drawio.bkp
+
+# Vendor dependencies
+vendor/

@@ -1,0 +1,7 @@
+# Replace placeholder teams when repository governance is established.
+* @shopsphere-platform-owners
+/services/ @shopsphere-backend-owners
+/frontend/ @shopsphere-frontend-owners
+/infrastructure/ @shopsphere-platform-owners
+/platform/ @shopsphere-platform-owners
+/docs/ @shopsphere-architecture-owners
