@@ -27,5 +27,5 @@ Scope: repository foundation only
 
 - [ ] Replace placeholder CODEOWNERS handles with real repository principals.
 - [ ] Review naming and boundaries with the project supervisor.
-- [ ] Record the first ADR when an architecture decision is approved.
+- [x] Record approved and proposed architecture decisions as indexed ADRs.
 - [ ] Capture the Day 1 commit identifier after review and commit.
