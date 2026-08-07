@@ -1,0 +1,35 @@
+# Copy to terraform.tfvars (ignored by Git), then replace every required placeholder.
+# Never commit project IDs, IP addresses, credentials, tokens, or secrets.
+
+gcp_project_id = "replace-with-existing-gcp-project-id"
+gcp_region     = "replace-with-existing-resource-region"
+gcp_zone       = "replace-with-existing-vm-zone"
+
+# Required: use the administrator's trusted public IPv4 address as a /32 or a
+# narrowly controlled corporate/VPN CIDR. The validation rejects 0.0.0.0/0.
+ssh_source_cidr = "replace-with-trusted-ipv4-cidr"
+
+# These defaults are illustrative. Replace them with the exact names and subnet
+# CIDR of existing resources before import; never guess resource identity.
+network_name  = "replace-with-existing-network-name"
+subnet_name   = "replace-with-existing-subnet-name"
+subnet_cidr   = "replace-with-existing-private-subnet-cidr"
+instance_name = "replace-with-existing-vm-name"
+static_ip_name = "replace-with-existing-static-ip-name"
+
+machine_type      = "n2-standard-8"
+boot_disk_size_gb = 300
+boot_disk_type    = "pd-balanced"
+
+# Public web ingress is intentionally off. Enable it only after selecting reviewed
+# sources and preparing the ingress controller. 0.0.0.0/0 is never implicit.
+enable_public_web_ingress = false
+web_source_cidrs          = []
+
+# Optional: reference an existing least-privilege service account. Terraform does
+# not create a service account or any service-account keys in this baseline.
+vm_service_account_email = null
+
+additional_labels = {
+  owner = "replace-with-non-sensitive-owner-label"
+}

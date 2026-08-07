@@ -1,0 +1,9 @@
+# Example only. Copy to backend.tf after an approved state-storage design exists.
+# Backend blocks cannot use input variables. Replace placeholders manually and do
+# not commit project identifiers or sensitive state-storage details.
+terraform {
+  backend "gcs" {
+    bucket = "replace-with-approved-existing-state-bucket"
+    prefix = "shopsphere/poc"
+  }
+}
