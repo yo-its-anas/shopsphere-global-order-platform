@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 DEFAULT_SERVICE_NAME = "api-gateway"
 DEFAULT_SERVICE_VERSION = "0.1.0"
@@ -18,6 +19,8 @@ class Settings:
     service_version: str
     environment: str
     log_level: str
+    customer_service_url: str = "http://customer-service:8000"
+    customer_service_timeout_seconds: float = 5.0
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -27,6 +30,15 @@ class Settings:
         service_version = os.getenv("SERVICE_VERSION", DEFAULT_SERVICE_VERSION).strip()
         environment = os.getenv("APP_ENV", "development").strip()
         log_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+        customer_service_url = (
+            os.getenv("CUSTOMER_SERVICE_URL", "http://customer-service:8000").strip().rstrip("/")
+        )
+        try:
+            customer_service_timeout_seconds = float(
+                os.getenv("CUSTOMER_SERVICE_TIMEOUT_SECONDS", "5")
+            )
+        except ValueError as exc:
+            raise ValueError("CUSTOMER_SERVICE_TIMEOUT_SECONDS must be numeric") from exc
 
         if not service_name:
             raise ValueError("SERVICE_NAME must not be empty")
@@ -36,10 +48,29 @@ class Settings:
             raise ValueError("APP_ENV must not be empty")
         if log_level not in _VALID_LOG_LEVELS:
             raise ValueError(f"LOG_LEVEL must be one of {sorted(_VALID_LOG_LEVELS)}")
+        parsed_customer_url = urlsplit(customer_service_url)
+        if (
+            parsed_customer_url.scheme not in {"http", "https"}
+            or not parsed_customer_url.hostname
+            or parsed_customer_url.username
+            or parsed_customer_url.password
+            or parsed_customer_url.query
+            or parsed_customer_url.fragment
+            or parsed_customer_url.path not in {"", "/"}
+        ):
+            raise ValueError("CUSTOMER_SERVICE_URL must be an HTTP(S) origin without credentials")
+        try:
+            _ = parsed_customer_url.port
+        except ValueError as exc:
+            raise ValueError("CUSTOMER_SERVICE_URL contains an invalid port") from exc
+        if customer_service_timeout_seconds <= 0 or customer_service_timeout_seconds > 30:
+            raise ValueError("CUSTOMER_SERVICE_TIMEOUT_SECONDS must be between 0 and 30")
 
         return cls(
             service_name=service_name,
             service_version=service_version,
             environment=environment,
             log_level=log_level,
+            customer_service_url=customer_service_url,
+            customer_service_timeout_seconds=customer_service_timeout_seconds,
         )

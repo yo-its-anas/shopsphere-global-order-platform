@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class HealthResponse(BaseModel):
-    """Dependency-free health status."""
+    """Non-sensitive process or dependency health status."""
 
     model_config = ConfigDict(extra="forbid")
 

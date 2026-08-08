@@ -2,11 +2,11 @@
 
 ## Status
 
-Proposed — no FastAPI application, route, or OpenAPI specification exists yet.
+Accepted — FastAPI service applications, versioned routes, generated OpenAPI documents, and the customer capability gateway mapping are implemented. Wider domain routing and formal API lifecycle governance remain Planned.
 
 ## Context
 
-Synchronous module interactions and frontend journeys need clear, discoverable contracts. Python is mandated, and the short delivery period benefits from schema validation and generated API descriptions.
+Synchronous module interactions and frontend journeys need clear, discoverable contracts. Python is mandated, and typed schema validation with generated API descriptions supports consistent service ownership.
 
 ## Decision
 
@@ -29,7 +29,7 @@ Validate all inputs, constrain payloads, avoid sensitive error detail, enforce a
 
 ## PoC limitations
 
-Versioning will demonstrate contract discipline but not a mature multi-version support policy. There are currently no routes or contract tests.
+Versioning demonstrates contract discipline but not a mature multi-version support policy. The gateway forwards fixed customer paths and preserves correlation and bearer headers, while customer-service remains the authoritative JWT and domain authorization boundary. Gateway-side JWT enforcement, quotas, circuit breaking, deployed contract tests, and other domain mappings remain Planned.
 
 ## Production evolution
 
