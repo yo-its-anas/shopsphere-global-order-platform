@@ -1,4 +1,6 @@
 PYTHON ?= python3
+KUBE_CONTEXT ?= kind-shopsphere-poc
+POSTGRESQL_OVERLAY := platform/kubernetes/overlays/poc/postgresql
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -6,7 +8,8 @@ SERVICE_DIRS := \
 	services/analytics-service \
 	services/api-gateway
 
-.PHONY: help format lint test build validate validate-shell validate-kubernetes doctor clean
+.PHONY: help format lint test build validate validate-shell validate-kubernetes \
+	validate-postgresql postgresql-secret postgresql-apply postgresql-status doctor clean
 
 help: ## Show available foundation targets
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -36,7 +39,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -48,6 +51,20 @@ validate-kubernetes: ## Validate the kind shape and render the PoC Kustomize ove
 	@test "$$(grep -c '^[[:space:]]*- role:' platform/kind/cluster-config.yaml)" -eq 1
 	@grep -q '^[[:space:]]*- role: control-plane$$' platform/kind/cluster-config.yaml
 	@kubectl kustomize platform/kubernetes/overlays/poc >/dev/null
+
+validate-postgresql: ## Validate PostgreSQL manifests without changing the cluster
+	@./scripts/validate-postgresql-manifests.sh
+
+postgresql-secret: ## Create the PostgreSQL Secret interactively; existing Secrets are preserved
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-postgresql-secret.sh
+
+postgresql-apply: validate-postgresql ## Apply the PoC PostgreSQL component; requires its Secret
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get secret shopsphere-postgresql-credentials >/dev/null 2>&1 || { \
+		echo "Create shopsphere-postgresql-credentials first with 'make postgresql-secret'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(POSTGRESQL_OVERLAY)"
+
+postgresql-status: ## Run read-only PostgreSQL workload, service, PVC, and database checks
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-postgresql.sh
 
 doctor: ## Run non-destructive host and tool checks
 	@status=0; \

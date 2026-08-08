@@ -12,3 +12,9 @@ Contains small, reviewed automation entry points for repeatable local and CI tas
 - `capture-tool-versions.sh` writes sanitized version evidence to `docs/evidence/tool-versions.md`.
 
 Run all checks with `make doctor`. A non-zero result means one or more prerequisites need attention; scripts never install packages or modify host services.
+
+## PostgreSQL operations
+
+- `validate-postgresql-manifests.sh` renders and checks the PoC PostgreSQL manifests without changing the cluster.
+- `check-postgresql.sh` performs read-only checks for workload readiness, ClusterIP-only networking, bound persistence, and the required logical database names.
+- `create-postgresql-secret.sh` is an explicit operational helper. It creates the Kubernetes Secret directly from hidden prompts, or generates strong values only when `--generate` is supplied. It never prints credentials and preserves an existing Secret.
