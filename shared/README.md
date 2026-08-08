@@ -4,7 +4,7 @@ Contains deliberately small, versioned cross-service assets such as API/event sc
 
 ## Service foundation conventions
 
-All ShopSphere FastAPI services follow these Day 1 conventions:
+All ShopSphere FastAPI services follow these platform-foundation conventions:
 
 - expose unversioned operational probes at `GET /health/live` and `GET /health/ready`;
 - expose non-sensitive identity metadata at `GET /api/v1/info`;

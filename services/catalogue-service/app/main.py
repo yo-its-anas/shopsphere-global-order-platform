@@ -45,7 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="ShopSphere Catalogue Service",
         summary="Product catalogue and inventory boundary skeleton. Product, pricing, stock, and cache behavior remain future work.",
         description=(
-            "Day 1 foundation API only. No database, cache, message broker, "
+            "Foundation API only. No database, cache, message broker, "
             "identity provider, authentication, or business workflow is connected."
         ),
         version=resolved_settings.service_version,

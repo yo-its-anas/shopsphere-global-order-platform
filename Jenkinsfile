@@ -331,13 +331,13 @@ make validate-kubernetes
             )
         }
         success {
-            echo 'Day 1 validation completed. No deployment was attempted.'
+            echo 'Foundation validation completed. No deployment was attempted.'
         }
     }
 }
 
 /*
- * PLANNED FOR DAY 5 — intentionally not executable in this foundation:
+ * PLANNED DEVSECOPS EXPANSION — intentionally not executable in this foundation:
  *
  * Security gates:
  *   - Bandit Python security scanning

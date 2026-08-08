@@ -2,11 +2,11 @@
 
 ## Status
 
-Proposed — service boundaries exist as Day 1 directories, but no deployable services or boundary tests exist yet.
+Proposed — independently buildable service skeletons exist, but domain behavior and boundary integration tests are not implemented.
 
 ## Context
 
-ShopSphere must demonstrate five enterprise modules with distinct responsibilities while remaining achievable in seven days. Customer, catalogue, order, analytics, and gateway capabilities change for different reasons and require clear ownership.
+ShopSphere must demonstrate five enterprise modules with distinct responsibilities while remaining achievable within the capstone scope. Customer, catalogue, order, analytics, and gateway capabilities change for different reasons and require clear ownership.
 
 ## Decision
 

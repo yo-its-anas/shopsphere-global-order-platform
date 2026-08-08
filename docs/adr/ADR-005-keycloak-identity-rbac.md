@@ -28,7 +28,7 @@ Use TLS, secure redirect URIs, short-lived tokens, protected administrative acce
 
 ## PoC limitations
 
-A single Keycloak instance would be a single point of failure. Federation, MFA, SMTP, hardened TLS, rotation automation, and enterprise lifecycle integration may be demonstrated only partially. None is implemented on Day 1.
+A single Keycloak instance would be a single point of failure. Federation, MFA, SMTP, hardened TLS, rotation automation, and enterprise lifecycle integration may be demonstrated only partially. These capabilities are not implemented in the current PoC baseline.
 
 ## Production evolution
 

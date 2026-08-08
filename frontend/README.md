@@ -1,6 +1,6 @@
 # ShopSphere Enterprise Frontend
 
-React and TypeScript presentation foundation for the ShopSphere Global Enterprise Order Management Platform. This Day 1 frontend uses fictional development fixtures only. It is not authenticated and does not connect to live backend, identity, or telemetry services.
+React and TypeScript presentation foundation for the ShopSphere Global Enterprise Order Management Platform. This frontend uses fictional development fixtures only. It is not authenticated and does not connect to live backend, identity, or telemetry services.
 
 ## Stitch design provenance
 
@@ -75,8 +75,8 @@ As of 2026-08-07, `npm audit` reports the React Router RSC server-action advisor
 ## Container build
 
 ```bash
-docker build -t shopsphere/frontend:day1 .
-docker run --rm -p 8080:8080 shopsphere/frontend:day1
+docker build -t shopsphere/frontend:foundation .
+docker run --rm -p 8080:8080 shopsphere/frontend:foundation
 ```
 
 The multi-stage build compiles static assets with Node and serves them through unprivileged Nginx as UID/GID 101 on port 8080. The Nginx configuration includes SPA route fallback and `/health`; runtime API configuration injection is not implemented yet.

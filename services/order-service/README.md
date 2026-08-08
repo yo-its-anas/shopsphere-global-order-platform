@@ -1,6 +1,6 @@
 # Order Service
 
-Day 1 FastAPI skeleton for the planned order capture, validation, lifecycle, orchestration, and domain-event boundary. No order business behavior, persistence, Kafka integration, or authentication is implemented.
+FastAPI foundation for the planned order capture, validation, lifecycle, orchestration, and domain-event boundary. No order business behavior, persistence, Kafka integration, or authentication is implemented.
 
 ## Local development
 

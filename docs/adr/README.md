@@ -13,6 +13,6 @@ Architecture Decision Records (ADRs) capture significant choices, their context,
 | [ADR-005](ADR-005-keycloak-identity-rbac.md) | Keycloak for identity and RBAC | Proposed |
 | [ADR-006](ADR-006-postgresql-redis-data-platform.md) | PostgreSQL for transactions and Redis for caching | Proposed |
 | [ADR-007](ADR-007-kafka-domain-events.md) | Kafka for asynchronous domain events | Proposed |
-| [ADR-008](ADR-008-monorepo-seven-day-capstone.md) | Monorepo for the seven-day capstone | Accepted |
+| [ADR-008](ADR-008-monorepo-capstone.md) | Monorepo for the enterprise capstone | Accepted |
 | [ADR-009](ADR-009-jenkins-cicd-devsecops.md) | Jenkins for CI/CD and DevSecOps orchestration | Proposed |
 | [ADR-010](ADR-010-utc-timestamps-json-logs.md) | UTC timestamps and structured JSON logs | Proposed |

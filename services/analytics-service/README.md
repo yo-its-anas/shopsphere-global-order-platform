@@ -1,6 +1,6 @@
 # Analytics Service
 
-Day 1 FastAPI skeleton for the planned reporting views and executive operational insights boundary. No analytics business behavior, Kafka consumption, persistence, dashboard implementation, or authentication is implemented.
+FastAPI foundation for the planned reporting views and executive operational insights boundary. No analytics business behavior, Kafka consumption, persistence, dashboard implementation, or authentication is implemented.
 
 ## Local development
 

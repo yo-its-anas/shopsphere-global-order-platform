@@ -28,7 +28,7 @@ The VM must use restricted firewall rules, patched images, least-privilege IAM, 
 
 ## PoC limitations
 
-No high availability, multi-zone resilience, managed control plane, realistic autoscaling, or node-failure recovery is provided. At Day 1, even the proposed cluster configuration is not present.
+No high availability, multi-zone resilience, managed control plane, realistic autoscaling, or node-failure recovery is provided. The cluster configuration exists, but deployed workload behavior and node-failure recovery have not been evidenced.
 
 ## Production evolution
 

@@ -1,4 +1,4 @@
-"""Tests for the complete Day 1 endpoint surface."""
+"""Tests for the complete foundation endpoint surface."""
 
 from fastapi.testclient import TestClient
 

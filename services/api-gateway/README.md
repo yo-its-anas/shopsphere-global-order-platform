@@ -1,6 +1,6 @@
 # API Gateway
 
-Day 1 FastAPI gateway placeholder. It does not proxy requests, authenticate users, authorize roles, connect to Keycloak, or implement any customer, catalogue, order, or analytics domain behavior.
+FastAPI gateway foundation. It does not proxy requests, authenticate users, authorize roles, connect to Keycloak, or implement any customer, catalogue, order, or analytics domain behavior.
 
 ## Local development
 
