@@ -33,6 +33,28 @@ class AccountStatusReason(str, Enum):
     OTHER = "other"
 
 
+class ActivityCategory(str, Enum):
+    """Stable categories presented independently of source payload formats."""
+
+    CUSTOMER_DOMAIN = "customer_domain"
+    AUTHENTICATION = "authentication"
+    IDENTITY_ADMINISTRATION = "identity_administration"
+
+
+class ActivitySource(str, Enum):
+    """Systems of record contributing to the customer activity view."""
+
+    CUSTOMER_SERVICE = "customer_service"
+    KEYCLOAK = "keycloak"
+
+
+class ActivityResult(str, Enum):
+    """Safe, source-neutral activity outcomes."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+
+
 @dataclass(slots=True)
 class CustomerProfile:
     """Customer-owned business profile linked to one external identity."""
@@ -81,3 +103,15 @@ class CustomerAuditEvent:
     entity_id: UUID | None = None
     id: UUID = field(default_factory=uuid4)
     occurred_at: datetime = field(default_factory=utc_now)
+
+
+@dataclass(frozen=True, slots=True)
+class CustomerActivity:
+    """Safe normalized projection; source records retain source-of-truth ownership."""
+
+    timestamp: datetime
+    category: ActivityCategory
+    action: str
+    source: ActivitySource
+    result: ActivityResult
+    context: dict[str, Any] = field(default_factory=dict)

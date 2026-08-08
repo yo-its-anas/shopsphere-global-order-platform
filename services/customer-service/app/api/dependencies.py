@@ -43,4 +43,4 @@ async def get_customer_service(request: Request) -> CustomerAccountService:
     factory = request.app.state.unit_of_work_factory
     if factory is None:
         raise DependencyUnavailableError
-    return CustomerAccountService(factory)
+    return CustomerAccountService(factory, request.app.state.identity_activity_provider)

@@ -8,11 +8,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.dependencies import get_customer_service, require_roles
-from app.api.v1.customers import _audit_response, _profile_response
+from app.api.v1.customers import _activity_response, _audit_response, _profile_response
 from app.application.customer_accounts import CustomerAccountService
 from app.core.security import Principal, Role
 from app.schemas.customer import (
     AccountStatusUpdate,
+    ActivityListResponse,
     AuditEventListResponse,
     ProfileListResponse,
     ProfileResponse,
@@ -57,10 +58,30 @@ async def get_profile(
 
 @router.get(
     "/{customer_id}/activity",
-    response_model=AuditEventListResponse,
-    summary="Retrieve customer-domain activity for authorized support",
+    response_model=ActivityListResponse,
+    summary="Retrieve normalized customer activity for authorized support or operations",
 )
 async def list_activity(
+    customer_id: UUID,
+    _: SupportActor,
+    service: CustomerService,
+    offset: Annotated[int, Query(ge=0, le=1_000)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> ActivityListResponse:
+    events = await service.list_customer_activity(customer_id, offset, limit)
+    return ActivityListResponse(
+        items=[_activity_response(item) for item in events],
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/{customer_id}/audit-history",
+    response_model=AuditEventListResponse,
+    summary="Retrieve customer-domain audit history for authorized support or operations",
+)
+async def list_audit_history(
     customer_id: UUID,
     _: SupportActor,
     service: CustomerService,

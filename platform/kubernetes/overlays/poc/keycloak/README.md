@@ -20,6 +20,8 @@ These are identity roles, not a substitute for customer-service ownership checks
 
 `shopsphere-service-integration` is a disabled-by-default-privilege confidential service account for future controlled machine integration. Keycloak generates its secret inside the realm database during import; no secret appears in Git. It has no application roles or broad scopes until a reviewed integration requires them.
 
+`shopsphere-customer-activity-reader` is a separate confidential service account used only by customer-service's identity-activity adapter. Interactive and direct-access grants are disabled. `make keycloak-configure` grants only `realm-management/view-events`, reads the Keycloak-generated client credential without displaying it, and reconciles it into `shopsphere-apps/shopsphere-customer-activity-keycloak`. It does not receive `manage-events`, `view-users`, or `realm-admin`.
+
 React initiates login with Authorization Code Flow and S256 PKCE, retains tokens in memory, sends the access token through the API gateway, refreshes only within the configured session, and uses the OpenID Connect logout endpoint. Frontend role checks affect presentation only; server authorization remains authoritative.
 
 ## Registration and passwords
@@ -30,7 +32,9 @@ The password policy requires length, upper- and lower-case characters, a digit, 
 
 ## Sessions, events, and audit
 
-Access tokens are short-lived, refresh-token rotation is enabled with reuse rejected, and session lifetimes are bounded. User authentication events and administrative events are persisted in the Keycloak database with finite retention. Event details and logs must not contain credentials or raw tokens. Customer-domain audit history remains owned by customer-service as defined in ADR-005.
+Access tokens are short-lived, refresh-token rotation is enabled with reuse rejected, and session lifetimes are bounded. Selected user authentication events and administrative events are persisted in the Keycloak database for seven days; administrative representation details are disabled. Customer-service reads selected events through the dedicated activity reader and normalizes them without exposing IP addresses, sessions, tokens, credentials, administrator identities, or raw event details. Customer-domain audit history remains owned by customer-service as defined in ADR-005.
+
+This pull-based PoC introduces an availability dependency on Keycloak and permits the customer-service workload to read retained realm events. The credential must be mounted only into customer-service, rotated when exposure is suspected, and protected with network policy and access monitoring. Production should prefer a durable, allow-listed identity-event export with privacy-governed retention rather than synchronous Admin API reads.
 
 ## Credentials and deployment
 
@@ -66,7 +70,7 @@ kubectl --context kind-shopsphere-poc -n shopsphere-platform port-forward --addr
 
 The Service is ClusterIP-only and no Ingress is created. A future ingress must publish required realm endpoints while denying public access to `/admin` and the management port. NetworkPolicy enforcement depends on the installed cluster network plugin.
 
-Startup import creates the realm only when it does not already exist. Existing realm state is intentionally preserved on pod restart. `make keycloak-configure` idempotently reconciles the authoritative ShopSphere client-policy profile and policy after the realm exists. Other configuration changes for an established realm require a reviewed migration or controlled administrative automation; replacing live realm state automatically could delete users or credentials.
+Startup import creates the realm only when it does not already exist. Existing realm state is intentionally preserved on pod restart. `make keycloak-configure` idempotently reconciles the authoritative ShopSphere client-policy profile, policy, dedicated activity-reader client, least-privilege role, and runtime Kubernetes Secret after the realm exists. Other configuration changes for an established realm require a reviewed migration or controlled administrative automation; replacing live realm state automatically could delete users or credentials.
 
 ## PoC limitations and production evolution
 

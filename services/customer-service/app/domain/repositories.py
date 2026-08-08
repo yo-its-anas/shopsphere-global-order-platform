@@ -6,7 +6,15 @@ from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
-from app.domain.models import CustomerAddress, CustomerAuditEvent, CustomerProfile
+from app.domain.models import CustomerActivity, CustomerAddress, CustomerAuditEvent, CustomerProfile
+
+
+class IdentityActivityProvider(Protocol):
+    """Source-neutral identity activity boundary implemented by the Keycloak adapter."""
+
+    async def list_activity(
+        self, identity_provider_subject: str, offset: int, limit: int
+    ) -> list[CustomerActivity]: ...
 
 
 class CustomerRepository(Protocol):

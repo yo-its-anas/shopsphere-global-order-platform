@@ -20,8 +20,9 @@ Customer self-service requires the `customer` role and resolves ownership only f
 - `PATCH` and `DELETE /api/v1/customers/me/addresses/{address_id}`
 - `PUT /api/v1/customers/me/addresses/{address_id}/default`
 - `GET /api/v1/customers/me/activity`
+- `GET /api/v1/customers/me/audit-history`
 
-Support and operations routes are under `/api/v1/admin/customers`. The `support` role can list and view profiles and domain activity but cannot modify accounts. The `operations_admin` role has the same read access and may change account status through `PATCH /api/v1/admin/customers/{customer_id}/status` using a governed reason code.
+Support and operations routes are under `/api/v1/admin/customers`. The `support` role can list and view profiles, normalized activity, and domain audit history but cannot modify accounts. The `operations_admin` role has the same read access and may change account status through `PATCH /api/v1/admin/customers/{customer_id}/status` using a governed reason code.
 
 ## Security model
 
@@ -33,6 +34,8 @@ After successful Keycloak authentication, clients call `PUT /api/v1/customers/me
 
 Domain mutations and their audit events commit in one transaction. Audit metadata is server-created and allow-listed; it contains field names, status transitions, and governed reason codes rather than arbitrary request content. PostgreSQL migration enforcement rejects updates and deletes against audit rows.
 
+`/activity` merges customer-domain events with selected real Keycloak user and identity-administration events through a source-neutral provider. Responses expose UTC time, stable category/action/source/result values, and allow-listed context only. Raw Keycloak payloads, IP addresses, session identifiers, tokens, credentials, administrator details, and client secrets are excluded. `/audit-history` exposes the independently owned customer-domain record. A Keycloak outage returns a safe `503` for the merged view without fabricating identity events.
+
 ## Configuration
 
 Copy `.env.example` only as a reference and inject actual values through the runtime secret mechanism. Required deployed settings are:
@@ -40,7 +43,9 @@ Copy `.env.example` only as a reference and inject actual values through the run
 - `DATABASE_URL` for `customer_db` using the `customer_app` credential;
 - `KEYCLOAK_ISSUER` for the `shopsphere` realm;
 - `KEYCLOAK_AUDIENCE=shopsphere-api`; and
-- optionally `KEYCLOAK_JWKS_URL` when internal discovery differs from the issuer URL.
+- optionally `KEYCLOAK_JWKS_URL` when internal discovery differs from the issuer URL;
+- `KEYCLOAK_ADMIN_URL` and `KEYCLOAK_ACTIVITY_REALM` for the internal Admin API; and
+- `KEYCLOAK_ACTIVITY_CLIENT_ID` and `KEYCLOAK_ACTIVITY_CLIENT_SECRET`, injected from the dedicated namespace-scoped Kubernetes Secret.
 
 The example contains placeholders only. Never commit a populated environment file.
 
@@ -61,4 +66,4 @@ Tests use SQLite by default and can use isolated PostgreSQL by setting `TEST_DAT
 
 ## Current boundary
 
-Profile, address, account-status, service-side JWT validation/RBAC, ownership enforcement, and domain-audit behavior are implemented. React integration, API-gateway routing, deployment manifests for this workload, Keycloak-to-profile lifecycle automation, Keycloak authentication-event projection, production rate limiting, and end-to-end browser journeys remain planned. This capability is PoC-scoped and is not a claim of production availability.
+Profile, address, account-status, service-side JWT validation/RBAC, ownership enforcement, domain-audit behavior, and normalized domain-plus-Keycloak activity retrieval are implemented. React integration, API-gateway routing, deployment manifests for this workload, Keycloak-to-profile lifecycle automation, durable event export, production rate limiting, and end-to-end browser journeys remain planned. This capability is PoC-scoped and is not a claim of production availability.

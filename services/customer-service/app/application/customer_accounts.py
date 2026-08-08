@@ -8,17 +8,26 @@ from dataclasses import replace
 from typing import Any
 from uuid import UUID
 
-from app.core.errors import ConflictError, InvalidIdentityClaimsError, ResourceNotFoundError
+from app.core.errors import (
+    ConflictError,
+    DependencyUnavailableError,
+    InvalidIdentityClaimsError,
+    ResourceNotFoundError,
+)
 from app.core.security import Principal
 from app.domain.models import (
     AccountStatusReason,
+    ActivityCategory,
+    ActivityResult,
+    ActivitySource,
+    CustomerActivity,
     CustomerAddress,
     CustomerAuditEvent,
     CustomerProfile,
     CustomerStatus,
     utc_now,
 )
-from app.domain.repositories import UnitOfWork
+from app.domain.repositories import IdentityActivityProvider, UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
 _IDENTITY_EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
@@ -27,8 +36,13 @@ _IDENTITY_EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 class CustomerAccountService:
     """Application policy with transactionally consistent domain auditing."""
 
-    def __init__(self, unit_of_work_factory: UnitOfWorkFactory) -> None:
+    def __init__(
+        self,
+        unit_of_work_factory: UnitOfWorkFactory,
+        identity_activity_provider: IdentityActivityProvider | None = None,
+    ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._identity_activity_provider = identity_activity_provider
 
     @staticmethod
     def _event(
@@ -331,3 +345,53 @@ class CustomerAccountService:
     ) -> list[CustomerAuditEvent]:
         profile = await self.get_own_profile(actor)
         return await self.list_activity(profile.id, offset, limit)
+
+    @staticmethod
+    def _normalize_domain_event(event: CustomerAuditEvent) -> CustomerActivity:
+        context: dict[str, Any] = {
+            "correlation_id": event.correlation_id,
+            "entity_type": event.entity_type,
+            **event.safe_metadata,
+        }
+        if event.entity_id is not None:
+            context["entity_id"] = str(event.entity_id)
+        return CustomerActivity(
+            timestamp=event.occurred_at,
+            category=ActivityCategory.CUSTOMER_DOMAIN,
+            action=event.action,
+            source=ActivitySource.CUSTOMER_SERVICE,
+            result=ActivityResult.SUCCESS,
+            context=context,
+        )
+
+    async def list_customer_activity(
+        self, customer_id: UUID, offset: int, limit: int
+    ) -> list[CustomerActivity]:
+        """Merge independently owned domain and identity activity into one safe view."""
+
+        if self._identity_activity_provider is None:
+            raise DependencyUnavailableError
+        fetch_limit = offset + limit
+        async with self._unit_of_work_factory() as unit:
+            profile = await unit.customers.get_profile_by_id(customer_id)
+            if profile is None:
+                raise ResourceNotFoundError
+            audit_events = await unit.customers.list_audit_events(customer_id, 0, fetch_limit)
+        identity_events = await self._identity_activity_provider.list_activity(
+            profile.identity_provider_subject, 0, fetch_limit
+        )
+        merged = sorted(
+            (
+                *(self._normalize_domain_event(event) for event in audit_events),
+                *identity_events,
+            ),
+            key=lambda item: item.timestamp,
+            reverse=True,
+        )
+        return merged[offset : offset + limit]
+
+    async def list_own_customer_activity(
+        self, actor: Principal, offset: int, limit: int
+    ) -> list[CustomerActivity]:
+        profile = await self.get_own_profile(actor)
+        return await self.list_customer_activity(profile.id, offset, limit)

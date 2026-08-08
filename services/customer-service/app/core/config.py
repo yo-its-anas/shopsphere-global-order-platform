@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 
 DEFAULT_SERVICE_NAME = "customer-service"
 DEFAULT_SERVICE_VERSION = "0.1.0"
@@ -25,6 +26,11 @@ class Settings:
     keycloak_role_client_id: str = "shopsphere-api"
     keycloak_jwks_url: str | None = None
     jwt_clock_skew_seconds: int = 30
+    keycloak_admin_url: str | None = None
+    keycloak_activity_realm: str = "shopsphere"
+    keycloak_activity_client_id: str | None = None
+    keycloak_activity_client_secret: str | None = field(default=None, repr=False)
+    keycloak_activity_timeout_seconds: float = 5.0
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -39,12 +45,21 @@ class Settings:
         keycloak_audience = os.getenv("KEYCLOAK_AUDIENCE", "shopsphere-api").strip()
         keycloak_role_client_id = os.getenv("KEYCLOAK_ROLE_CLIENT_ID", "shopsphere-api").strip()
         keycloak_jwks_url = os.getenv("KEYCLOAK_JWKS_URL", "").strip() or None
+        keycloak_admin_url = os.getenv("KEYCLOAK_ADMIN_URL", "").strip().rstrip("/") or None
+        keycloak_activity_realm = os.getenv("KEYCLOAK_ACTIVITY_REALM", "shopsphere").strip()
+        keycloak_activity_client_id = os.getenv("KEYCLOAK_ACTIVITY_CLIENT_ID", "").strip() or None
+        keycloak_activity_client_secret = (
+            os.getenv("KEYCLOAK_ACTIVITY_CLIENT_SECRET", "").strip() or None
+        )
 
         try:
             database_connect_timeout_seconds = float(
                 os.getenv("DATABASE_CONNECT_TIMEOUT_SECONDS", "3")
             )
             jwt_clock_skew_seconds = int(os.getenv("JWT_CLOCK_SKEW_SECONDS", "30"))
+            keycloak_activity_timeout_seconds = float(
+                os.getenv("KEYCLOAK_ACTIVITY_TIMEOUT_SECONDS", "5")
+            )
         except ValueError as exc:
             raise ValueError("Numeric configuration values are invalid") from exc
 
@@ -64,6 +79,22 @@ class Settings:
             raise ValueError("KEYCLOAK_ROLE_CLIENT_ID must not be empty")
         if jwt_clock_skew_seconds < 0 or jwt_clock_skew_seconds > 120:
             raise ValueError("JWT_CLOCK_SKEW_SECONDS must be between 0 and 120")
+        activity_values = (
+            keycloak_admin_url,
+            keycloak_activity_client_id,
+            keycloak_activity_client_secret,
+        )
+        if any(activity_values) and not all(activity_values):
+            raise ValueError(
+                "KEYCLOAK_ADMIN_URL, KEYCLOAK_ACTIVITY_CLIENT_ID, and "
+                "KEYCLOAK_ACTIVITY_CLIENT_SECRET must be configured together"
+            )
+        if not keycloak_activity_realm or not re.fullmatch(
+            r"[A-Za-z0-9._-]{1,128}", keycloak_activity_realm
+        ):
+            raise ValueError("KEYCLOAK_ACTIVITY_REALM is invalid")
+        if keycloak_activity_timeout_seconds <= 0 or keycloak_activity_timeout_seconds > 30:
+            raise ValueError("KEYCLOAK_ACTIVITY_TIMEOUT_SECONDS must be between 0 and 30")
 
         return cls(
             service_name=service_name,
@@ -77,4 +108,9 @@ class Settings:
             keycloak_role_client_id=keycloak_role_client_id,
             keycloak_jwks_url=keycloak_jwks_url,
             jwt_clock_skew_seconds=jwt_clock_skew_seconds,
+            keycloak_admin_url=keycloak_admin_url,
+            keycloak_activity_realm=keycloak_activity_realm,
+            keycloak_activity_client_id=keycloak_activity_client_id,
+            keycloak_activity_client_secret=keycloak_activity_client_secret,
+            keycloak_activity_timeout_seconds=keycloak_activity_timeout_seconds,
         )

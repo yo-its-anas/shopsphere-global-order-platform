@@ -16,7 +16,9 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import CorrelationIdMiddleware
 from app.core.security import KeycloakTokenVerifier, TokenVerifier
+from app.domain.repositories import IdentityActivityProvider
 from app.infrastructure.database import create_database_engine, create_session_factory
+from app.infrastructure.keycloak_activity import KeycloakIdentityActivityProvider
 from app.infrastructure.repositories import SqlAlchemyUnitOfWork
 
 logger = logging.getLogger(__name__)
@@ -46,6 +48,7 @@ def create_app(
     *,
     database_engine: AsyncEngine | None = None,
     token_verifier: TokenVerifier | None = None,
+    identity_activity_provider: IdentityActivityProvider | None = None,
 ) -> FastAPI:
     """Create an independently configurable FastAPI application."""
 
@@ -63,6 +66,14 @@ def create_app(
     resolved_session_factory = (
         create_session_factory(resolved_engine) if resolved_engine is not None else None
     )
+    resolved_activity_provider = identity_activity_provider
+    if (
+        resolved_activity_provider is None
+        and resolved_settings.keycloak_admin_url
+        and resolved_settings.keycloak_activity_client_id
+        and resolved_settings.keycloak_activity_client_secret
+    ):
+        resolved_activity_provider = KeycloakIdentityActivityProvider(resolved_settings)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -86,6 +97,7 @@ def create_app(
     application.state.settings = resolved_settings
     application.state.database_engine = resolved_engine
     application.state.token_verifier = resolved_verifier
+    application.state.identity_activity_provider = resolved_activity_provider
     application.state.unit_of_work_factory = (
         (lambda: SqlAlchemyUnitOfWork(resolved_session_factory))
         if resolved_session_factory is not None

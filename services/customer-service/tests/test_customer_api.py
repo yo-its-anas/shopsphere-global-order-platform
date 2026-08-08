@@ -108,7 +108,10 @@ def test_address_crud_default_selection_and_audit(client: Any, auth_headers: Any
         "address.default_selected",
         "address.deleted",
     }.issubset(actions)
-    assert any(event["correlation_id"] == "address-workflow" for event in activity.json()["items"])
+    assert any(
+        event["context"].get("correlation_id") == "address-workflow"
+        for event in activity.json()["items"]
+    )
 
 
 def test_authentication_failures(client: Any, token_factory: Any) -> None:
@@ -231,9 +234,9 @@ def test_operations_admin_changes_status_and_creates_audit_event(
     status_event = next(
         item for item in activity.json()["items"] if item["action"] == "account.status_changed"
     )
-    assert status_event["correlation_id"] == "admin-status-change"
-    assert status_event["metadata"]["new_status"] == "suspended"
-    assert status_event["metadata"]["reason_code"] == "risk_review"
+    assert status_event["context"]["correlation_id"] == "admin-status-change"
+    assert status_event["context"]["new_status"] == "suspended"
+    assert status_event["context"]["reason_code"] == "risk_review"
 
     blocked_mutation = client.patch(
         "/api/v1/customers/me",

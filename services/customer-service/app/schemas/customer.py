@@ -9,7 +9,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.domain.models import AccountStatusReason, CustomerStatus
+from app.domain.models import (
+    AccountStatusReason,
+    ActivityCategory,
+    ActivityResult,
+    ActivitySource,
+    CustomerStatus,
+)
 
 _EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 _PHONE_PATTERN = re.compile(r"^\+?[1-9][0-9 .()\-]{6,24}$")
@@ -187,5 +193,20 @@ class ProfileListResponse(ApiModel):
 
 class AuditEventListResponse(ApiModel):
     items: list[AuditEventResponse]
+    offset: int
+    limit: int
+
+
+class ActivityEventResponse(ApiModel):
+    timestamp: datetime
+    event_category: ActivityCategory
+    action: str
+    source: ActivitySource
+    result: ActivityResult
+    context: dict[str, Any]
+
+
+class ActivityListResponse(ApiModel):
+    items: list[ActivityEventResponse]
     offset: int
     limit: int

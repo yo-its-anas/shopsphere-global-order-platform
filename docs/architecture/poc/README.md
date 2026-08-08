@@ -8,6 +8,8 @@ The governing identity design is [ADR-005](../../adr/ADR-005-keycloak-identity-r
 
 The [customer registration and profile provisioning sequence](customer-registration-sequence.md) shows the implemented idempotent service boundary and clearly identifies the planned React and gateway integration steps.
 
+The [customer activity visibility design](customer-activity-visibility.md) distinguishes customer-domain audit history from real Keycloak authentication and user-administration events, including authorization, safe normalization, pagination, outage behavior, and the least-privilege Admin API trade-off.
+
 The PoC deploys a single Keycloak pod backed by the internal PostgreSQL `keycloak_db`, with a sanitized `shopsphere` realm, governed roles, public frontend client, API audience, PKCE policy, security defaults, and event recording. Deployment and operational detail is documented in the [Keycloak PoC guide](../../../platform/kubernetes/overlays/poc/keycloak/README.md).
 
-Customer-service now implements JWT validation, resource authorization, profiles, addresses, domain auditing, and concurrency-safe profile provisioning keyed by Keycloak `sub`. React OIDC integration, API-gateway routing, workload deployment, SMTP, MFA, and executed browser-to-service journeys remain Planned. The single-pod, single-node topology does not provide host-level high availability.
+Customer-service now implements JWT validation, resource authorization, profiles, addresses, domain auditing, concurrency-safe profile provisioning keyed by Keycloak `sub`, and a normalized domain-plus-Keycloak activity view. React OIDC integration, API-gateway routing, workload deployment, SMTP, MFA, and executed browser-to-service journeys remain Planned. The single-pod, single-node topology does not provide host-level high availability.

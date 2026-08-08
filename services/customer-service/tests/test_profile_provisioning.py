@@ -32,8 +32,8 @@ def test_first_authenticated_request_provisions_profile_and_audit(
         event for event in activity.json()["items"] if event["action"] == "profile.provisioned"
     ]
     assert len(provision_events) == 1
-    assert provision_events[0]["correlation_id"] == "registration-provisioning"
-    assert provision_events[0]["metadata"] == {"source": "authenticated_identity"}
+    assert provision_events[0]["context"]["correlation_id"] == "registration-provisioning"
+    assert provision_events[0]["context"]["source"] == "authenticated_identity"
 
 
 def test_subsequent_authentication_reuses_profile(client: Any, auth_headers: Any) -> None:

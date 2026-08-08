@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.core.config import Settings
 from app.core.security import KeycloakTokenVerifier
+from app.domain.models import CustomerActivity
 from app.infrastructure.orm_models import Base
 from app.main import create_app
 
@@ -57,6 +58,20 @@ class ApiClient:
         return self.request("DELETE", url, **kwargs)
 
 
+class StubIdentityActivityProvider:
+    """Deterministic source-neutral activity provider for API tests."""
+
+    def __init__(self) -> None:
+        self.events: list[CustomerActivity] = []
+        self.requested_subjects: list[str] = []
+
+    async def list_activity(
+        self, identity_provider_subject: str, offset: int, limit: int
+    ) -> list[CustomerActivity]:
+        self.requested_subjects.append(identity_provider_subject)
+        return self.events[offset : offset + limit]
+
+
 @pytest.fixture
 def settings() -> Settings:
     return Settings(
@@ -92,6 +107,11 @@ def database_engine(tmp_path: Path) -> Iterator[AsyncEngine]:
 @pytest.fixture
 def private_key() -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+@pytest.fixture
+def identity_activity_provider() -> StubIdentityActivityProvider:
+    return StubIdentityActivityProvider()
 
 
 @pytest.fixture
@@ -134,11 +154,17 @@ def client(
     settings: Settings,
     database_engine: AsyncEngine,
     private_key: rsa.RSAPrivateKey,
+    identity_activity_provider: StubIdentityActivityProvider,
 ) -> Iterator[ApiClient]:
     verifier = KeycloakTokenVerifier(settings)
     verifier._keys = {"test-key": private_key.public_key()}
     verifier._keys_loaded_at = float("inf")
-    application = create_app(settings, database_engine=database_engine, token_verifier=verifier)
+    application = create_app(
+        settings,
+        database_engine=database_engine,
+        token_verifier=verifier,
+        identity_activity_provider=identity_activity_provider,
+    )
     yield ApiClient(application)
 
 

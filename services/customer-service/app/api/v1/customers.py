@@ -10,8 +10,10 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from app.api.dependencies import get_customer_service, require_roles
 from app.application.customer_accounts import CustomerAccountService
 from app.core.security import Principal, Role
-from app.domain.models import CustomerAddress, CustomerAuditEvent, CustomerProfile
+from app.domain.models import CustomerActivity, CustomerAddress, CustomerAuditEvent, CustomerProfile
 from app.schemas.customer import (
+    ActivityEventResponse,
+    ActivityListResponse,
     AddressCreate,
     AddressResponse,
     AddressUpdate,
@@ -75,6 +77,17 @@ def _audit_response(event: CustomerAuditEvent) -> AuditEventResponse:
         occurred_at=event.occurred_at,
         correlation_id=event.correlation_id,
         metadata=event.safe_metadata,
+    )
+
+
+def _activity_response(event: CustomerActivity) -> ActivityEventResponse:
+    return ActivityEventResponse(
+        timestamp=event.timestamp,
+        event_category=event.category,
+        action=event.action,
+        source=event.source,
+        result=event.result,
+        context=event.context,
     )
 
 
@@ -218,10 +231,29 @@ async def delete_address(
 
 @router.get(
     "/activity",
-    response_model=AuditEventListResponse,
-    summary="List the current customer's domain activity",
+    response_model=ActivityListResponse,
+    summary="List the current customer's normalized domain and identity activity",
 )
 async def list_activity(
+    actor: CustomerActor,
+    service: CustomerService,
+    offset: Annotated[int, Query(ge=0, le=1_000)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> ActivityListResponse:
+    events = await service.list_own_customer_activity(actor, offset, limit)
+    return ActivityListResponse(
+        items=[_activity_response(item) for item in events],
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/audit-history",
+    response_model=AuditEventListResponse,
+    summary="List the current customer's customer-domain audit history",
+)
+async def list_audit_history(
     actor: CustomerActor,
     service: CustomerService,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
