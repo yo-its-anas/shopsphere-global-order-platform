@@ -18,3 +18,10 @@ Run all checks with `make doctor`. A non-zero result means one or more prerequis
 - `validate-postgresql-manifests.sh` renders and checks the PoC PostgreSQL manifests without changing the cluster.
 - `check-postgresql.sh` performs read-only checks for workload readiness, ClusterIP-only networking, bound persistence, and the required logical database names.
 - `create-postgresql-secret.sh` is an explicit operational helper. It creates the Kubernetes Secret directly from hidden prompts, or generates strong values only when `--generate` is supplied. It never prints credentials and preserves an existing Secret.
+
+## Keycloak operations
+
+- `validate-keycloak-manifests.sh` validates the Kubernetes resources and sanitized realm JSON without changing the cluster.
+- `configure-keycloak.sh` idempotently reconciles the version-controlled ShopSphere client-policy profile and policy after realm import.
+- `check-keycloak.sh` performs non-destructive checks for readiness, internal service exposure, PostgreSQL connectivity, realm settings, roles, clients, PKCE enforcement, and authentication-event recording. It requests a least-privilege service token so Keycloak produces a verifiable client authentication event; no token is displayed.
+- `create-keycloak-secret.sh` copies the existing Keycloak database credential into a namespace-scoped Secret and creates bootstrap administrator credentials from hidden prompts, or generates them only when `--generate` is supplied. It never prints credential values and preserves an existing Secret.

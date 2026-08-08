@@ -1,6 +1,7 @@
 PYTHON ?= python3
 KUBE_CONTEXT ?= kind-shopsphere-poc
 POSTGRESQL_OVERLAY := platform/kubernetes/overlays/poc/postgresql
+KEYCLOAK_OVERLAY := platform/kubernetes/overlays/poc/keycloak
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -9,7 +10,8 @@ SERVICE_DIRS := \
 	services/api-gateway
 
 .PHONY: help format lint test build validate validate-shell validate-kubernetes \
-	validate-postgresql postgresql-secret postgresql-apply postgresql-status doctor clean
+	validate-postgresql postgresql-secret postgresql-apply postgresql-status \
+	validate-keycloak keycloak-secret keycloak-apply keycloak-configure keycloak-status doctor clean
 
 help: ## Show available foundation targets
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -39,7 +41,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -65,6 +67,25 @@ postgresql-apply: validate-postgresql ## Apply the PoC PostgreSQL component; req
 
 postgresql-status: ## Run read-only PostgreSQL workload, service, PVC, and database checks
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-postgresql.sh
+
+validate-keycloak: ## Validate Keycloak manifests and realm configuration without changing the cluster
+	@./scripts/validate-keycloak-manifests.sh
+
+keycloak-secret: ## Create Keycloak credentials interactively; existing Secrets are preserved
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-keycloak-secret.sh
+
+keycloak-apply: validate-keycloak ## Apply the PoC Keycloak component; requires PostgreSQL and its Secret
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-platform get secret shopsphere-keycloak-credentials >/dev/null 2>&1 || { \
+		echo "Create shopsphere-keycloak-credentials first with 'make keycloak-secret'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get service postgresql >/dev/null 2>&1 || { \
+		echo "The internal PostgreSQL Service is required before Keycloak can be applied." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(KEYCLOAK_OVERLAY)"
+
+keycloak-configure: ## Reconcile the version-controlled Keycloak client policies idempotently
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/configure-keycloak.sh
+
+keycloak-status: ## Run non-destructive Keycloak workload, realm, client, event, and database checks
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-keycloak.sh
 
 doctor: ## Run non-destructive host and tool checks
 	@status=0; \

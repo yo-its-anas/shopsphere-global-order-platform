@@ -1,0 +1,16 @@
+{
+  "profiles": [
+    {
+      "name": "shopsphere-pkce-s256",
+      "description": "Require S256 PKCE for ShopSphere authorization code requests",
+      "executors": [
+        {
+          "executor": "pkce-enforcer",
+          "configuration": {
+            "auto-configure": true
+          }
+        }
+      ]
+    }
+  ]
+}

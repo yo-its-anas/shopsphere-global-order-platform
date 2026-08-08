@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — configuration placeholders exist, but no realm, client, role, user, or deployed Keycloak evidence exists.
+Accepted — the PoC Kubernetes deployment, PostgreSQL integration, sanitized realm import, roles, clients, security defaults, PKCE client policy, and authentication-event recording are implemented and live-validated. React, gateway, customer-service, SMTP, and end-to-end identity journeys are not integrated.
 
 ## Context
 
@@ -77,7 +77,7 @@ Gateway validation provides early rejection but does not replace service validat
 
 ### Role-based and resource-level authorization
 
-Keycloak supplies governed realm or client roles. Initial roles are expected to distinguish customer self-service, support operations, and restricted administration; exact role names and permissions remain Planned. Roles are least privilege, deny by default, and are checked at both gateway routes and service use cases as appropriate.
+Keycloak supplies governed realm or client roles. The implemented realm roles are `customer`, `support`, and `operations_admin`; self-registration receives `customer` by default. Their application permissions and service-side enforcement remain Planned. Roles are least privilege, deny by default, and are checked at both gateway routes and service use cases as appropriate.
 
 RBAC alone is insufficient for customer records. `customer-service` also enforces object ownership and permitted fields. A customer may access only the profile associated with their verified `sub`; support or administrative access requires an explicit role and a documented business rule. Server-side checks prevent insecure direct object reference (IDOR), including when valid profile or address UUIDs are guessed.
 
@@ -127,7 +127,9 @@ Authentication and audit telemetry can contain personal or security-sensitive me
 
 ## PoC limitations
 
-The intended PoC uses one Keycloak instance on the single-node kind cluster and therefore has no host-level availability. Realm configuration, SPA and API clients, roles, password policy, brute-force controls, event recording, profile provisioning, JWKS validation, activity projection, persistence, and authorization tests are all Planned unless separately evidenced. Federation, MFA, SMTP-backed recovery, automated rotation, and enterprise lifecycle integration may be demonstrated only partially. The current repository contains service and UI foundations only; it does not implement this identity architecture.
+The PoC uses one Keycloak pod and one PostgreSQL pod on the single-node kind cluster and therefore has no host-level availability. The `shopsphere` realm, public frontend client, API audience, service-integration client, roles, password policy, brute-force controls, bounded tokens and sessions, refresh-token rotation, event recording, and PostgreSQL persistence are implemented. The Service is ClusterIP-only; local HTTP and loopback URLs are PoC constraints, not production transport controls.
+
+React authentication, public ingress, gateway and service JWT validation, customer profile provisioning, resource authorization, activity projection, SMTP-backed recovery, verified email, MFA, federation, automated credential rotation, and enterprise lifecycle integration remain Planned. No customer user, profile, or business authorization flow is claimed as implemented.
 
 ## Production evolution
 

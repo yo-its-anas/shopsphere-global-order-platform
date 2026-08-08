@@ -1,0 +1,13 @@
+{
+  "policies": [
+    {
+      "name": "shopsphere-pkce-s256-policy",
+      "description": "Apply S256 PKCE enforcement to authorization code requests in the ShopSphere realm",
+      "enabled": true,
+      "conditions": [],
+      "profiles": [
+        "shopsphere-pkce-s256"
+      ]
+    }
+  ]
+}
