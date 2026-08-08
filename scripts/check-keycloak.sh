@@ -22,6 +22,8 @@ main() {
     local cluster_ip=""
     local pod_name=""
     local database_connections=""
+    local activity_client_id=""
+    local activity_client_secret=""
 
     require_command kubectl
 
@@ -54,12 +56,16 @@ main() {
             --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null 2>&1
 
         realm_doc="$("$kcadm" get realms/shopsphere --config "$admin_config" \
-            --fields realm,enabled,registrationAllowed,registrationEmailAsUsername,loginWithEmailAllowed,duplicateEmailsAllowed,editUsernameAllowed,resetPasswordAllowed,passwordPolicy,accessTokenLifespan,ssoSessionIdleTimeout,ssoSessionMaxLifespan,bruteForceProtected,eventsEnabled,eventsExpiration,adminEventsEnabled,revokeRefreshToken,refreshTokenMaxReuse)"
+            --fields realm,enabled,registrationAllowed,registrationEmailAsUsername,loginWithEmailAllowed,duplicateEmailsAllowed,editUsernameAllowed,resetPasswordAllowed,passwordPolicy,accessTokenLifespan,ssoSessionIdleTimeout,ssoSessionMaxLifespan,bruteForceProtected,eventsEnabled,eventsExpiration,enabledEventTypes,adminEventsEnabled,adminEventsDetailsEnabled,revokeRefreshToken,refreshTokenMaxReuse)"
         grep -Eq '\''"realm"[[:space:]]*:[[:space:]]*"shopsphere"'\'' <<<"$realm_doc"
         grep -Eq '\''"registrationAllowed"[[:space:]]*:[[:space:]]*true'\'' <<<"$realm_doc"
         grep -Eq '\''"bruteForceProtected"[[:space:]]*:[[:space:]]*true'\'' <<<"$realm_doc"
         grep -Eq '\''"eventsEnabled"[[:space:]]*:[[:space:]]*true'\'' <<<"$realm_doc"
         grep -Eq '\''"adminEventsEnabled"[[:space:]]*:[[:space:]]*true'\'' <<<"$realm_doc"
+        grep -Eq '\''"adminEventsDetailsEnabled"[[:space:]]*:[[:space:]]*false'\'' <<<"$realm_doc"
+        grep -Eq '\''"eventsExpiration"[[:space:]]*:[[:space:]]*604800'\'' <<<"$realm_doc"
+        grep -q '\''UPDATE_PROFILE'\'' <<<"$realm_doc"
+        grep -q '\''UPDATE_EMAIL'\'' <<<"$realm_doc"
         grep -Eq '\''"revokeRefreshToken"[[:space:]]*:[[:space:]]*true'\'' <<<"$realm_doc"
         grep -Eq '\''"registrationEmailAsUsername"[[:space:]]*:[[:space:]]*true'\'' <<<"$realm_doc"
         grep -Eq '\''"loginWithEmailAllowed"[[:space:]]*:[[:space:]]*true'\'' <<<"$realm_doc"
@@ -127,7 +133,67 @@ main() {
         events_doc="$("$kcadm" get events -r shopsphere --config "$admin_config" --fields type,clientId)"
         grep -Eq '\''"type"[[:space:]]*:[[:space:]]*"CLIENT_LOGIN"'\'' <<<"$events_doc"
         grep -Eq '\''"clientId"[[:space:]]*:[[:space:]]*"shopsphere-service-integration"'\'' <<<"$events_doc"
+
+        activity_doc="$("$kcadm" get clients -r shopsphere --config "$admin_config" \
+            -q clientId=shopsphere-customer-activity-reader \
+            --fields id,clientId,publicClient,standardFlowEnabled,directAccessGrantsEnabled,serviceAccountsEnabled,fullScopeAllowed)"
+        activity_uuid="$(sed -n '\''s/.*"id" : "\([^"]*\)".*/\1/p'\'' <<<"$activity_doc")"
+        test -n "$activity_uuid"
+        grep -Eq '\''"publicClient"[[:space:]]*:[[:space:]]*false'\'' <<<"$activity_doc"
+        grep -Eq '\''"standardFlowEnabled"[[:space:]]*:[[:space:]]*false'\'' <<<"$activity_doc"
+        grep -Eq '\''"directAccessGrantsEnabled"[[:space:]]*:[[:space:]]*false'\'' <<<"$activity_doc"
+        grep -Eq '\''"serviceAccountsEnabled"[[:space:]]*:[[:space:]]*true'\'' <<<"$activity_doc"
+        grep -Eq '\''"fullScopeAllowed"[[:space:]]*:[[:space:]]*false'\'' <<<"$activity_doc"
+
+        activity_user_doc="$("$kcadm" get "clients/${activity_uuid}/service-account-user" \
+            -r shopsphere --config "$admin_config" --fields id)"
+        activity_user_uuid="$(sed -n '\''s/.*"id" : "\([^"]*\)".*/\1/p'\'' <<<"$activity_user_doc")"
+        test -n "$activity_user_uuid"
+        realm_management_doc="$("$kcadm" get clients -r shopsphere --config "$admin_config" \
+            -q clientId=realm-management --fields id)"
+        realm_management_uuid="$(sed -n '\''s/.*"id" : "\([^"]*\)".*/\1/p'\'' \
+            <<<"$realm_management_doc")"
+        test -n "$realm_management_uuid"
+        activity_roles="$("$kcadm" get \
+            "users/${activity_user_uuid}/role-mappings/clients/${realm_management_uuid}" \
+            -r shopsphere --config "$admin_config" --fields name)"
+        grep -Eq '\''"name"[[:space:]]*:[[:space:]]*"view-events"'\'' <<<"$activity_roles"
+        if grep -Eq '\''"name"[[:space:]]*:[[:space:]]*"(manage-events|realm-admin)"'\'' \
+            <<<"$activity_roles"; then
+            printf '\''Activity reader has an excessive realm-management role.\n'\'' >&2
+            exit 1
+        fi
+        activity_scope="$("$kcadm" get \
+            "clients/${activity_uuid}/scope-mappings/clients/${realm_management_uuid}" \
+            -r shopsphere --config "$admin_config" --fields name)"
+        grep -Eq '\''"name"[[:space:]]*:[[:space:]]*"view-events"'\'' <<<"$activity_scope"
+        if grep -Eq '\''"name"[[:space:]]*:[[:space:]]*"(manage-events|realm-admin)"'\'' \
+            <<<"$activity_scope"; then
+            printf '\''Activity reader token scope has an excessive realm-management role.\n'\'' >&2
+            exit 1
+        fi
+
+        activity_secret_doc="$("$kcadm" get "clients/${activity_uuid}/client-secret" \
+            -r shopsphere --config "$admin_config")"
+        activity_secret="$(sed -n '\''s/.*"value" : "\([^"]*\)".*/\1/p'\'' \
+            <<<"$activity_secret_doc")"
+        test -n "$activity_secret"
+        "$kcadm" get events -r shopsphere --no-config \
+            --server http://127.0.0.1:8080 \
+            --realm shopsphere \
+            --client shopsphere-customer-activity-reader \
+            --secret "$activity_secret" \
+            --fields type >/dev/null
+        unset activity_secret activity_secret_doc
     ' >/dev/null
+
+    activity_client_id="$(kubectl --context "$KUBE_CONTEXT" -n shopsphere-apps get secret \
+        shopsphere-customer-activity-keycloak -o jsonpath='{.data.client-id}')"
+    activity_client_secret="$(kubectl --context "$KUBE_CONTEXT" -n shopsphere-apps get secret \
+        shopsphere-customer-activity-keycloak -o jsonpath='{.data.client-secret}')"
+    [[ -n "$activity_client_id" && -n "$activity_client_secret" ]] || \
+        fail "The customer activity Keycloak Secret is absent or incomplete."
+    unset activity_client_id activity_client_secret
 
     database_connections="$(kubectl --context "$KUBE_CONTEXT" -n shopsphere-data exec postgresql-0 -- \
         sh -ec 'psql --tuples-only --no-align --username "$POSTGRES_USER" --dbname postgres --command="SELECT count(*) FROM pg_stat_activity WHERE datname = '\''keycloak_db'\'';"')"
@@ -143,6 +209,8 @@ main() {
     printf '[OK] API client is a bearer-only resource-server audience.\n'
     printf '[OK] The enabled realm client policy enforces S256 PKCE.\n'
     printf '[OK] A least-privilege client authentication event was recorded and queried successfully.\n'
+    printf '[OK] The dedicated customer activity reader has view-events without manage-events or realm-admin.\n'
+    printf '[OK] The activity-reader client credential exists in a namespace-scoped Kubernetes Secret.\n'
     printf '[INFO] No credentials, client secrets, or token values were displayed.\n'
 }
 

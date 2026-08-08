@@ -22,6 +22,6 @@ Run all checks with `make doctor`. A non-zero result means one or more prerequis
 ## Keycloak operations
 
 - `validate-keycloak-manifests.sh` validates the Kubernetes resources and sanitized realm JSON without changing the cluster.
-- `configure-keycloak.sh` idempotently reconciles the version-controlled ShopSphere client-policy profile and policy after realm import.
+- `configure-keycloak.sh` idempotently reconciles the ShopSphere client policies, dedicated `view-events` activity reader, and namespace-scoped runtime Secret after realm import without displaying credentials.
 - `check-keycloak.sh` performs non-destructive checks for readiness, internal service exposure, PostgreSQL connectivity, realm settings, roles, clients, PKCE enforcement, and authentication-event recording. It requests a least-privilege service token so Keycloak produces a verifiable client authentication event; no token is displayed.
 - `create-keycloak-secret.sh` copies the existing Keycloak database credential into a namespace-scoped Secret and creates bootstrap administrator credentials from hidden prompts, or generates them only when `--generate` is supplied. It never prints credential values and preserves an existing Secret.

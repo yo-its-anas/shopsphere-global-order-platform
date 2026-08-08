@@ -81,7 +81,7 @@ keycloak-apply: validate-keycloak ## Apply the PoC Keycloak component; requires 
 		echo "The internal PostgreSQL Service is required before Keycloak can be applied." >&2; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(KEYCLOAK_OVERLAY)"
 
-keycloak-configure: ## Reconcile the version-controlled Keycloak client policies idempotently
+keycloak-configure: ## Reconcile Keycloak client policies and the least-privilege activity reader
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/configure-keycloak.sh
 
 keycloak-status: ## Run non-destructive Keycloak workload, realm, client, event, and database checks
