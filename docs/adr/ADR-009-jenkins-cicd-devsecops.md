@@ -28,7 +28,7 @@ Use least-privilege ephemeral agents where possible, pinned plugins and tools, p
 
 ## PoC limitations
 
-The likely single-host controller and agent will not be highly available and may share trust boundaries with workloads. No CI/CD or security scan has been executed at Day 1.
+The likely single-host controller and agent will not be highly available and may share trust boundaries with workloads. A foundation pipeline exists, but no retained Jenkins controller run or security-scan evidence is present.
 
 ## Production evolution
 

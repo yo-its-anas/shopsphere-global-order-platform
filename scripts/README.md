@@ -2,7 +2,7 @@
 
 Contains small, reviewed automation entry points for repeatable local and CI tasks. Scripts must be safe by default, portable where practical, and must not embed credentials.
 
-## Day 1 environment validation
+## Environment validation
 
 - `check-host.sh` reports read-only Ubuntu host capacity and network-listener information.
 - `check-docker.sh` checks the Docker CLI, daemon access, Compose, and Buildx.

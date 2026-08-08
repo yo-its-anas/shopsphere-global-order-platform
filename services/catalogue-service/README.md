@@ -1,6 +1,6 @@
 # Catalogue Service
 
-Day 1 FastAPI skeleton for the planned product catalogue, pricing, availability, and inventory boundary. No catalogue business behavior, persistence, Redis caching, or authentication is implemented.
+FastAPI foundation for the planned product catalogue, pricing, availability, and inventory boundary. No catalogue business behavior, persistence, Redis caching, or authentication is implemented.
 
 ## Local development
 

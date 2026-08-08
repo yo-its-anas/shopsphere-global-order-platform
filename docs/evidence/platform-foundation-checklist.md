@@ -1,4 +1,4 @@
-# Day 1 Foundation Checklist
+# Platform Foundation Checklist
 
 Date: 2026-08-07  
 Scope: repository foundation only
@@ -15,7 +15,7 @@ Scope: repository foundation only
 
 ## Governance and safety
 
-- [x] Root purpose, module, architecture, stack, and seven-day plan documented.
+- [x] Root purpose, modules, architecture, stack, and capability delivery model documented.
 - [x] `.gitignore` covers Python, Node, Terraform, IDE, secret, Kubernetes, and test artifacts.
 - [x] `.editorconfig` establishes consistent text formatting.
 - [x] `.env.example` contains placeholders only.
@@ -28,4 +28,4 @@ Scope: repository foundation only
 - [ ] Replace placeholder CODEOWNERS handles with real repository principals.
 - [ ] Review naming and boundaries with the project supervisor.
 - [x] Record approved and proposed architecture decisions as indexed ADRs.
-- [ ] Capture the Day 1 commit identifier after review and commit.
+- [ ] Capture the reviewed platform-foundation commit identifier.

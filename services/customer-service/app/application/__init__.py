@@ -1,1 +1,1 @@
-"""Application use-case boundary; intentionally empty on Day 1."""
+"""Application use-case boundary; intentionally empty in this foundation."""

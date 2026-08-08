@@ -29,7 +29,7 @@ Use separate least-privilege database identities, encrypted connections, protect
 
 ## PoC limitations
 
-Single instances provide no high availability and may share host resources. Backup restoration, failover, replica behavior, and realistic cache pressure are not proven. Nothing beyond configuration placeholders exists on Day 1.
+Single instances provide no high availability and may share host resources. Backup restoration, failover, replica behavior, and realistic cache pressure are not proven. Runtime data integrations remain unimplemented beyond configuration placeholders.
 
 ## Production evolution
 

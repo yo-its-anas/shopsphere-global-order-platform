@@ -11,7 +11,7 @@ export function PlaceholderPage({ title, description }: PlaceholderPageProps) {
     <div className="placeholder-page">
       <header className="page-heading">
         <div>
-          <span className="eyebrow">Day 1 placeholder</span>
+          <span className="eyebrow">Capability preview</span>
           <div className="page-heading__title">
             <h1>{title}</h1>
             <DemoDataBadge />
@@ -22,7 +22,7 @@ export function PlaceholderPage({ title, description }: PlaceholderPageProps) {
       <AsyncState
         kind="empty"
         title={title + " is not connected"}
-        message="Presentation and API integration will be implemented in a later delivery phase."
+        message="Presentation and API integration remain planned capabilities."
       />
     </div>
   );

@@ -1,4 +1,4 @@
-# ADR-008: Use a monorepo for the seven-day capstone
+# ADR-008: Use a monorepo for the enterprise capstone
 
 ## Status
 
@@ -6,7 +6,7 @@ Accepted — the repository contains the planned service, frontend, shared, infr
 
 ## Context
 
-The capstone has one delivery team, a seven-day schedule, shared governance, and a need for a single traceable evidence pack. Coordinated changes will often span API contracts, services, platform assets, tests, and documentation.
+The capstone has one delivery team, shared governance, and a need for a single traceable evidence pack. Coordinated changes will often span API contracts, services, platform assets, tests, and documentation.
 
 ## Decision
 
@@ -28,7 +28,7 @@ Repository access potentially exposes a broader code surface. Apply branch prote
 
 ## PoC limitations
 
-Current CODEOWNERS entries are placeholders, and path-filtered pipelines are not implemented. The small Day 1 repository does not validate monorepo scaling characteristics.
+Current CODEOWNERS entries are placeholders, and path-filtered pipelines are not implemented. The current repository size does not validate monorepo scaling characteristics.
 
 ## Production evolution
 

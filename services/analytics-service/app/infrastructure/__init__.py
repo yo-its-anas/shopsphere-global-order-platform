@@ -1,1 +1,1 @@
-"""Infrastructure adapter boundary; no external integrations on Day 1."""
+"""Infrastructure adapter boundary; no external integrations in this foundation."""

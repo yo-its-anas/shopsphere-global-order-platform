@@ -29,15 +29,15 @@ test: ## Run each service's independent Pytest suite
 		(cd "$$service" && $(PYTHON) -m pytest); \
 	done
 
-build: ## Build a Day 1 Docker image for every service
+build: ## Build a foundation Docker image for every service
 	@set -e; for service in $(SERVICE_DIRS); do \
 		name="$${service##*/}"; \
 		echo "== build: $$name =="; \
-		docker build --tag "shopsphere/$$name:day1" "$$service"; \
+		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
 validate: validate-shell validate-kubernetes ## Run implemented static foundation validation
-	@echo "validation: implemented Day 1 shell and Kubernetes checks passed"
+	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
 	@bash -n scripts/*.sh platform/kind/*.sh
@@ -49,7 +49,7 @@ validate-kubernetes: ## Validate the kind shape and render the PoC Kustomize ove
 	@grep -q '^[[:space:]]*- role: control-plane$$' platform/kind/cluster-config.yaml
 	@kubectl kustomize platform/kubernetes/overlays/poc >/dev/null
 
-doctor: ## Run non-destructive Day 1 host and tool checks
+doctor: ## Run non-destructive host and tool checks
 	@status=0; \
 	for check in \
 		scripts/check-host.sh \
@@ -64,4 +64,4 @@ doctor: ## Run non-destructive Day 1 host and tool checks
 	exit $$status
 
 clean: ## Non-destructive placeholder; reports intended cleanup without deleting files
-	@echo "clean: no files removed (Day 1 safety placeholder)"
+	@echo "clean: no files removed (non-destructive safety placeholder)"

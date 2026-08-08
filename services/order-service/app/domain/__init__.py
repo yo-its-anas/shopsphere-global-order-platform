@@ -1,1 +1,1 @@
-"""Domain model boundary; intentionally empty on Day 1."""
+"""Domain model boundary; intentionally empty in this foundation."""

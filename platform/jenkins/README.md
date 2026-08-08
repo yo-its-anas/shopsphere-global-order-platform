@@ -1,6 +1,6 @@
-# Jenkins Day 1 Pipeline Foundation
+# Foundation CI Validation Pipeline
 
-The root `Jenkinsfile` defines the initial validation pipeline for the ShopSphere monorepo. It is deliberately a Day 1 quality foundation, not the final Day 5 DevSecOps or deployment implementation.
+The root `Jenkinsfile` defines the foundation validation pipeline for the ShopSphere monorepo. It establishes initial quality controls; the broader DevSecOps and deployment implementation remains planned.
 
 ## Pipeline behavior
 
@@ -33,7 +33,7 @@ The Jenkins agent must provide:
 - Terraform compatible with `infrastructure/terraform/versions.tf`;
 - outbound access to the approved Python, npm, Terraform-provider, and container registries.
 
-The agent must not solve missing access with `sudo`, a privileged container, a world-writable Docker socket, or embedded credentials. Registry and cloud identities will require reviewed Jenkins credential bindings in a later phase; none are configured here.
+The agent must not solve missing access with `sudo`, a privileged container, a world-writable Docker socket, or embedded credentials. Registry and cloud identities require reviewed Jenkins credential bindings before those integrations are enabled; none are configured here.
 
 Docker validation creates locally tagged `ci-<build number>` images. Host-level image retention and garbage collection are an administrator responsibility and are intentionally not implemented as destructive pipeline cleanup.
 
@@ -46,7 +46,7 @@ Docker validation creates locally tagged `ci-<build number>` images. Host-level 
 - No authentication or secret retrieval.
 - No claim that DevSecOps controls are complete.
 
-## Planned Day 5 expansion
+## Planned DevSecOps expansion
 
 The following gates are documented in the Jenkinsfile but intentionally have no executable stages yet:
 
@@ -58,7 +58,7 @@ The following gates are documented in the Jenkinsfile but intentionally have no 
 - artifact provenance and registry publication;
 - approval-controlled PoC deployment, smoke testing, and rollback validation.
 
-Day 5 implementation must define severity thresholds, false-positive governance, credential bindings, evidence retention, approval boundaries, and failure behavior before any gate or deployment becomes active.
+The expanded implementation must define severity thresholds, false-positive governance, credential bindings, evidence retention, approval boundaries, and failure behavior before any gate or deployment becomes active.
 
 ## Local command alignment
 

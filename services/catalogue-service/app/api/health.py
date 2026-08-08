@@ -26,7 +26,7 @@ async def live(request: Request) -> HealthResponse:
 
 @router.get("/ready", response_model=HealthResponse, summary="Check service readiness")
 async def ready(request: Request) -> HealthResponse:
-    """Report readiness; no external dependencies are configured on Day 1."""
+    """Report readiness; no external dependencies are configured in this foundation."""
 
     settings = _settings(request)
     return HealthResponse(

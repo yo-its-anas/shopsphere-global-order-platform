@@ -16,7 +16,7 @@ Maintain distinct PoC and production-reference views. The PoC view describes onl
 
 - One architecture diagram with annotations: compact but easy to misinterpret.
 - Document only the PoC: fails to demonstrate production design competence.
-- Build the production architecture during the capstone: outside the seven-day scope and cost envelope.
+- Build the production architecture within the PoC: outside the capstone scope and cost envelope.
 
 ## Consequences
 

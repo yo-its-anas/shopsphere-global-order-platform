@@ -1,6 +1,6 @@
 # ShopSphere Global Enterprise Order Management Platform
 
-ShopSphere is an EduQual Level 6 enterprise capstone that demonstrates the foundations of a secure, observable, event-driven global order management platform. This repository is a Day 1 monorepo scaffold: it defines ownership, delivery boundaries, and engineering conventions without implementing complete business features.
+ShopSphere is an EduQual Level 6 enterprise capstone that demonstrates the foundations of a secure, observable, event-driven global order management platform. This monorepo defines ownership, delivery boundaries, and engineering conventions while keeping incomplete business capabilities explicitly identified as planned work.
 
 ## Mandatory functional modules
 
@@ -26,19 +26,19 @@ The **production-reference architecture** documents the recommended evolution: m
 - Trivy, Semgrep, Wazuh, and Open Policy Agent (OPA)
 - Markdown, Mermaid, PlantUML, and Draw.io
 
-## Seven-day delivery approach
+## Capability delivery model
 
-| Day | Outcome |
+| Capability | Intended outcome |
 | --- | --- |
-| 1 | Monorepo foundation, boundaries, standards, and evidence checklist |
-| 2 | Service skeletons, shared contracts, database migration baseline, and frontend shell |
-| 3 | Customer and catalogue vertical slices |
-| 4 | Order workflow and Kafka event integration |
-| 5 | Analytics, gateway integration, identity, and end-to-end flow |
-| 6 | Kubernetes, CI/CD, observability, security controls, and test hardening |
-| 7 | Validation, architecture documentation, evidence pack, and viva preparation |
+| Foundation | Monorepo boundaries, engineering standards, shared conventions, and evidence governance |
+| Customer Identity | Customer account capabilities and governed identity integration |
+| Catalogue & Inventory | Product catalogue, pricing, availability, and inventory capabilities |
+| Order Processing | Order lifecycle, orchestration, persistence, and domain-event integration |
+| Operations Dashboard | Executive operational views backed by governed application data |
+| Platform Engineering | Kubernetes, infrastructure as code, CI/CD, observability, and security controls |
+| Architecture & Validation | Architecture documentation, automated validation, evidence, and viva preparation |
 
-Each day should produce reviewable evidence, automated checks, and updated architecture decisions. Scope is constrained to an educational PoC while production gaps remain explicit.
+Each capability should produce reviewable evidence, automated checks, and updated architecture decisions. Scope is constrained to an educational PoC while production gaps remain explicit.
 
 ## Repository map
 

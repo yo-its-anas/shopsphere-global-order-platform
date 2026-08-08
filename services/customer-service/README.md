@@ -1,6 +1,6 @@
 # Customer Service
 
-Day 1 FastAPI skeleton for the planned customer profile, contact, address, and account boundary. No customer business behavior, persistence, identity integration, or authentication is implemented.
+FastAPI foundation for the planned customer profile, contact, address, and account boundary. No customer business behavior, persistence, identity integration, or authentication is implemented.
 
 ## Local development
 

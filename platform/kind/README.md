@@ -6,7 +6,7 @@ Multiple replicas can demonstrate Kubernetes scheduling, rolling updates, and se
 
 ## Network exposure
 
-The kind node maps VM ports 80 and 443 to prepare for a future ingress controller. No ingress controller or application is deployed on Day 1. PostgreSQL, Redis, Kafka, Keycloak administration, Jenkins, Kubernetes administration, and monitoring administration ports are not mapped. Google Cloud firewall policy must independently control access to ports 80 and 443.
+The kind node maps VM ports 80 and 443 to prepare for a future ingress controller. No ingress controller or application is deployed by this foundation configuration. PostgreSQL, Redis, Kafka, Keycloak administration, Jenkins, Kubernetes administration, and monitoring administration ports are not mapped. Google Cloud firewall policy must independently control access to ports 80 and 443.
 
 ## Prerequisites
 
@@ -26,7 +26,7 @@ The script checks prerequisites, creates the cluster only when absent, waits for
 ./platform/kind/load-images.sh shopsphere/customer-service:dev
 ```
 
-Only explicitly named images already present in the local Docker daemon are loaded. The script neither builds nor pulls images. No business or data-service image is part of the Day 1 baseline.
+Only explicitly named images already present in the local Docker daemon are loaded. The script neither builds nor pulls images. No business or data-service image is part of the platform baseline.
 
 ## Delete deliberately
 
