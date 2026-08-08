@@ -15,6 +15,7 @@ Operational endpoints remain unauthenticated:
 Customer self-service requires the `customer` role and resolves ownership only from the verified token subject:
 
 - `POST`, `GET`, and `PATCH /api/v1/customers/me`
+- `PUT /api/v1/customers/me` — idempotently provision from verified Keycloak claims or return the existing profile
 - `POST` and `GET /api/v1/customers/me/addresses`
 - `PATCH` and `DELETE /api/v1/customers/me/addresses/{address_id}`
 - `PUT /api/v1/customers/me/addresses/{address_id}/default`
@@ -27,6 +28,8 @@ Support and operations routes are under `/api/v1/admin/customers`. The `support`
 Access tokens are accepted only as bearer tokens. The verifier fetches and caches Keycloak JWKS asynchronously, permits only RS256, and validates signature, issuer, API audience, expiry, and required claims. It extracts only the allow-listed `customer`, `support`, and `operations_admin` roles from the configured realm and resource client. Unknown keys trigger a bounded JWKS refresh for signing-key rotation.
 
 Self-service paths do not accept customer IDs. Address queries combine the address ID with the profile resolved from `sub`, returning `404` for another customer's address. Response schemas do not expose ORM objects or the external identity reference. Validation errors omit supplied values so credentials accidentally sent to an unsupported field are not reflected.
+
+After successful Keycloak authentication, clients call `PUT /api/v1/customers/me`. The first valid request seeds the profile from `given_name`, `family_name`, and `email`; database conflict handling and the unique subject constraint make retries and concurrent calls return the same profile. Later email claims for the same `sub` do not re-key, duplicate, or silently overwrite the domain profile.
 
 Domain mutations and their audit events commit in one transaction. Audit metadata is server-created and allow-listed; it contains field names, status transitions, and governed reason codes rather than arbitrary request content. PostgreSQL migration enforcement rejects updates and deletes against audit rows.
 

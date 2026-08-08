@@ -27,6 +27,10 @@ class ApiClient:
     def __init__(self, application: object) -> None:
         self._application = application
 
+    @property
+    def application(self) -> object:
+        return self._application
+
     def request(self, method: str, url: str, **kwargs: Any) -> httpx2.Response:
         async def send() -> httpx2.Response:
             transport = httpx2.ASGITransport(app=self._application)
@@ -99,6 +103,9 @@ def token_factory(private_key: rsa.RSAPrivateKey) -> Any:
         expires_in: timedelta = timedelta(minutes=5),
         audience: str = "shopsphere-api",
         signing_key: rsa.RSAPrivateKey | None = None,
+        email: str | None = None,
+        given_name: str = "Amina",
+        family_name: str = "Khan",
     ) -> str:
         now = datetime.now(timezone.utc)
         return jwt.encode(
@@ -109,7 +116,9 @@ def token_factory(private_key: rsa.RSAPrivateKey) -> Any:
                 "iat": now,
                 "exp": now + expires_in,
                 "preferred_username": f"{subject}@example.test",
-                "email": f"{subject}@example.test",
+                "email": email or f"{subject}@example.test",
+                "given_name": given_name,
+                "family_name": family_name,
                 "realm_access": {"roles": list(roles)},
             },
             signing_key or private_key,
@@ -135,7 +144,15 @@ def client(
 
 @pytest.fixture
 def auth_headers(token_factory: Any) -> Any:
-    def build(role: str = "customer", subject: str = "keycloak-customer-a") -> dict[str, str]:
-        return {"Authorization": f"Bearer {token_factory(subject=subject, roles=(role,))}"}
+    def build(
+        role: str = "customer",
+        subject: str = "keycloak-customer-a",
+        **identity_claims: Any,
+    ) -> dict[str, str]:
+        return {
+            "Authorization": (
+                f"Bearer {token_factory(subject=subject, roles=(role,), **identity_claims)}"
+            )
+        }
 
     return build

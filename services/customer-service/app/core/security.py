@@ -31,6 +31,8 @@ class Principal:
     username: str | None
     email: str | None
     roles: frozenset[str]
+    given_name: str | None = None
+    family_name: str | None = None
 
     def has_any_role(self, *required_roles: Role) -> bool:
         return bool(self.roles.intersection(role.value for role in required_roles))
@@ -133,9 +135,13 @@ def _principal_from_claims(claims: dict[str, Any], role_client_id: str) -> Princ
 
     username = claims.get("preferred_username")
     email = claims.get("email")
+    given_name = claims.get("given_name")
+    family_name = claims.get("family_name")
     return Principal(
         subject=subject,
         username=username if isinstance(username, str) else None,
         email=email if isinstance(email, str) else None,
         roles=roles,
+        given_name=given_name if isinstance(given_name, str) else None,
+        family_name=family_name if isinstance(family_name, str) else None,
     )

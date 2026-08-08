@@ -18,6 +18,7 @@ from app.schemas.customer import (
     AuditEventListResponse,
     AuditEventResponse,
     ProfileCreate,
+    ProfileProvisioningResponse,
     ProfileResponse,
     ProfileUpdate,
 )
@@ -74,6 +75,25 @@ def _audit_response(event: CustomerAuditEvent) -> AuditEventResponse:
         occurred_at=event.occurred_at,
         correlation_id=event.correlation_id,
         metadata=event.safe_metadata,
+    )
+
+
+@router.put(
+    "",
+    response_model=ProfileProvisioningResponse,
+    summary="Provision or reuse the profile for the authenticated identity",
+)
+async def provision_authenticated_profile(
+    request: Request,
+    actor: CustomerActor,
+    service: CustomerService,
+) -> ProfileProvisioningResponse:
+    profile, provisioned = await service.provision_authenticated_profile(
+        actor, _request_id(request)
+    )
+    return ProfileProvisioningResponse(
+        profile=_profile_response(profile),
+        provisioned=provisioned,
     )
 
 

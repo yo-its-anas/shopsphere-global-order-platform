@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 from uuid import UUID
 
-from app.core.errors import ConflictError, ResourceNotFoundError
+from app.core.errors import ConflictError, InvalidIdentityClaimsError, ResourceNotFoundError
 from app.core.security import Principal
 from app.domain.models import (
     AccountStatusReason,
@@ -20,6 +21,7 @@ from app.domain.models import (
 from app.domain.repositories import UnitOfWork
 
 UnitOfWorkFactory = Callable[[], UnitOfWork]
+_IDENTITY_EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 
 class CustomerAccountService:
@@ -52,6 +54,46 @@ class CustomerAccountService:
     def _require_mutable(profile: CustomerProfile) -> None:
         if profile.status is not CustomerStatus.ACTIVE:
             raise ConflictError
+
+    @staticmethod
+    def _profile_values_from_identity(actor: Principal) -> dict[str, str]:
+        first_name = (actor.given_name or "").strip()
+        last_name = (actor.family_name or "").strip()
+        email = (actor.email or "").strip().casefold()
+        names_are_safe = all(
+            value and len(value) <= 100 and not any(ord(character) < 32 for character in value)
+            for value in (first_name, last_name)
+        )
+        if not names_are_safe or len(email) > 320 or not _IDENTITY_EMAIL_PATTERN.fullmatch(email):
+            raise InvalidIdentityClaimsError
+        return {"first_name": first_name, "last_name": last_name, "email": email}
+
+    async def provision_authenticated_profile(
+        self, actor: Principal, correlation_id: str
+    ) -> tuple[CustomerProfile, bool]:
+        """Provision once from verified identity claims or return the existing profile."""
+
+        candidate = CustomerProfile(
+            identity_provider_subject=actor.subject,
+            **self._profile_values_from_identity(actor),
+        )
+        async with self._unit_of_work_factory() as unit:
+            profile, provisioned = await unit.customers.provision_profile_if_absent(candidate)
+            if not provisioned:
+                return profile, False
+            unit.customers.add_audit_event(
+                self._event(
+                    profile.id,
+                    actor,
+                    "profile.provisioned",
+                    "customer_profile",
+                    correlation_id,
+                    profile.id,
+                    {"source": "authenticated_identity"},
+                )
+            )
+            await unit.commit()
+            return profile, True
 
     async def provision_profile(
         self, actor: Principal, values: dict[str, Any], correlation_id: str

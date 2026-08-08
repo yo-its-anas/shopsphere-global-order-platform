@@ -59,7 +59,7 @@ flowchart LR
 4. React uses the access token for APIs and treats UI role checks as presentation only, never as an authorization control. Token storage must minimize exposure; long-lived tokens must not be persisted in browser local storage.
 5. Logout is initiated through the OpenID Connect logout flow so the Keycloak session is terminated. Local UI state is then cleared.
 
-Self-registration creates the Keycloak identity first. Customer-profile provisioning is a separate idempotent operation correlated by `sub`; it must handle retries and an identity that temporarily has no profile. The precise provisioning mechanism remains an implementation decision and is not claimed as present.
+Self-registration creates the Keycloak identity first. Customer-profile provisioning is a separate idempotent operation correlated by `sub`. The implemented customer-service endpoint is `PUT /api/v1/customers/me`: verified identity claims seed the first profile, while an atomic database insert-or-read operation and unique constraint make retries and concurrent requests converge on one profile. Only the winning insert creates the `profile.provisioned` domain audit event. An identity may temporarily exist without a profile until this endpoint is called.
 
 ### React to customer-service API flow
 
@@ -129,7 +129,7 @@ Authentication and audit telemetry can contain personal or security-sensitive me
 
 The PoC uses one Keycloak pod and one PostgreSQL pod on the single-node kind cluster and therefore has no host-level availability. The `shopsphere` realm, public frontend client, API audience, service-integration client, roles, password policy, brute-force controls, bounded tokens and sessions, refresh-token rotation, event recording, and PostgreSQL persistence are implemented. The Service is ClusterIP-only; local HTTP and loopback URLs are PoC constraints, not production transport controls.
 
-React authentication, public ingress, gateway and service JWT validation, customer profile provisioning, resource authorization, activity projection, SMTP-backed recovery, verified email, MFA, federation, automated credential rotation, and enterprise lifecycle integration remain Planned. No customer user, profile, or business authorization flow is claimed as implemented.
+Customer-service JWT validation, profile provisioning, resource authorization, customer-domain audit storage, and customer activity APIs are implemented and tested with isolated PostgreSQL. React authentication integration, public ingress, gateway JWT enforcement/routing, Keycloak authentication-event projection, SMTP-backed recovery, verified email, MFA, federation, automated credential rotation, workload deployment, and enterprise lifecycle integration remain Planned. No browser-to-service customer journey is claimed as implemented.
 
 ## Production evolution
 

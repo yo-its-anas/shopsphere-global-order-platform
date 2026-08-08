@@ -74,6 +74,11 @@ class ProfileResponse(ApiModel):
     updated_at: datetime
 
 
+class ProfileProvisioningResponse(ApiModel):
+    profile: ProfileResponse
+    provisioned: bool
+
+
 class AddressCreate(ApiModel):
     label: str = Field(min_length=1, max_length=50)
     recipient_name: str = Field(min_length=1, max_length=200)

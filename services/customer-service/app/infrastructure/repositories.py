@@ -6,6 +6,8 @@ from types import TracebackType
 from uuid import UUID
 
 from sqlalchemy import Select, select, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.domain.models import (
@@ -87,6 +89,49 @@ class SqlAlchemyCustomerRepository:
                 updated_at=profile.updated_at,
             )
         )
+
+    async def provision_profile_if_absent(
+        self, profile: CustomerProfile
+    ) -> tuple[CustomerProfile, bool]:
+        """Atomically insert one profile per identity-provider subject."""
+
+        values = {
+            "id": profile.id,
+            "identity_provider_subject": profile.identity_provider_subject,
+            "first_name": profile.first_name,
+            "last_name": profile.last_name,
+            "email": profile.email,
+            "phone": profile.phone,
+            "account_status": profile.status.value,
+            "created_at": profile.created_at,
+            "updated_at": profile.updated_at,
+        }
+        dialect_name = self._session.get_bind().dialect.name
+        if dialect_name == "postgresql":
+            statement = (
+                postgresql_insert(CustomerProfileRecord)
+                .values(**values)
+                .on_conflict_do_nothing(constraint="uq_customer_profiles_idp_subject")
+                .returning(CustomerProfileRecord.id)
+            )
+        elif dialect_name == "sqlite":
+            statement = (
+                sqlite_insert(CustomerProfileRecord)
+                .values(**values)
+                .on_conflict_do_nothing(index_elements=["identity_provider_subject"])
+                .returning(CustomerProfileRecord.id)
+            )
+        else:
+            raise RuntimeError("Profile provisioning requires a supported SQL dialect")
+
+        result = await self._session.execute(statement)
+        if result.scalar_one_or_none() is not None:
+            return profile, True
+
+        existing = await self.get_profile_by_subject(profile.identity_provider_subject)
+        if existing is None:
+            raise RuntimeError("Identity conflict did not resolve to an existing profile")
+        return existing, False
 
     async def get_profile_by_id(self, customer_id: UUID) -> CustomerProfile | None:
         record = await self._session.get(CustomerProfileRecord, customer_id)

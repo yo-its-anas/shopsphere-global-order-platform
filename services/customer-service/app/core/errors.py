@@ -33,6 +33,12 @@ class ConflictError(ApplicationError):
     message = "The request conflicts with the current resource state."
 
 
+class InvalidIdentityClaimsError(ApplicationError):
+    status_code = 400
+    code = "invalid_identity_claims"
+    message = "Required identity profile claims are missing or invalid."
+
+
 class DependencyUnavailableError(ApplicationError):
     status_code = 503
     code = "dependency_unavailable"
