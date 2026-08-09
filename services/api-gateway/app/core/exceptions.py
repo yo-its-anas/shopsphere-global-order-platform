@@ -10,6 +10,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.core.errors import GatewayError
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,6 +56,18 @@ async def unexpected_exception_handler(request: Request, exc: Exception) -> JSON
         exc_info=exc,
         extra={"event": "unhandled_exception"},
     )
+
+
+async def gateway_exception_handler(request: Request, exc: GatewayError) -> JSONResponse:
+    """Return a stable failure without internal service addresses or exception details."""
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {"code": exc.code, "message": exc.message},
+            "correlation_id": _request_id(request),
+        },
+    )
     return JSONResponse(
         status_code=500,
         content={
@@ -70,6 +84,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Register the service-wide exception policy."""
 
     handlers: tuple[tuple[type[Exception], Any], ...] = (
+        (GatewayError, gateway_exception_handler),
         (HTTPException, http_exception_handler),
         (RequestValidationError, validation_exception_handler),
         (Exception, unexpected_exception_handler),

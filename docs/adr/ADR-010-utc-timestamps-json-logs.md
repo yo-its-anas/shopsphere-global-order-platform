@@ -12,6 +12,8 @@ ShopSphere represents global activity across services. Local timestamps and unst
 
 Store timestamps as timezone-aware UTC values and emit them in ISO 8601 format. Convert to user-local time only at presentation boundaries. Emit structured JSON application logs with UTC timestamp, severity, service, environment, event name, trace identifier, span identifier, and correlation identifier where available.
 
+Keep operational logs, domain audit records, and identity-provider authentication events as distinct record classes. Customer-domain audit records are owned by `customer-service`; authentication events are owned by Keycloak. Cross-system customer activity views may present an authorized, minimal projection of both, but do not transfer source-of-truth ownership. Event correlation uses opaque correlation and trace identifiers, never credentials or bearer tokens.
+
 ## Alternatives considered
 
 - Store local time: appears user-friendly but creates daylight-saving and cross-region ambiguity.
@@ -25,6 +27,8 @@ Events and logs can be correlated consistently across systems. Developers must u
 ## Security implications
 
 Logs must exclude credentials, tokens, payment data, and unnecessary personal data; apply redaction, access controls, integrity protection, retention, and deletion policy. Correlation identifiers must not encode sensitive values.
+
+Audit records require stronger modification controls than ordinary application logs and must capture a verified actor, action, target, outcome, source, and UTC event time without copying sensitive before/after values unnecessarily. Authentication-event retention and presentation must account for the sensitivity of IP address, device, location, and failed-login metadata.
 
 ## PoC limitations
 

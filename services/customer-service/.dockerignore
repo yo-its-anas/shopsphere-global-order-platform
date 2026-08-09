@@ -9,5 +9,5 @@ tests/
 .git/
 .env
 .env.*
+!.env.example
 README.md
-

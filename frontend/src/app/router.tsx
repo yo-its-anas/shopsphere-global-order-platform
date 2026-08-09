@@ -6,10 +6,18 @@ import {
 } from "react-router-dom";
 
 import { AppShell } from "../layouts/AppShell";
+import { AuthenticatedRoute, RoleRoute } from "../features/auth/RouteGuards";
+import { AccountActivityPage } from "../pages/AccountActivityPage";
+import { AddressesPage } from "../pages/AddressesPage";
+import { CustomerAdministrationPage } from "../pages/CustomerAdministrationPage";
+import { CustomerLandingPage } from "../pages/CustomerLandingPage";
+import { CustomerProfilePage } from "../pages/CustomerProfilePage";
 import { DashboardPage } from "../pages/DashboardPage";
 import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { PlaceholderPage } from "../pages/PlaceholderPage";
+import { RegisterPage } from "../pages/RegisterPage";
+import { UnauthorizedPage } from "../pages/UnauthorizedPage";
 
 export const appRoutes: RouteObject[] = [
   {
@@ -17,20 +25,53 @@ export const appRoutes: RouteObject[] = [
     element: <LoginPage />,
   },
   {
+    path: "/register",
+    element: <RegisterPage />,
+  },
+  {
     path: "/",
-    element: <AppShell />,
+    element: (
+      <AuthenticatedRoute>
+        <AppShell />
+      </AuthenticatedRoute>
+    ),
     children: [
       { index: true, element: <Navigate replace to="/dashboard" /> },
       { path: "dashboard", element: <DashboardPage /> },
+      { path: "customers", element: <CustomerLandingPage /> },
       {
-        path: "customers",
+        path: "profile",
         element: (
-          <PlaceholderPage
-            title="Customers"
-            description="Customer identity and account presentation will be integrated later."
-          />
+          <RoleRoute roles={["customer"]}>
+            <CustomerProfilePage />
+          </RoleRoute>
         ),
       },
+      {
+        path: "addresses",
+        element: (
+          <RoleRoute roles={["customer"]}>
+            <AddressesPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "account-activity",
+        element: (
+          <RoleRoute roles={["customer"]}>
+            <AccountActivityPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "customer-administration",
+        element: (
+          <RoleRoute roles={["support", "operations_admin"]}>
+            <CustomerAdministrationPage />
+          </RoleRoute>
+        ),
+      },
+      { path: "unauthorized", element: <UnauthorizedPage /> },
       {
         path: "products",
         element: (

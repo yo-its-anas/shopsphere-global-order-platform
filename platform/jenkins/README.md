@@ -9,17 +9,18 @@ The declarative pipeline uses one Jenkins workspace and executes these stages se
 1. Explicit source checkout.
 2. Non-sensitive host and tool diagnostics.
 3. Required monorepo path and Git whitespace validation.
-4. Isolated Python virtual environment preparation and Black checks.
-5. Ruff linting for all five Python services.
-6. Pytest unit tests for all five services with individual JUnit XML reports.
-7. Locked frontend installation using `npm ci`.
-8. Frontend Prettier and ESLint checks.
-9. Vitest execution with JUnit XML output.
-10. Docker builds for the five backend images and the frontend image.
-11. Terraform formatting validation.
-12. Terraform provider initialization with `-backend=false` and configuration validation.
-13. Offline kind-shape and PoC Kustomize rendering validation.
-14. JUnit publication and test-result archival.
+4. Customer-service dependency installation in an isolated Python virtual environment, followed by `pip check`.
+5. Black formatting checks and Ruff linting for all five Python services.
+6. An enforcing Bandit scan of customer-service with a JSON evidence report.
+7. Pytest unit tests for all five services with individual JUnit XML reports.
+8. Locked frontend installation using `npm ci`.
+9. Frontend Prettier and ESLint checks.
+10. Vitest execution with JUnit XML output and a production frontend build.
+11. A dedicated customer-service Docker build followed by validation builds for the remaining deployable images.
+12. Terraform formatting validation.
+13. Terraform provider initialization with `-backend=false` and configuration validation.
+14. Offline kind-shape, PoC Kustomize, and customer-service manifest validation.
+15. JUnit publication and archival of XML and security evidence under `test-results/`.
 
 The pipeline has a 60-minute overall timeout plus tighter stage timeouts, timestamps, disabled concurrent runs, and retention of 20 builds for at most 30 days. A failure stops subsequent stages. If failure occurs after any test report is created, the pipeline-level `post` handler attempts to publish and archive that partial evidence.
 
@@ -48,9 +49,8 @@ Docker validation creates locally tagged `ci-<build number>` images. Host-level 
 
 ## Planned DevSecOps expansion
 
-The following gates are documented in the Jenkinsfile but intentionally have no executable stages yet:
+Bandit is an active, fail-closed customer-service gate. Findings that make Bandit return a non-zero status fail the build; its JSON report is archived even when that happens. The following gates remain documented in the Jenkinsfile but intentionally have no executable stages yet:
 
-- Bandit;
 - Semgrep;
 - Trivy filesystem and image scanning;
 - Python and npm dependency scanning;
@@ -66,9 +66,20 @@ The pipeline uses the same repository-level building blocks available to develop
 
 ```bash
 make validate-kubernetes
+make validate-customer-service
 terraform -chdir=infrastructure/terraform fmt -check -recursive
 terraform -chdir=infrastructure/terraform init -backend=false -input=false
 terraform -chdir=infrastructure/terraform validate
 ```
 
 Python commands execute inside an ephemeral workspace virtual environment. Frontend commands execute inside `frontend/` against the committed `package-lock.json`.
+
+## Validation cadence and customer integration policy
+
+All checkout, static analysis, unit test, frontend build, Docker build, Terraform, and Kubernetes validation stages run on every commit. They require no live ShopSphere workload.
+
+The `PoC customer integration tests` stage is the deliberate exception because it exercises live PoC services. Jenkins marks the stage as skipped unless `SHOPSPHERE_RUN_CUSTOMER_INTEGRATION=true`; this is pipeline policy, not a synthetic passing result. When enabled, the job must inject the complete environment contract described in `tests/integration/README.md`, including masked credentials for dedicated test-only Keycloak clients. Missing configuration or unavailable services fail the enabled stage rather than being ignored.
+
+The stage creates randomized simulated identities, exercises only Keycloak, API Gateway, customer-service, and the customer database boundary, then publishes `test-results/integration/customer-identity.xml`. It does not deploy workloads, modify PostgreSQL availability, use bootstrap administrator credentials, or test incomplete business modules.
+
+Jenkins credentials must be bound as masked environment variables by job configuration. The pipeline never echoes configuration values, credentials, access tokens, or refresh tokens.

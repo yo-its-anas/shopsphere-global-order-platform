@@ -2,6 +2,16 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
+# Vite embeds these public endpoints at build time. They must never contain secrets.
+ARG VITE_API_BASE_URL=http://localhost:8000/api/v1
+ARG VITE_KEYCLOAK_URL=http://localhost:8081
+ARG VITE_KEYCLOAK_REALM=shopsphere
+ARG VITE_KEYCLOAK_CLIENT_ID=shopsphere-frontend
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
+    VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL} \
+    VITE_KEYCLOAK_REALM=${VITE_KEYCLOAK_REALM} \
+    VITE_KEYCLOAK_CLIENT_ID=${VITE_KEYCLOAK_CLIENT_ID}
+
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 

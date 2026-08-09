@@ -95,16 +95,28 @@ echo 'Repository structure validation passed.'
             }
         }
 
-        stage('Python formatting check') {
+        stage('Customer-service dependency installation') {
             options {
                 timeout(time: 10, unit: 'MINUTES')
             }
             steps {
-                sh(label: 'Prepare Python CI environment and check Black formatting', script: '''#!/usr/bin/env bash
+                sh(label: 'Install locked customer-service and validation dependencies', script: '''#!/usr/bin/env bash
 set -Eeuo pipefail
 
 python3 -m venv "$CI_VENV"
 "$CI_VENV/bin/python" -m pip install -e 'services/customer-service[dev]'
+"$CI_VENV/bin/python" -m pip check
+''')
+            }
+        }
+
+        stage('Python Black check') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Check Black formatting for every Python service', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
 
 services=(
     services/customer-service
@@ -125,7 +137,7 @@ done
             }
         }
 
-        stage('Python linting') {
+        stage('Python Ruff linting') {
             options {
                 timeout(time: 5, unit: 'MINUTES')
             }
@@ -148,6 +160,27 @@ for service in "${services[@]}"; do
         "$WORKSPACE/$CI_VENV/bin/python" -m ruff check .
     )
 done
+''')
+            }
+        }
+
+        stage('Customer-service Bandit') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Scan customer-service Python code with Bandit', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/security
+(
+    cd services/customer-service
+    "$WORKSPACE/$CI_VENV/bin/python" -m bandit \
+        --quiet \
+        --recursive app \
+        --format json \
+        --output "$WORKSPACE/test-results/security/customer-service-bandit.json"
+)
 ''')
             }
         }
@@ -178,6 +211,26 @@ for service in "${services[@]}"; do
             --junitxml="$WORKSPACE/test-results/python/${service_name}.xml"
     )
 done
+''')
+            }
+        }
+
+        stage('PoC customer integration tests') {
+            when {
+                environment name: 'SHOPSPHERE_RUN_CUSTOMER_INTEGRATION', value: 'true'
+            }
+            options {
+                timeout(time: 20, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run opt-in customer identity integration suite', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/integration
+"$CI_VENV/bin/python" -m pytest \
+    -c tests/integration/pytest.ini \
+    tests/integration/customer_identity \
+    --junitxml=test-results/integration/customer-identity.xml
 ''')
             }
         }
@@ -227,7 +280,37 @@ npm test -- \
             }
         }
 
-        stage('Docker image build validation') {
+        stage('Frontend production build') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                dir('frontend') {
+                    sh(label: 'Build the production frontend bundle', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+npm run build
+''')
+                }
+            }
+        }
+
+        stage('Customer-service Docker build') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Build the customer-service image', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+docker build \
+    --label "shopsphere.ci.build=${BUILD_NUMBER}" \
+    --tag "shopsphere/customer-service:ci-${BUILD_NUMBER}" \
+    services/customer-service
+''')
+            }
+        }
+
+        stage('Remaining Docker image build validation') {
             options {
                 timeout(time: 25, unit: 'MINUTES')
             }
@@ -236,7 +319,6 @@ npm test -- \
 set -Eeuo pipefail
 
 services=(
-    services/customer-service
     services/catalogue-service
     services/order-service
     services/analytics-service
@@ -293,6 +375,7 @@ terraform -chdir=infrastructure/terraform validate
                 sh(label: 'Validate kind shape and render PoC manifests', script: '''#!/usr/bin/env bash
 set -Eeuo pipefail
 make validate-kubernetes
+make validate-customer-service
 ''')
             }
         }
@@ -308,7 +391,7 @@ make validate-kubernetes
                     keepLongStdio: true
                 )
                 archiveArtifacts(
-                    artifacts: 'test-results/**/*.xml',
+                    artifacts: 'test-results/**/*',
                     allowEmptyArchive: false,
                     fingerprint: true
                 )
@@ -325,7 +408,7 @@ make validate-kubernetes
                 keepLongStdio: true
             )
             archiveArtifacts(
-                artifacts: 'test-results/**/*.xml',
+                artifacts: 'test-results/**/*',
                 allowEmptyArchive: true,
                 fingerprint: true
             )
@@ -340,7 +423,6 @@ make validate-kubernetes
  * PLANNED DEVSECOPS EXPANSION — intentionally not executable in this foundation:
  *
  * Security gates:
- *   - Bandit Python security scanning
  *   - Semgrep static analysis
  *   - Trivy filesystem and container-image scanning
  *   - Python and npm dependency vulnerability scanning

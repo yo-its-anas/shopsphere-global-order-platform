@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — separate documentation and Kubernetes overlay locations exist. Detailed diagrams, manifests, and production designs remain planned.
+Accepted — separate documentation and Kubernetes overlay locations exist. The PoC includes deployable PostgreSQL, Keycloak, and customer-service manifests; the production-reference material remains recommendation-only.
 
 ## Context
 
@@ -28,7 +28,7 @@ The separation prevents PoC shortcuts from becoming implicit production controls
 
 ## PoC limitations
 
-Current evidence is limited to directory separation and explanatory READMEs. No complete PoC or production diagrams, threat models, or manifests exist yet.
+Current PoC evidence includes a single-node cluster, internal PostgreSQL and Keycloak, customer-service, configuration validation scripts, trust-boundary and sequence diagrams, and explicit availability limitations. API Gateway and frontend are not deployed. The production reference is not deployable or validated production infrastructure.
 
 ## Production evolution
 

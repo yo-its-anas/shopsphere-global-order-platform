@@ -5,10 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "shopsphere-api-gateway"
 version = "0.1.0"
-description = "Enterprise API gateway placeholder. Routing, identity integration, policy enforcement, and downstream calls remain future work."
+description = "Versioned ShopSphere API gateway with transport-only customer capability routing."
 requires-python = ">=3.10,<3.15"
 dependencies = [
   "fastapi==0.139.2",
+  "httpx2==2.7.0",
   "uvicorn==0.51.0",
 ]
 

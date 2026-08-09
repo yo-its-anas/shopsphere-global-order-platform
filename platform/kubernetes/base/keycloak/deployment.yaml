@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: shopsphere-platform
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+      app.kubernetes.io/component: identity-provider
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+        app.kubernetes.io/component: identity-provider
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.7.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - start
+            - --import-realm
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: management
+              containerPort: 9000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: keycloak-environment
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://postgresql.shopsphere-data.svc.cluster.local:5432/keycloak_db
+            - name: KC_DB_USERNAME
+              value: keycloak_app
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-keycloak-credentials
+                  key: keycloak-db-password
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-keycloak-credentials
+                  key: bootstrap-admin-username
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-keycloak-credentials
+                  key: bootstrap-admin-password
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME_STRICT
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+            - name: KC_CACHE
+              value: local
+            - name: KC_TRANSACTION_XA_ENABLED
+              value: "false"
+            - name: JAVA_OPTS_KC_HEAP
+              value: -XX:InitialRAMPercentage=35 -XX:MaxRAMPercentage=65
+          startupProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+              scheme: HTTP
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+              scheme: HTTP
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+              scheme: HTTP
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import/shopsphere-realm.json
+              subPath: shopsphere-realm.json
+              readOnly: true
+            - name: realm-import
+              mountPath: /opt/keycloak/data/configuration/client-policy-profiles.json
+              subPath: client-policy-profiles.json
+              readOnly: true
+            - name: realm-import
+              mountPath: /opt/keycloak/data/configuration/client-policies.json
+              subPath: client-policies.json
+              readOnly: true
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: realm-import
+          configMap:
+            name: keycloak-realm-import
+            defaultMode: 0440
+        - name: temporary
+          emptyDir:
+            sizeLimit: 256Mi

@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: shopsphere-platform
+
+resources:
+  - ../../../base/keycloak
+
+configMapGenerator:
+  - name: keycloak-environment
+    literals:
+      - KC_HOSTNAME=http://localhost:8080
+      - SHOPSPHERE_FRONTEND_BASE_URL=http://localhost:5173
+
+generatorOptions:
+  # Stable because the reusable base references this environment-specific name.
+  # Deployment changes remain explicit through the overlay review and apply.
+  disableNameSuffixHash: true
+
+labels:
+  - pairs:
+      shopsphere.io/environment: poc

@@ -12,3 +12,19 @@ Contains small, reviewed automation entry points for repeatable local and CI tas
 - `capture-tool-versions.sh` writes sanitized version evidence to `docs/evidence/tool-versions.md`.
 
 Run all checks with `make doctor`. A non-zero result means one or more prerequisites need attention; scripts never install packages or modify host services.
+
+## PostgreSQL operations
+
+- `validate-postgresql-manifests.sh` renders and checks the PoC PostgreSQL manifests without changing the cluster.
+- `check-postgresql.sh` performs read-only checks for workload readiness, ClusterIP-only networking, bound persistence, and the required logical database names.
+- `create-postgresql-secret.sh` is an explicit operational helper. It creates the Kubernetes Secret directly from hidden prompts, or generates strong values only when `--generate` is supplied. It never prints credentials and preserves an existing Secret.
+
+## Keycloak operations
+
+- `validate-keycloak-manifests.sh` validates the Kubernetes resources and sanitized realm JSON without changing the cluster.
+- `configure-keycloak.sh` idempotently reconciles the ShopSphere client policies, dedicated `view-events` activity reader, and namespace-scoped runtime Secret after realm import without displaying credentials.
+- `check-keycloak.sh` performs non-destructive checks for readiness, internal service exposure, PostgreSQL connectivity, realm settings, roles, clients, PKCE enforcement, and authentication-event recording. It requests a least-privilege service token so Keycloak produces a verifiable client authentication event; no token is displayed.
+- `create-keycloak-secret.sh` copies the existing Keycloak database credential into a namespace-scoped Secret and creates bootstrap administrator credentials from hidden prompts, or generates them only when `--generate` is supplied. It never prints credential values and preserves an existing Secret.
+- `create-customer-service-secret.sh` derives a percent-encoded customer database URL from the existing PostgreSQL credential and creates a namespace-scoped Secret directly through the Kubernetes API. It never prints the URL or credential and preserves an existing Secret.
+- `validate-customer-service-manifests.sh` renders and statically checks the internal customer-service Kustomize overlay without changing the cluster.
+- `check-customer-service.sh` verifies the deployed workload, ClusterIP-only Service, and health endpoints without reading credentials.

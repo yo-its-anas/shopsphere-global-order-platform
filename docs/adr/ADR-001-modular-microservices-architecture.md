@@ -12,6 +12,8 @@ ShopSphere must demonstrate five enterprise modules with distinct responsibiliti
 
 Organize the backend as independently bounded services: customer, catalogue, order, analytics, and API gateway. Keep domain logic and persistence ownership within each service. Use governed contracts in `shared/` only where interoperability requires them. Modular internal design is required even if PoC deployment constraints cause components to share infrastructure.
 
+For the Customer Identity and Account Management capability, Keycloak owns authentication, credentials, password policy, token issuance, identity roles, login/logout, and authentication events. `customer-service` owns the customer business profile, addresses, account metadata, customer-domain audit history, and customer activity presentation. It links a profile to the immutable Keycloak subject identifier but does not store passwords, password hashes, reset tokens, or other credentials. The API gateway is the external API enforcement point; downstream services still enforce authorization for resources they own.
+
 ## Alternatives considered
 
 - A single layered monolith: simpler deployment, but weaker demonstration of service ownership and independent evolution.
@@ -21,6 +23,8 @@ Organize the backend as independently bounded services: customer, catalogue, ord
 ## Consequences
 
 Boundaries and ownership become explicit and services can evolve independently. The trade-off is additional API, event, deployment, observability, and consistency complexity. Cross-service database access is prohibited by design.
+
+Identity lifecycle and customer-profile lifecycle are related but not identical. Their identifiers remain distinct, provisioning must tolerate retries and partial failure, and account deletion or suspension requires an explicit cross-boundary workflow rather than direct access to another component's data store.
 
 ## Security implications
 

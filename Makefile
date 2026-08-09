@@ -1,4 +1,9 @@
 PYTHON ?= python3
+KUBE_CONTEXT ?= kind-shopsphere-poc
+POSTGRESQL_OVERLAY := platform/kubernetes/overlays/poc/postgresql
+KEYCLOAK_OVERLAY := platform/kubernetes/overlays/poc/keycloak
+CUSTOMER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/customer-service
+CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -6,7 +11,12 @@ SERVICE_DIRS := \
 	services/analytics-service \
 	services/api-gateway
 
-.PHONY: help format lint test build validate validate-shell validate-kubernetes doctor clean
+.PHONY: help format lint test build validate validate-shell validate-kubernetes \
+	validate-postgresql postgresql-secret postgresql-apply postgresql-status \
+	validate-keycloak keycloak-secret keycloak-apply keycloak-configure keycloak-status doctor clean \
+	validate-customer-service customer-service-secret customer-service-build \
+	customer-service-load customer-service-apply customer-service-status \
+	customer-integration customer-integration-collect
 
 help: ## Show available foundation targets
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -36,7 +46,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -48,6 +58,71 @@ validate-kubernetes: ## Validate the kind shape and render the PoC Kustomize ove
 	@test "$$(grep -c '^[[:space:]]*- role:' platform/kind/cluster-config.yaml)" -eq 1
 	@grep -q '^[[:space:]]*- role: control-plane$$' platform/kind/cluster-config.yaml
 	@kubectl kustomize platform/kubernetes/overlays/poc >/dev/null
+
+validate-postgresql: ## Validate PostgreSQL manifests without changing the cluster
+	@./scripts/validate-postgresql-manifests.sh
+
+postgresql-secret: ## Create the PostgreSQL Secret interactively; existing Secrets are preserved
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-postgresql-secret.sh
+
+postgresql-apply: validate-postgresql ## Apply the PoC PostgreSQL component; requires its Secret
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get secret shopsphere-postgresql-credentials >/dev/null 2>&1 || { \
+		echo "Create shopsphere-postgresql-credentials first with 'make postgresql-secret'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(POSTGRESQL_OVERLAY)"
+
+postgresql-status: ## Run read-only PostgreSQL workload, service, PVC, and database checks
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-postgresql.sh
+
+validate-keycloak: ## Validate Keycloak manifests and realm configuration without changing the cluster
+	@./scripts/validate-keycloak-manifests.sh
+
+keycloak-secret: ## Create Keycloak credentials interactively; existing Secrets are preserved
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-keycloak-secret.sh
+
+keycloak-apply: validate-keycloak ## Apply the PoC Keycloak component; requires PostgreSQL and its Secret
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-platform get secret shopsphere-keycloak-credentials >/dev/null 2>&1 || { \
+		echo "Create shopsphere-keycloak-credentials first with 'make keycloak-secret'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get service postgresql >/dev/null 2>&1 || { \
+		echo "The internal PostgreSQL Service is required before Keycloak can be applied." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(KEYCLOAK_OVERLAY)"
+
+keycloak-configure: ## Reconcile Keycloak client policies and the least-privilege activity reader
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/configure-keycloak.sh
+
+keycloak-status: ## Run non-destructive Keycloak workload, realm, client, event, and database checks
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-keycloak.sh
+
+validate-customer-service: ## Validate customer-service manifests without changing the cluster
+	@./scripts/validate-customer-service-manifests.sh
+
+customer-service-secret: ## Derive the customer database URL Secret without displaying credentials
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-customer-service-secret.sh
+
+customer-service-build: ## Build the local customer-service PoC image
+	@docker build --tag "$(CUSTOMER_SERVICE_IMAGE)" services/customer-service
+
+customer-service-load: ## Load the existing customer-service image into the kind node
+	@./platform/kind/load-images.sh "$(CUSTOMER_SERVICE_IMAGE)"
+
+customer-service-apply: validate-customer-service ## Apply the internal customer-service workload; requires runtime Secrets
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-customer-service-database >/dev/null 2>&1 || { \
+		echo "Create shopsphere-customer-service-database first with 'make customer-service-secret'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-customer-activity-keycloak >/dev/null 2>&1 || { \
+		echo "Reconcile shopsphere-customer-activity-keycloak first with 'make keycloak-configure'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(CUSTOMER_SERVICE_OVERLAY)"
+
+customer-service-status: ## Run read-only customer-service workload, probe, and exposure checks
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-customer-service.sh
+
+customer-integration: ## Run opt-in live customer capability integration tests with JUnit output
+	@mkdir -p test-results/integration
+	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
+		tests/integration/customer_identity \
+		--junitxml=test-results/integration/customer-identity.xml
+
+customer-integration-collect: ## Collect customer integration tests without contacting services
+	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
+		tests/integration/customer_identity --collect-only
 
 doctor: ## Run non-destructive host and tool checks
 	@status=0; \

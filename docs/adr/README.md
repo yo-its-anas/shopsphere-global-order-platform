@@ -10,7 +10,7 @@ Architecture Decision Records (ADRs) capture significant choices, their context,
 | [ADR-002](ADR-002-single-vm-kind-poc.md) | Single GCP VM and single-node kind for the PoC | Proposed |
 | [ADR-003](ADR-003-separate-poc-and-production-architecture.md) | Separate PoC and recommended GKE production architecture | Accepted |
 | [ADR-004](ADR-004-fastapi-versioned-rest-apis.md) | FastAPI REST APIs with `/api/v1` routes | Proposed |
-| [ADR-005](ADR-005-keycloak-identity-rbac.md) | Keycloak for identity and RBAC | Proposed |
+| [ADR-005](ADR-005-keycloak-identity-rbac.md) | Keycloak for identity and RBAC | Accepted |
 | [ADR-006](ADR-006-postgresql-redis-data-platform.md) | PostgreSQL for transactions and Redis for caching | Proposed |
 | [ADR-007](ADR-007-kafka-domain-events.md) | Kafka for asynchronous domain events | Proposed |
 | [ADR-008](ADR-008-monorepo-capstone.md) | Monorepo for the enterprise capstone | Accepted |

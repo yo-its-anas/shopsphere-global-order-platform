@@ -59,6 +59,7 @@ terraform.rc
 *.jks
 secrets/
 credentials/
+backups/
 kubeconfig*
 !kubeconfig.example
 
@@ -66,6 +67,14 @@ kubeconfig*
 *.kubeconfig
 *.rendered.yaml
 *.generated.yaml
+platform/kubernetes/**/postgresql-secret.yaml
+platform/kubernetes/**/postgresql-secret.env
+platform/kubernetes/**/keycloak-secret.yaml
+platform/kubernetes/**/keycloak-secret.env
+platform/kubernetes/**/customer-activity-reader-secret.yaml
+platform/kubernetes/**/customer-activity-reader-secret.env
+platform/kubernetes/**/customer-service-secret.yaml
+platform/kubernetes/**/customer-service-secret.env
 charts/**/charts/
 charts/**/tmpcharts/
 
