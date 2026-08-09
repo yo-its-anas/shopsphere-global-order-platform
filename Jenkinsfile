@@ -182,6 +182,26 @@ done
             }
         }
 
+        stage('Customer capability integration tests') {
+            when {
+                environment name: 'SHOPSPHERE_RUN_CUSTOMER_INTEGRATION', value: 'true'
+            }
+            options {
+                timeout(time: 20, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run opt-in customer identity integration suite', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/integration
+"$CI_VENV/bin/python" -m pytest \
+    -c tests/integration/pytest.ini \
+    tests/integration/customer_identity \
+    --junitxml=test-results/integration/customer-identity.xml
+''')
+            }
+        }
+
         stage('Frontend dependency installation') {
             options {
                 timeout(time: 10, unit: 'MINUTES')

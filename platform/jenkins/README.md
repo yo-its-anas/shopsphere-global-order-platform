@@ -72,3 +72,9 @@ terraform -chdir=infrastructure/terraform validate
 ```
 
 Python commands execute inside an ephemeral workspace virtual environment. Frontend commands execute inside `frontend/` against the committed `package-lock.json`.
+
+## Customer capability integration stage
+
+The pipeline includes an opt-in Customer Identity and Account Management integration stage. It is skipped unless `SHOPSPHERE_RUN_CUSTOMER_INTEGRATION=true`. When enabled, the job must inject the complete environment contract described in `tests/integration/README.md`, including masked credentials for dedicated test-only Keycloak clients.
+
+The stage creates randomized simulated identities, exercises only Keycloak, API Gateway, customer-service, and the customer database boundary, then publishes `test-results/integration/customer-identity.xml`. It does not deploy workloads, modify PostgreSQL availability, use bootstrap administrator credentials, or test incomplete business modules.

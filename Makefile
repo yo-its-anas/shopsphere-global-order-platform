@@ -15,7 +15,8 @@ SERVICE_DIRS := \
 	validate-postgresql postgresql-secret postgresql-apply postgresql-status \
 	validate-keycloak keycloak-secret keycloak-apply keycloak-configure keycloak-status doctor clean \
 	validate-customer-service customer-service-secret customer-service-build \
-	customer-service-load customer-service-apply customer-service-status
+	customer-service-load customer-service-apply customer-service-status \
+	customer-integration customer-integration-collect
 
 help: ## Show available foundation targets
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -112,6 +113,16 @@ customer-service-apply: validate-customer-service ## Apply the internal customer
 
 customer-service-status: ## Run read-only customer-service workload, probe, and exposure checks
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-customer-service.sh
+
+customer-integration: ## Run opt-in live customer capability integration tests with JUnit output
+	@mkdir -p test-results/integration
+	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
+		tests/integration/customer_identity \
+		--junitxml=test-results/integration/customer-identity.xml
+
+customer-integration-collect: ## Collect customer integration tests without contacting services
+	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
+		tests/integration/customer_identity --collect-only
 
 doctor: ## Run non-destructive host and tool checks
 	@status=0; \
