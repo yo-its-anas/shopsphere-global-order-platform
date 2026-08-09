@@ -1,27 +1,36 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
-import { DemoDataBadge } from "../components/DemoDataBadge";
+import { useAuth } from "../features/auth/useAuth";
 
 export function LoginPage() {
+  const auth = useAuth();
+  if (auth.authenticated) return <Navigate replace to="/dashboard" />;
+
   return (
-    <main className="login-page">
-      <section className="login-card">
-        <span className="brand__mark brand__mark--large" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-          <i />
+    <main className="identity-page">
+      <section className="identity-card" aria-labelledby="sign-in-title">
+        <span className="identity-card__mark" aria-hidden="true">
+          SG
         </span>
-        <span className="eyebrow">ShopSphere Global</span>
-        <h1>Enterprise Operations</h1>
-        <DemoDataBadge />
-        <p>
-          Authentication is intentionally not implemented. Keycloak integration and protected routes
-          are future work.
+        <h1 id="sign-in-title">Sign in to ShopSphere Global</h1>
+        <p>Continue through the secure ShopSphere identity service.</p>
+        <button
+          className="button button--primary identity-card__action"
+          onClick={() => void auth.login()}
+          type="button"
+        >
+          Continue to secure sign in
+        </button>
+        <div className="identity-card__divider">
+          <span>or</span>
+        </div>
+        <p className="identity-card__link">
+          Don&apos;t have an account? <Link to="/register">Create an account</Link>
         </p>
-        <Link className="button button--primary" to="/dashboard">
-          Open demonstration dashboard
-        </Link>
+        <small>
+          Passwords and authentication are managed by Keycloak and are never handled by this
+          application.
+        </small>
       </section>
     </main>
   );

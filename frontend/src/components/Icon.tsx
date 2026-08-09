@@ -2,6 +2,8 @@ import type { ReactNode, SVGProps } from "react";
 
 export type IconName =
   | "alert"
+  | "addresses"
+  | "administration"
   | "audit"
   | "chevron"
   | "customers"
@@ -10,6 +12,7 @@ export type IconName =
   | "inventory"
   | "orders"
   | "products"
+  | "profile"
   | "revenue"
   | "search"
   | "shipments";
@@ -21,6 +24,12 @@ interface IconProps extends SVGProps<SVGSVGElement> {
 
 const paths: Record<IconName, ReactNode> = {
   alert: <path d="M12 3 2.8 20h18.4L12 3Zm0 6v5m0 3v.1" />,
+  addresses: (
+    <path d="M12 21s7-5.1 7-12a7 7 0 1 0-14 0c0 6.9 7 12 7 12Zm0-9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+  ),
+  administration: (
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2m7.5-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v6m3-3h-6" />
+  ),
   audit: <path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5m3-3v6l4 2" />,
   chevron: <path d="m9 18 6-6-6-6" />,
   customers: (
@@ -35,6 +44,7 @@ const paths: Record<IconName, ReactNode> = {
   inventory: <path d="M3 9 12 4l9 5-9 5-9-5Zm0 0v10h18V9M8 21v-7h8v7" />,
   orders: <path d="M3 4h2l2.4 11h10.8l2-7H7m2 11h.1m8.9 0h.1" />,
   products: <path d="M4 4h16v5H4V4Zm2 5v11h12V9M9 13h6" />,
+  profile: <path d="M20 21a8 8 0 0 0-16 0m8-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />,
   revenue: <path d="M3 7h18v10H3V7Zm4 7h.1M17 10h.1M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />,
   search: <path d="m21 21-4.4-4.4m2.4-5.1a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />,
   shipments: (

@@ -3,16 +3,28 @@ import { NavLink, Outlet } from "react-router-dom";
 import { DemoDataBadge } from "../components/DemoDataBadge";
 import { Icon, type IconName } from "../components/Icon";
 import { environment } from "../config/environment";
+import { useAuth } from "../features/auth/useAuth";
+import type { ShopSphereRole } from "../types/auth";
 
 interface NavigationItem {
   label: string;
   path: string;
   icon: IconName;
+  roles?: ShopSphereRole[];
 }
 
 const navigationItems: NavigationItem[] = [
   { label: "Executive Dashboard", path: "/dashboard", icon: "dashboard" },
   { label: "Customers", path: "/customers", icon: "customers" },
+  { label: "My Profile", path: "/profile", icon: "profile", roles: ["customer"] },
+  { label: "Addresses", path: "/addresses", icon: "addresses", roles: ["customer"] },
+  { label: "Account Activity", path: "/account-activity", icon: "audit", roles: ["customer"] },
+  {
+    label: "Customer Administration",
+    path: "/customer-administration",
+    icon: "administration",
+    roles: ["support", "operations_admin"],
+  },
   { label: "Product Catalogue", path: "/products", icon: "products" },
   { label: "Inventory", path: "/inventory", icon: "inventory" },
   { label: "Orders", path: "/orders", icon: "orders" },
@@ -21,6 +33,15 @@ const navigationItems: NavigationItem[] = [
 ];
 
 export function AppShell() {
+  const auth = useAuth();
+  const visibleNavigation = navigationItems.filter(
+    (item) => !item.roles || item.roles.some((role) => auth.hasRole(role)),
+  );
+  const displayName =
+    [auth.user?.firstName, auth.user?.lastName].filter(Boolean).join(" ") ||
+    auth.user?.username ||
+    "Authenticated user";
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -38,7 +59,7 @@ export function AppShell() {
         </div>
 
         <nav aria-label="Primary navigation" className="sidebar__nav">
-          {navigationItems.map((item) => (
+          {visibleNavigation.map((item) => (
             <NavLink
               className={({ isActive }) => "nav-link" + (isActive ? " nav-link--active" : "")}
               key={item.path}
@@ -52,7 +73,7 @@ export function AppShell() {
 
         <div className="sidebar__notice">
           <DemoDataBadge />
-          <p>No live services connected</p>
+          <p>Badge applies to unrelated dashboard metrics. Customer pages use gateway APIs.</p>
         </div>
       </aside>
 
@@ -77,6 +98,14 @@ export function AppShell() {
               Environment: <strong>{environment.displayName}</strong>
             </span>
             {environment.usesMockData && <DemoDataBadge />}
+            <span className="topbar__user">{displayName}</span>
+            <button
+              className="button button--secondary topbar__logout"
+              onClick={() => void auth.logout()}
+              type="button"
+            >
+              Sign out
+            </button>
           </div>
         </header>
 
