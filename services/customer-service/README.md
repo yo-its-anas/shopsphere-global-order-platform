@@ -44,7 +44,7 @@ Copy `.env.example` only as a reference and inject actual values through the run
 - `KEYCLOAK_ISSUER` for the `shopsphere` realm;
 - `KEYCLOAK_AUDIENCE=shopsphere-api`; and
 - optionally `KEYCLOAK_JWKS_URL` when internal discovery differs from the issuer URL;
-- `KEYCLOAK_ADMIN_URL` and `KEYCLOAK_ACTIVITY_REALM` for the internal Admin API; and
+- `KEYCLOAK_ADMIN_URL`, `KEYCLOAK_TOKEN_URL`, and `KEYCLOAK_ACTIVITY_REALM` for private back-channel Admin API and service-token access; and
 - `KEYCLOAK_ACTIVITY_CLIENT_ID` and `KEYCLOAK_ACTIVITY_CLIENT_SECRET`, injected from the dedicated namespace-scoped Kubernetes Secret.
 
 The example contains placeholders only. Never commit a populated environment file.

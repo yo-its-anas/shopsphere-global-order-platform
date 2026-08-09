@@ -55,11 +55,14 @@ class KeycloakIdentityActivityProvider:
         if not (
             settings.keycloak_issuer
             and settings.keycloak_admin_url
+            and settings.keycloak_token_url
             and settings.keycloak_activity_client_id
             and settings.keycloak_activity_client_secret
         ):
             raise ValueError("Keycloak activity integration is not fully configured")
-        self._token_url = f"{settings.keycloak_issuer}/protocol/openid-connect/token"
+        # The OIDC issuer is a strict token claim and can be browser-facing, while this
+        # back-channel endpoint must remain reachable from the service runtime.
+        self._token_url = settings.keycloak_token_url
         realm = quote(settings.keycloak_activity_realm, safe="")
         self._events_url = f"{settings.keycloak_admin_url}/admin/realms/{realm}/events"
         self._admin_events_url = f"{settings.keycloak_admin_url}/admin/realms/{realm}/admin-events"
