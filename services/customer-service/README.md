@@ -64,6 +64,25 @@ DATABASE_URL='postgresql+psycopg://...' .venv/bin/alembic upgrade head
 
 Tests use SQLite by default and can use isolated PostgreSQL by setting `TEST_DATABASE_URL`. Alembic must run as a controlled deployment step before the service receives traffic; application startup does not mutate schemas automatically.
 
-## Current boundary
+## Validation evidence
 
-Profile, address, account-status, service-side JWT validation/RBAC, ownership enforcement, domain-audit behavior, and normalized domain-plus-Keycloak activity retrieval are implemented. React integration, API-gateway routing, deployment manifests for this workload, Keycloak-to-profile lifecycle automation, durable event export, production rate limiting, and end-to-end browser journeys remain planned. This capability is PoC-scoped and is not a claim of production availability.
+The following statements are supported by the current review:
+
+- the Kubernetes Deployment is Ready, its liveness and readiness endpoints return HTTP 200, and its Service is ClusterIP-only;
+- PostgreSQL is Ready with a Bound PVC and separate `customer_db` and `keycloak_db` databases;
+- Keycloak is Ready, records events, and provides the activity reader only `view-events` access;
+- profile, address, status, JWT/RBAC, ownership, audit, and normalized activity implementations and their automated test definitions exist; and
+- React customer tests and the frontend production build pass.
+
+The customer-service suite collects 25 tests, but test execution did not complete during this documentation review. The retained live integration JUnit report records seven skipped tests because explicit PoC integration configuration was not supplied. Therefore profile, address, audit, service-side RBAC, and merged-activity behavior are **implemented but not claimed as end-to-end verified**. Run the service suite and the opt-in integration suite successfully before using them as examination execution evidence.
+
+## Security assumptions and limitations
+
+- Keycloak is the only credential authority. Customer-service does not store or process passwords, password hashes, reset tokens, access tokens, or refresh tokens as domain data.
+- JWT validation assumes the configured issuer, audience, JWKS endpoint, and bounded clock skew match the tokens issued to ShopSphere. Gateway bearer propagation does not replace service-side validation.
+- The confidential activity-reader credential is a PoC trade-off. It is delivered through a Kubernetes Secret and is limited to `view-events`, but compromise of customer-service could expose retained identity-event data.
+- NetworkPolicy expresses API Gateway-only ingress intent, but enforcement depends on the installed CNI. The current kind network must not be treated as a production security boundary.
+- The PoC uses one customer-service replica, one Keycloak pod, and one PostgreSQL pod on one kind node on the same physical GCP VM. A VM, Docker, node, or disk failure can affect the entire identity capability; there is no host-level high availability.
+- API Gateway and frontend source integrations exist, but neither workload is deployed in the current cluster. TLS ingress, SMTP recovery, verified email, MFA, production rate limiting, durable event export, reconciliation of orphaned identities, and end-to-end browser validation remain outstanding.
+
+Production must separate and replicate identity and database infrastructure, use a supported highly available Keycloak topology or evaluated managed identity service, use regional managed PostgreSQL with automated backups and PITR, enforce private networking and TLS, externalize and rotate secrets, export audit events durably, and test failover and recovery.

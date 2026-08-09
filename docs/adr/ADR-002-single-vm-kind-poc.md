@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — the target topology is documented, but Terraform, VM, kind configuration, and deployment evidence are not yet implemented.
+Accepted — the existing GCP VM hosts a live single-node `shopsphere-poc` kind cluster. Current checks confirm one Ready control-plane node and Ready PostgreSQL, Keycloak, and customer-service workloads. The Terraform baseline remains import-oriented and has not been applied by this repository.
 
 ## Context
 
@@ -28,7 +28,7 @@ The VM must use restricted firewall rules, patched images, least-privilege IAM, 
 
 ## PoC limitations
 
-No high availability, multi-zone resilience, managed control plane, realistic autoscaling, or node-failure recovery is provided. The cluster configuration exists, but deployed workload behavior and node-failure recovery have not been evidenced.
+No high availability, multi-zone resilience, managed control plane, realistic autoscaling, or node-failure recovery is provided. PostgreSQL, Keycloak, and customer-service readiness is evidenced, but all run through the same Docker host and kind node. A host failure affects identity, customer data, and the customer API together; node-failure recovery has not been demonstrated.
 
 ## Production evolution
 

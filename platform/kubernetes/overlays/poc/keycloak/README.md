@@ -32,7 +32,7 @@ The password policy requires length, upper- and lower-case characters, a digit, 
 
 ## Sessions, events, and audit
 
-Access tokens are short-lived, refresh-token rotation is enabled with reuse rejected, and session lifetimes are bounded. Selected user authentication events and administrative events are persisted in the Keycloak database for seven days; administrative representation details are disabled. Customer-service reads selected events through the dedicated activity reader and normalizes them without exposing IP addresses, sessions, tokens, credentials, administrator identities, or raw event details. Customer-domain audit history remains owned by customer-service as defined in ADR-005.
+Access tokens are short-lived, refresh-token rotation is enabled with reuse rejected, and session lifetimes are bounded. Selected user authentication events and administrative events use a finite 604800-second retention in the Keycloak database; administrative representation details are disabled. Customer-service reads selected events through the dedicated activity reader and normalizes them without exposing IP addresses, sessions, tokens, credentials, administrator identities, or raw event details. Customer-domain audit history remains owned by customer-service as defined in ADR-005.
 
 This pull-based PoC introduces an availability dependency on Keycloak and permits the customer-service workload to read retained realm events. The credential must be mounted only into customer-service, rotated when exposure is suspected, and protected with network policy and access monitoring. Production should prefer a durable, allow-listed identity-event export with privacy-governed retention rather than synchronous Admin API reads.
 

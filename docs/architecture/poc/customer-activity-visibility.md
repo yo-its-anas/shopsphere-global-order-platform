@@ -49,3 +49,7 @@ The confidential `shopsphere-customer-activity-reader` service account receives 
 This pull-based PoC makes customer activity dependent on Keycloak availability and spends a client-credentials exchange per request. It is acceptable for the single-node demonstration but increases the blast radius of customer-service: compromise of the workload could read retained realm events. Network restriction, secret rotation, short timeouts, rate limiting, audit access monitoring, and keeping `manage-events`, `view-users`, and `realm-admin` absent are required controls.
 
 Production evolution should export an allow-listed identity-event projection to a durable, privacy-governed audit pipeline. That projection should use workload identity or a rotated external secret, immutable retention, duplicate handling, monitored access, bounded data fields, and availability independent of the interactive identity provider. Keycloak remains the authentication source of truth.
+
+## Validation boundary
+
+The current live platform check confirmed Keycloak event recording, the dedicated activity-reader client, successful event querying, and absence of `manage-events` and `realm-admin`. Customer-service is deployed and Ready. The normalization, merged pagination, authorization, and Keycloak-unavailable tests exist, but their service test run did not complete and the live integration suite was skipped. The merged `/activity` journey is implemented but not claimed as end-to-end verified.

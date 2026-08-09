@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — the PoC Kubernetes deployment, PostgreSQL integration, sanitized realm import, roles, clients, security defaults, PKCE client policy, and authentication-event recording are implemented and live-validated. React, gateway, customer-service, SMTP, and end-to-end identity journeys are not integrated.
+Accepted — PostgreSQL, Keycloak, and customer-service are deployed and healthy in the PoC. Realm import, roles, clients, security defaults, PKCE policy, event recording, and least-privilege activity-reader access are implemented and live-validated. React and API Gateway integrations exist in source but are not deployed, and the end-to-end identity journey has not been validated.
 
 ## Context
 
@@ -64,20 +64,20 @@ Self-registration creates the Keycloak identity first. Customer-profile provisio
 ### React to customer-service API flow
 
 1. React sends the access token to a versioned gateway route using the `Authorization: Bearer` header.
-2. The gateway validates the token and applies coarse route policy, rate limits, request size controls, correlation identifiers, and safe error handling.
+2. The implemented gateway applies fixed-route forwarding, bounded timeouts, correlation identifiers, and safe transport errors while propagating the bearer token without logging it. Gateway JWT validation, rate limits, and request-size policy remain production-facing gaps.
 3. The gateway forwards the request through an authenticated internal route. It must not convert user-supplied identity headers into trusted identity.
 4. `customer-service` independently validates the token and performs resource-level authorization using the verified subject and roles.
 5. For self-service operations, the service derives ownership from the verified `sub` mapping. It must not authorize a profile merely because the caller supplied its identifier.
 
 ### JWT validation
 
-The gateway and `customer-service` act as OAuth 2.0 resource servers. They validate the signature with Keycloak's published, cached JWKS and verify the expected issuer, intended audience, permitted algorithm, expiry, not-before time, and required claims. Validation fails closed for malformed or unverifiable tokens. JWKS caching must support signing-key rotation without accepting arbitrary keys. Clock skew is narrowly bounded, and tokens are never written to application logs.
+`customer-service` acts as the implemented OAuth 2.0 resource server. It validates the signature with Keycloak's published, cached JWKS and verifies the expected issuer, intended audience, permitted algorithm, expiry, and required claims. Validation fails closed for malformed or unverifiable tokens. JWKS caching supports bounded refresh for signing-key rotation without accepting arbitrary keys. Clock skew is narrowly bounded, and tokens are never written to application logs. Gateway-side JWT validation is not implemented and must not be claimed as an active control.
 
 Gateway validation provides early rejection but does not replace service validation. Internal network location is not proof of end-user identity. Any trusted internal identity context must be integrity-protected and derived only from the validated token.
 
 ### Role-based and resource-level authorization
 
-Keycloak supplies governed realm or client roles. The implemented realm roles are `customer`, `support`, and `operations_admin`; self-registration receives `customer` by default. Their application permissions and service-side enforcement remain Planned. Roles are least privilege, deny by default, and are checked at both gateway routes and service use cases as appropriate.
+Keycloak supplies governed realm or client roles. The implemented realm roles are `customer`, `support`, and `operations_admin`; self-registration receives `customer` by default. Customer-service implements customer self-service ownership, support read-only access, and explicit operations-administrator status changes. React uses roles only to shape navigation and routes. API Gateway forwards registered routes but does not currently enforce roles. Service-side automated tests exist, but their execution did not complete during the current documentation review.
 
 RBAC alone is insufficient for customer records. `customer-service` also enforces object ownership and permitted fields. A customer may access only the profile associated with their verified `sub`; support or administrative access requires an explicit role and a documented business rule. Server-side checks prevent insecure direct object reference (IDOR), including when valid profile or address UUIDs are guessed.
 
@@ -127,9 +127,9 @@ Authentication and audit telemetry can contain personal or security-sensitive me
 
 ## PoC limitations
 
-The PoC uses one Keycloak pod and one PostgreSQL pod on the single-node kind cluster and therefore has no host-level availability. The `shopsphere` realm, public frontend client, API audience, service-integration client, roles, password policy, brute-force controls, bounded tokens and sessions, refresh-token rotation, event recording, and PostgreSQL persistence are implemented. The Service is ClusterIP-only; local HTTP and loopback URLs are PoC constraints, not production transport controls.
+The PoC uses one Keycloak pod, one PostgreSQL pod, and one customer-service pod on the single-node kind cluster on one physical GCP VM. This topology has no host-level high availability. The `shopsphere` realm, public frontend client, API audience, service-integration client, roles, password policy, brute-force controls, bounded tokens and sessions, refresh-token rotation, event recording, PostgreSQL persistence, and internal ClusterIP services are implemented. Local HTTP and loopback URLs are PoC constraints, not production transport controls.
 
-Customer-service JWT validation, profile provisioning, resource authorization, customer-domain audit storage, and normalized customer activity APIs are implemented and tested with isolated PostgreSQL. The activity adapter, dedicated event-reader client configuration, least-privilege role reconciliation, and Kubernetes Secret delivery mechanism are implemented; customer-service workload deployment remains Planned. React authentication integration, public ingress, gateway JWT enforcement/routing, SMTP-backed recovery, verified email, MFA, federation, automated credential rotation, and enterprise lifecycle integration remain Planned. No browser-to-service customer journey is claimed as implemented.
+Customer-service JWT validation, profile provisioning, resource authorization, customer-domain audit storage, normalized activity APIs, activity adapter, runtime Secret references, and Kubernetes workload are implemented. React authentication/customer screens and API Gateway customer routing are also implemented in source. Live checks validate the Keycloak and deployment configuration, but the retained live integration report contains seven skips and the customer-service test run did not complete in this review. No browser-to-service journey is claimed as functionally validated. Public ingress, gateway JWT enforcement, SMTP-backed recovery, verified email, MFA, federation, automated credential rotation, durable event export, and enterprise lifecycle reconciliation remain outstanding.
 
 ## Production evolution
 
