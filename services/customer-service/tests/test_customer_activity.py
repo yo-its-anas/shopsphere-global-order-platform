@@ -5,6 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+import pytest
+
+from app.core.config import Settings
 from app.core.errors import DependencyUnavailableError
 from app.domain.models import (
     ActivityCategory,
@@ -13,6 +16,38 @@ from app.domain.models import (
     CustomerActivity,
 )
 from app.infrastructure.keycloak_activity import KeycloakIdentityActivityProvider
+
+
+def test_activity_provider_uses_explicit_internal_token_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KEYCLOAK_ISSUER", "http://localhost:8080/realms/shopsphere")
+    monkeypatch.setenv("KEYCLOAK_ADMIN_URL", "http://keycloak.internal:8080")
+    monkeypatch.setenv(
+        "KEYCLOAK_TOKEN_URL",
+        "http://keycloak.internal:8080/realms/shopsphere/protocol/openid-connect/token",
+    )
+    monkeypatch.setenv("KEYCLOAK_ACTIVITY_CLIENT_ID", "activity-reader")
+    monkeypatch.setenv("KEYCLOAK_ACTIVITY_CLIENT_SECRET", "test-only-secret")
+
+    settings = Settings.from_environment()
+    provider = KeycloakIdentityActivityProvider(settings)
+
+    assert provider._token_url == settings.keycloak_token_url  # noqa: SLF001
+    assert settings.keycloak_issuer == "http://localhost:8080/realms/shopsphere"
+
+
+def test_activity_configuration_requires_explicit_token_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("KEYCLOAK_ISSUER", "http://localhost:8080/realms/shopsphere")
+    monkeypatch.setenv("KEYCLOAK_ADMIN_URL", "http://keycloak.internal:8080")
+    monkeypatch.delenv("KEYCLOAK_TOKEN_URL", raising=False)
+    monkeypatch.setenv("KEYCLOAK_ACTIVITY_CLIENT_ID", "activity-reader")
+    monkeypatch.setenv("KEYCLOAK_ACTIVITY_CLIENT_SECRET", "test-only-secret")
+
+    with pytest.raises(ValueError, match="KEYCLOAK_TOKEN_URL"):
+        Settings.from_environment()
 
 
 def _profile_payload() -> dict[str, str]:

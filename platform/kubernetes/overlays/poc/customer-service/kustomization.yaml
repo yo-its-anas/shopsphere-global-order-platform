@@ -13,12 +13,15 @@ configMapGenerator:
       - SERVICE_NAME=customer-service
       - SERVICE_VERSION=0.1.0
       - DATABASE_CONNECT_TIMEOUT_SECONDS=3
-      - KEYCLOAK_ISSUER=http://keycloak.shopsphere-platform.svc.cluster.local:8080/realms/shopsphere
+      # Strictly matches tokens issued through the documented Windows SSH tunnel.
+      - KEYCLOAK_ISSUER=http://localhost:8080/realms/shopsphere
       - KEYCLOAK_AUDIENCE=shopsphere-api
       - KEYCLOAK_ROLE_CLIENT_ID=shopsphere-api
       - KEYCLOAK_JWKS_URL=http://keycloak.shopsphere-platform.svc.cluster.local:8080/realms/shopsphere/protocol/openid-connect/certs
       - JWT_CLOCK_SKEW_SECONDS=30
       - KEYCLOAK_ADMIN_URL=http://keycloak.shopsphere-platform.svc.cluster.local:8080
+      # Private back-channel endpoint; never route this call through the VM public IP.
+      - KEYCLOAK_TOKEN_URL=http://keycloak.shopsphere-platform.svc.cluster.local:8080/realms/shopsphere/protocol/openid-connect/token
       - KEYCLOAK_ACTIVITY_REALM=shopsphere
       - KEYCLOAK_ACTIVITY_TIMEOUT_SECONDS=5
 
@@ -28,4 +31,3 @@ generatorOptions:
 labels:
   - pairs:
       shopsphere.io/environment: poc
-
