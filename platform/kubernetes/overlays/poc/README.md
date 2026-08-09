@@ -5,3 +5,5 @@ Targets the resource-constrained `shopsphere-poc` single-node kind cluster on on
 Stateful components are opt-in child overlays so a missing local Secret cannot cause an incomplete deployment during cluster creation. The [PostgreSQL overlay](postgresql/README.md) deploys the customer and Keycloak logical database foundation after its Kubernetes Secret is created explicitly.
 
 The [Keycloak overlay](keycloak/README.md) deploys the internal identity provider after PostgreSQL is Ready and Keycloak's namespace-scoped Secret has been created explicitly.
+
+The [customer-service overlay](customer-service/README.md) deploys the internal customer capability after PostgreSQL, Keycloak, and its namespace-scoped runtime Secrets are available. It creates no external service endpoint.

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: customer-service
+  namespace: shopsphere-apps
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: customer-service
+    app.kubernetes.io/component: customer-management
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+

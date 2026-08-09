@@ -2,6 +2,8 @@ PYTHON ?= python3
 KUBE_CONTEXT ?= kind-shopsphere-poc
 POSTGRESQL_OVERLAY := platform/kubernetes/overlays/poc/postgresql
 KEYCLOAK_OVERLAY := platform/kubernetes/overlays/poc/keycloak
+CUSTOMER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/customer-service
+CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -11,7 +13,9 @@ SERVICE_DIRS := \
 
 .PHONY: help format lint test build validate validate-shell validate-kubernetes \
 	validate-postgresql postgresql-secret postgresql-apply postgresql-status \
-	validate-keycloak keycloak-secret keycloak-apply keycloak-configure keycloak-status doctor clean
+	validate-keycloak keycloak-secret keycloak-apply keycloak-configure keycloak-status doctor clean \
+	validate-customer-service customer-service-secret customer-service-build \
+	customer-service-load customer-service-apply customer-service-status
 
 help: ## Show available foundation targets
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -41,7 +45,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -86,6 +90,28 @@ keycloak-configure: ## Reconcile Keycloak client policies and the least-privileg
 
 keycloak-status: ## Run non-destructive Keycloak workload, realm, client, event, and database checks
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-keycloak.sh
+
+validate-customer-service: ## Validate customer-service manifests without changing the cluster
+	@./scripts/validate-customer-service-manifests.sh
+
+customer-service-secret: ## Derive the customer database URL Secret without displaying credentials
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-customer-service-secret.sh
+
+customer-service-build: ## Build the local customer-service PoC image
+	@docker build --tag "$(CUSTOMER_SERVICE_IMAGE)" services/customer-service
+
+customer-service-load: ## Load the existing customer-service image into the kind node
+	@./platform/kind/load-images.sh "$(CUSTOMER_SERVICE_IMAGE)"
+
+customer-service-apply: validate-customer-service ## Apply the internal customer-service workload; requires runtime Secrets
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-customer-service-database >/dev/null 2>&1 || { \
+		echo "Create shopsphere-customer-service-database first with 'make customer-service-secret'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-customer-activity-keycloak >/dev/null 2>&1 || { \
+		echo "Reconcile shopsphere-customer-activity-keycloak first with 'make keycloak-configure'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(CUSTOMER_SERVICE_OVERLAY)"
+
+customer-service-status: ## Run read-only customer-service workload, probe, and exposure checks
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-customer-service.sh
 
 doctor: ## Run non-destructive host and tool checks
 	@status=0; \
