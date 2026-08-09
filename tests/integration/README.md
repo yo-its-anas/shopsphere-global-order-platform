@@ -124,6 +124,6 @@ python3 -m pytest -c tests/integration/pytest.ini \
 
 ## Jenkins
 
-The root Jenkinsfile contains a conditional `Customer capability integration tests` stage. It executes only when `SHOPSPHERE_RUN_CUSTOMER_INTEGRATION=true`; otherwise no identity or environment mutation occurs. Configure endpoints and non-secret values at job/folder level and inject both client credentials through masked Jenkins credentials.
+The root Jenkinsfile contains a conditional `PoC customer integration tests` stage. It executes only when `SHOPSPHERE_RUN_CUSTOMER_INTEGRATION=true`; otherwise no identity or environment mutation occurs. Configure endpoints and non-secret values at job/folder level and inject both client credentials through masked Jenkins credentials.
 
 JUnit XML is written to `test-results/integration/customer-identity.xml`, published by the existing report stage, and archived with the other machine-readable test evidence. Jenkins console output must never echo the integration environment or run with shell tracing.
