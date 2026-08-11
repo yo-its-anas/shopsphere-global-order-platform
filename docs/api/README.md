@@ -69,8 +69,16 @@ Catalogue-service now implements internal `/api/v1` category, product, search, l
 | `POST` | `/api/v1/products/{product_id}/deactivate` | `operations_admin` | Make a product inactive and non-searchable. |
 | `GET` | `/api/v1/products/{product_id}/prices` | All governed roles | Retrieve current pricing; history is operational-role-only. |
 | `PUT` | `/api/v1/products/{product_id}/prices/{currency_code}` | `operations_admin` | Close the prior price and create an immediately effective decimal price. |
+| `GET` | `/api/v1/inventory/products/{product_id}/availability` | All governed roles | Return derived availability; customers receive no operational balance fields. |
+| `GET` | `/api/v1/inventory/products/{product_id}` | `support`, `operations_admin` | Return operational on-hand, reserved, available, threshold, and version values. |
+| `POST` | `/api/v1/inventory/products/{product_id}/initialize` | `operations_admin` | Establish tracked stock and its `INITIAL_STOCK` movement idempotently. |
+| `POST` | `/api/v1/inventory/products/{product_id}/adjustments` | `operations_admin` | Apply a locked/versioned stock delta and append movement evidence. |
+| `PATCH` | `/api/v1/inventory/products/{product_id}/settings` | `operations_admin` | Change the reorder threshold with an optional version guard. |
+| `GET` | `/api/v1/inventory/products/{product_id}/movements` | `support`, `operations_admin` | Page through append-only movement history. |
+| `GET` | `/api/v1/inventory[?state=...]` | `support`, `operations_admin` | List tracked balances and filter by derived availability state. |
+| `GET` | `/api/v1/inventory/statistics` | `support`, `operations_admin` | Calculate stock counts and unit totals from persisted balances. |
 
-Catalogue-service independently validates the same Keycloak issuer/audience/role assumptions as customer-service. Customers see active/searchable products and current prices only; support is read-only; operations administrators own mutations. API responses contain domain schemas rather than SQLAlchemy records. Inventory endpoints are not implemented.
+Catalogue-service independently validates the same Keycloak issuer/audience/role assumptions as customer-service. Customers see active/searchable products, current prices, and safe derived availability only; support is read-only; operations administrators own mutations. API responses contain domain schemas rather than SQLAlchemy records. Inventory reservation/release/fulfilment commands remain unavailable until Order Processing integration is implemented.
 
 ## Evidence boundary
 

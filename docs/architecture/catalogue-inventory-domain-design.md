@@ -2,7 +2,7 @@
 
 ## Status and evidence boundary
 
-This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, SQLAlchemy repositories, Alembic migration, JWT/RBAC enforcement, and internal service APIs are implemented. Inventory entities and transactions, API Gateway catalogue routes, Kubernetes application deployment, Redis, Kafka, and domain-event publication remain **Planned** and must not be presented as implemented evidence.
+This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, and internal service APIs are implemented. Order reservations, API Gateway catalogue routes, Kubernetes application deployment, Redis, Kafka, and domain-event publication remain **Planned** and must not be presented as implemented evidence.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md), [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md), [ADR-005](../adr/ADR-005-keycloak-identity-rbac.md), [ADR-006](../adr/ADR-006-postgresql-redis-data-platform.md), [ADR-007](../adr/ADR-007-kafka-domain-events.md), and [ADR-010](../adr/ADR-010-utc-timestamps-json-logs.md).
 
@@ -107,19 +107,19 @@ Representative movement types are `receipt`, `adjustment`, `reservation`, `relea
 
 ## Concurrency and consistency
 
-Inventory is a contention point. A read-then-write sequence without locking can oversell stock. The planned repository operation must execute one database transaction that:
+Inventory is a contention point. A read-then-write sequence without locking can lose updates. The implemented repository operation executes one database transaction that:
 
-1. validates or claims the idempotency key;
-2. locks the InventoryItem row with `SELECT ... FOR UPDATE` or performs a version-checked atomic update;
+1. validates the globally unique movement idempotency key;
+2. locks the InventoryItem row with `SELECT ... FOR UPDATE` and applies a version-checked atomic update;
 3. checks the proposed balances against database constraints;
 4. updates the balances and version; and
 5. inserts the corresponding immutable movement before commit.
 
-Constraint or version conflicts become a stable `409 Conflict`; validation failures become `422` or a governed `400` response. Deadlocks and serialization failures receive bounded retries with structured, token-free logs. Multi-item reservations require deterministic lock ordering. Statistics and search projections may be eventually consistent, but commands and availability decisions must use the authoritative transactional state.
+Constraint or version conflicts become a stable `409 Conflict`; validation failures become `422` or a governed `400` response. The current implementation does not retry deadlocks or serialization failures; production evolution must add bounded retries with structured, token-free logs. Multi-item reservations will require deterministic lock ordering. Current statistics are calculated directly from authoritative balances rather than an eventually consistent projection.
 
 The initial implementation should prefer PostgreSQL reads over Redis until a measured cache requirement exists. If caching is introduced, product search and availability projections must have explicit TTL/invalidation rules; Redis must never become the stock source of truth.
 
-## Planned API and authorization model
+## API and authorization model
 
 Routes will follow `/api/v1`, remain explicitly registered in the API Gateway, and preserve the current fixed-upstream, correlation-ID, timeout, safe-logging, and bearer-propagation conventions. Exact schemas remain an implementation concern, but the resource families are expected to include `/products`, `/categories`, `/prices`, `/inventory`, `/inventory/movements`, and `/inventory/statistics`.
 
@@ -160,7 +160,7 @@ Events require versioned schemas, aggregate/event IDs, UTC occurrence time, corr
 
 ## PoC implementation boundary
 
-The PoC keeps both contexts allocated to `catalogue-service`, but only Catalogue behavior is implemented. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe mechanism for deriving a namespace-local catalogue-service database Secret. Catalogue schema, migration, repository, service APIs, and automated API/domain tests exist. API Gateway catalogue mapping and the Kubernetes catalogue-service workload do not exist. Inventory behavior, Redis, and Kafka are not implemented or deployed.
+The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe mechanism for deriving a namespace-local catalogue-service database Secret. Catalogue and inventory schema, migrations, repositories, internal service APIs, and automated API/domain tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. API Gateway catalogue mapping and the Kubernetes catalogue-service workload do not exist. Order reservations, Redis, and Kafka are not implemented or deployed.
 
 `catalogue_db`, `customer_db`, and `keycloak_db` share one PostgreSQL server and persistent volume. Logical ownership reduces accidental cross-capability access but does not provide infrastructure-level isolation or independent scaling.
 

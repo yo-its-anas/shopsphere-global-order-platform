@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — independently buildable service boundaries exist. Customer and Product Catalogue behavior are implemented; Inventory behavior and wider catalogue integrations remain Planned.
+Accepted — independently buildable service boundaries exist. Customer, Product Catalogue, and Inventory behavior are implemented; wider catalogue integrations remain Planned.
 
 ## Context
 
@@ -38,7 +38,7 @@ Each service requires least-privilege identity, network access, secrets, authori
 
 ## PoC limitations
 
-Catalogue categories, products, effective pricing, search, persistence adapters, migration, internal APIs, RBAC enforcement, and service tests are implemented. Inventory behavior, catalogue API Gateway routes, a catalogue Kubernetes workload, Kafka/Redis integration, and deployed end-to-end tests are not implemented. Services may share a VM and supporting platforms, so the PoC will not prove independent infrastructure failure isolation or high availability.
+Catalogue categories, products, effective pricing, search, inventory balances/movements/statistics, persistence adapters, migrations, internal APIs, RBAC enforcement, and service tests are implemented. Catalogue/Inventory API Gateway routes, a catalogue Kubernetes workload, Order Processing reservations, Kafka/Redis integration, and deployed end-to-end tests are not implemented. Services may share a VM and supporting platforms, so the PoC will not prove independent infrastructure failure isolation or high availability.
 
 ## Production evolution
 

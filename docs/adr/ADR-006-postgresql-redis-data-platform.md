@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — the PoC PostgreSQL platform, customer persistence, separate catalogue logical database, and Catalogue SQLAlchemy/Alembic schema are implemented. Inventory persistence remains Planned; Redis is not deployed or integrated.
+Accepted — the PoC PostgreSQL platform, customer persistence, separate catalogue logical database, and Catalogue and Inventory SQLAlchemy/Alembic schemas are implemented. Redis is not deployed or integrated.
 
 ## Context
 
@@ -35,7 +35,7 @@ Use separate least-privilege database identities, encrypted connections, protect
 
 ## PoC limitations
 
-Single instances provide no high availability and may share host resources. Backup restoration, failover, replica behavior, and realistic cache pressure are not proven. `customer_db`, `keycloak_db`, and `catalogue_db` are logically separated by ownership but share one PostgreSQL server, volume, node, and VM. Catalogue schema, migration, and repositories exist and the migration round trip is validated against disposable PostgreSQL; the migration has not been applied to the live PoC database and catalogue-service is not deployed. Inventory persistence and Redis are absent.
+Single instances provide no high availability and may share host resources. Backup restoration, failover, replica behavior, and realistic cache pressure are not proven. `customer_db`, `keycloak_db`, and `catalogue_db` are logically separated by ownership but share one PostgreSQL server, volume, node, and VM. Catalogue and inventory schemas, migrations, and repositories exist; migration validation uses disposable PostgreSQL. These migrations have not been applied to the live PoC database and catalogue-service is not deployed. Redis is absent.
 
 ## Production evolution
 
