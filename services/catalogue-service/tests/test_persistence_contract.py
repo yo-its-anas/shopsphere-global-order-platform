@@ -1,0 +1,30 @@
+"""Static SQLAlchemy persistence contract tests independent of a test driver."""
+
+from sqlalchemy import Numeric
+
+from app.infrastructure.orm_models import (
+    ProductCategoryRecord,
+    ProductPriceRecord,
+    ProductRecord,
+)
+
+
+def test_monetary_amount_uses_fixed_precision_numeric() -> None:
+    amount_type = ProductPriceRecord.__table__.c.amount.type
+
+    assert isinstance(amount_type, Numeric)
+    assert amount_type.precision == 19
+    assert amount_type.scale == 4
+
+
+def test_database_contract_contains_governed_uniqueness_and_lifecycle_constraints() -> None:
+    product_constraints = {constraint.name for constraint in ProductRecord.__table__.constraints}
+    category_constraints = {
+        constraint.name for constraint in ProductCategoryRecord.__table__.constraints
+    }
+    price_indexes = {index.name for index in ProductPriceRecord.__table__.indexes}
+
+    assert "uq_products_sku" in product_constraints
+    assert "ck_products_status" in product_constraints
+    assert "uq_product_categories_slug" in category_constraints
+    assert "uq_product_prices_active_currency" in price_indexes

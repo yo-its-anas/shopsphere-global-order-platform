@@ -2,7 +2,7 @@
 
 ## Status and evidence boundary
 
-This document defines the proposed domain model for Product Catalogue and Inventory Management. The `catalogue-service` currently exposes only foundation health and information endpoints. The entities, persistence mappings, business APIs, gateway routes, authorization rules, inventory transactions, Kubernetes workload, and domain-event publication described here are **Planned** and must not be presented as implemented evidence.
+This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, SQLAlchemy repositories, Alembic migration, JWT/RBAC enforcement, and internal service APIs are implemented. Inventory entities and transactions, API Gateway catalogue routes, Kubernetes application deployment, Redis, Kafka, and domain-event publication remain **Planned** and must not be presented as implemented evidence.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md), [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md), [ADR-005](../adr/ADR-005-keycloak-identity-rbac.md), [ADR-006](../adr/ADR-006-postgresql-redis-data-platform.md), [ADR-007](../adr/ADR-007-kafka-domain-events.md), and [ADR-010](../adr/ADR-010-utc-timestamps-json-logs.md).
 
@@ -160,7 +160,7 @@ Events require versioned schemas, aggregate/event IDs, UTC occurrence time, corr
 
 ## PoC implementation boundary
 
-The proposed PoC keeps both contexts in `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe mechanism for deriving a namespace-local catalogue-service database Secret. This is persistence infrastructure only: no catalogue schema, migration, repository, business API, gateway mapping, Kubernetes application workload, or business test exists. Redis and Kafka are not deployed.
+The PoC keeps both contexts allocated to `catalogue-service`, but only Catalogue behavior is implemented. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe mechanism for deriving a namespace-local catalogue-service database Secret. Catalogue schema, migration, repository, service APIs, and automated API/domain tests exist. API Gateway catalogue mapping and the Kubernetes catalogue-service workload do not exist. Inventory behavior, Redis, and Kafka are not implemented or deployed.
 
 `catalogue_db`, `customer_db`, and `keycloak_db` share one PostgreSQL server and persistent volume. Logical ownership reduces accidental cross-capability access but does not provide infrastructure-level isolation or independent scaling.
 

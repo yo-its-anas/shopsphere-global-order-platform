@@ -1,1 +1,1 @@
-"""Domain model boundary; intentionally empty in this foundation."""
+"""Product Catalogue domain model boundary."""

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — service JSON logging and UTC customer-domain timestamps exist. Central collection/schema enforcement and the proposed catalogue/inventory persistence remain Planned.
+Accepted — service JSON logging and UTC customer and Catalogue timestamps exist. Central collection/schema enforcement and Inventory persistence remain Planned.
 
 ## Context
 

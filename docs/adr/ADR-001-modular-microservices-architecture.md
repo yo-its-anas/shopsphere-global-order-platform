@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — independently buildable service boundaries exist. Customer behavior is implemented; the catalogue/inventory boundary is designed but its business behavior and integrations remain Planned.
+Accepted — independently buildable service boundaries exist. Customer and Product Catalogue behavior are implemented; Inventory behavior and wider catalogue integrations remain Planned.
 
 ## Context
 
@@ -38,7 +38,7 @@ Each service requires least-privilege identity, network access, secrets, authori
 
 ## PoC limitations
 
-The catalogue service currently contains only the common FastAPI health/info foundation. Its proposed domain entities, persistence, APIs, RBAC enforcement, gateway routes, Kubernetes workload, and integration tests are not implemented. Services may share a VM and supporting platforms, so the PoC will not prove independent infrastructure failure isolation or high availability.
+Catalogue categories, products, effective pricing, search, persistence adapters, migration, internal APIs, RBAC enforcement, and service tests are implemented. Inventory behavior, catalogue API Gateway routes, a catalogue Kubernetes workload, Kafka/Redis integration, and deployed end-to-end tests are not implemented. Services may share a VM and supporting platforms, so the PoC will not prove independent infrastructure failure isolation or high availability.
 
 ## Production evolution
 

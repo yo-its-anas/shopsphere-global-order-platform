@@ -5,10 +5,17 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "shopsphere-catalogue-service"
 version = "0.1.0"
-description = "Product catalogue and inventory boundary skeleton. Product, pricing, stock, and cache behavior remain future work."
+description = "Product categories, catalogue search, lifecycle, and effective pricing capability."
 requires-python = ">=3.10,<3.15"
 dependencies = [
+  "alembic==1.18.4",
+  "anyio==4.12.1",
   "fastapi==0.139.2",
+  "httpx2==2.7.0",
+  "psycopg[binary]==3.3.4",
+  "pydantic==2.13.4",
+  "PyJWT[crypto]==2.13.0",
+  "SQLAlchemy==2.0.51",
   "uvicorn==0.51.0",
 ]
 
@@ -16,8 +23,8 @@ dependencies = [
 dev = [
   "bandit==1.9.4",
   "black==26.5.1",
-  "httpx2==2.7.0",
   "pytest==9.1.1",
+  "pytest-cov==7.0.0",
   "ruff==0.15.22",
 ]
 
@@ -39,7 +46,7 @@ select = ["E4", "E7", "E9", "F", "I", "UP", "B", "S"]
 "tests/**/*.py" = ["S101"]
 
 [tool.pytest.ini_options]
-addopts = "-q --strict-markers"
+addopts = "-q --strict-markers --cov=app --cov-report=term-missing"
 testpaths = ["tests"]
 
 [tool.bandit]
