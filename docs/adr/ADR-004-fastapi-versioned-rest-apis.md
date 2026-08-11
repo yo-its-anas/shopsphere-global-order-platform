@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — FastAPI service applications, customer, Catalogue, and Inventory versioned APIs, generated OpenAPI documents, and the customer capability gateway mapping are implemented. Catalogue/Inventory gateway mapping, wider domain routing, and formal API lifecycle governance remain Planned.
+Accepted — FastAPI service applications, customer, Catalogue, and Inventory versioned APIs, generated OpenAPI documents, and fixed customer and Catalogue/Inventory gateway mappings are implemented. Wider domain routing, deployed gateway validation, and formal API lifecycle governance remain Planned.
 
 ## Context
 
@@ -25,11 +25,11 @@ Contracts are approachable and automatically describable. Versioned paths suppor
 
 ## Security implications
 
-Validate all inputs, constrain payloads, avoid sensitive error detail, enforce authorization at gateway and service layers, rate-limit exposed routes, and ensure OpenAPI exposure is appropriate for each environment.
+Validate all inputs, constrain payloads, avoid sensitive error detail, preserve bearer credentials without logging them, and keep downstream service authorization authoritative. Production edge-token validation, rate limiting, and environment-appropriate OpenAPI exposure remain defence-in-depth controls rather than replacements for service authorization.
 
 ## PoC limitations
 
-Versioning demonstrates contract discipline but not a mature multi-version support policy. The gateway forwards fixed customer paths and preserves correlation and bearer headers, while each downstream service remains authoritative for JWT and domain authorization. Catalogue-service implements internal category/product/pricing and inventory paths, but those paths are not registered in API Gateway. Gateway-side JWT enforcement, quotas, circuit breaking, deployed contract tests, and other domain mappings remain Planned.
+Versioning demonstrates contract discipline but not a mature multi-version support policy. The gateway forwards explicit customer and Catalogue/Inventory paths, query parameters, bodies, correlation identifiers, and bearer headers, while each downstream service remains authoritative for JWT and domain authorization. Gateway deployment, authenticated live catalogue journeys, gateway-side JWT defence in depth, quotas, circuit breaking, and other domain mappings remain Planned.
 
 ## Production evolution
 

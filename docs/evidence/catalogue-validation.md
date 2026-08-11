@@ -1,6 +1,6 @@
 # Product Catalogue Validation Record
 
-This record covers the implemented Product Catalogue, Inventory, cache-aside, transactional outbox/event producer, and internal PoC deployment boundary. Order reservations, API Gateway catalogue/inventory routing, event consumers, frontend integration, and authenticated end-to-end catalogue journeys remain outside this evidence.
+This record covers the implemented Product Catalogue, Inventory, cache-aside, transactional outbox/event producer, internal PoC deployment boundary, and isolated API Gateway transport validation. Order reservations, gateway deployment, event consumers, frontend integration, and authenticated end-to-end catalogue journeys remain outside this evidence.
 
 ## Kafka and outbox validation
 
@@ -29,6 +29,7 @@ This evidence does not prove broker failover or high availability. Kafka and the
 | Live Redis | Ready authenticated pod and ClusterIP-only Service in `shopsphere-data` | Passed |
 | Live catalogue-service | Ready pod, successful database migration init container, health probes, authenticated Redis connectivity, and ClusterIP-only Service | Passed |
 | Controlled Redis outage | Redis scaled to zero, catalogue liveness/readiness/info and safe cache miss verified, Redis restored to one Ready replica | Passed |
+| API Gateway transport | Fixed Catalogue/Inventory route allow-list, query/pagination/body forwarding, bearer and correlation propagation, normalized timeout/unavailable/protocol failures, safe logging, readiness dependency status, and OpenAPI exposure | Passed in the isolated gateway suite |
 
 Catalogue revisions `001_product_catalogue` and `002_enterprise_inventory` were applied by the deployment init container to the existing PoC `catalogue_db`. No database, PostgreSQL pod, or persistent volume was recreated. Redis runtime credentials exist only in namespace-scoped Kubernetes Secrets and were not displayed.
 
@@ -52,4 +53,4 @@ Catalogue revisions `001_product_catalogue` and `002_enterprise_inventory` were 
 
 ## Evidence limitations
 
-API/domain/cache tests use in-memory repository and cache contract implementations for deterministic behavior. Redis adapter tests cover TTL forwarding, malformed JSON, and Redis exceptions. SQLAlchemy metadata and Alembic were also validated against disposable PostgreSQL, including migration round trip, drift, append-only trigger, and balance constraints. The deployed service is PostgreSQL-ready and its migration completed, but no authenticated live product mutation/read journey was executed. Order reservation/release/fulfilment behavior is not implemented. Redis and catalogue-service each have one pod on the same kind node and are not highly available.
+API/domain/cache tests use in-memory repository and cache contract implementations for deterministic behavior. Redis adapter tests cover TTL forwarding, malformed JSON, and Redis exceptions. SQLAlchemy metadata and Alembic were also validated against disposable PostgreSQL, including migration round trip, drift, append-only trigger, and balance constraints. Gateway tests use an injected HTTP transport and do not constitute a deployed network test. The deployed catalogue-service is PostgreSQL-ready and its migration completed, but no authenticated live product mutation/read journey through a deployed gateway was executed. Order reservation/release/fulfilment behavior is not implemented. Redis and catalogue-service each have one pod on the same kind node and are not highly available.

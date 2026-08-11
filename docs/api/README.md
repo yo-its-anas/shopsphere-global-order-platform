@@ -1,6 +1,6 @@
 # ShopSphere API Documentation
 
-FastAPI remains the executable OpenAPI source. Customer-facing clients use API Gateway paths beneath `/api/v1`; the gateway forwards only registered method/path combinations to the internal ClusterIP-only customer-service. The gateway propagates bearer tokens but does not currently validate them. Customer-service is the authoritative JWT, role, and ownership enforcement point.
+FastAPI remains the executable OpenAPI source. Clients use API Gateway paths beneath `/api/v1`; the gateway forwards only registered method/path combinations to the internal ClusterIP-only customer-service and catalogue-service. The gateway propagates bearer tokens but does not currently validate them. Each downstream service remains authoritative for JWT validation, role enforcement, visibility, ownership, and domain invariants.
 
 Interactive OpenAPI is available from a locally reachable service at `/docs`; the machine-readable document is `/openapi.json`. Do not expose the internal customer-service documentation endpoint publicly.
 
@@ -54,7 +54,7 @@ Normalized activity returns `timestamp`, `event_category`, `action`, `source`, `
 
 ## Product Catalogue service
 
-Catalogue-service now implements internal `/api/v1` category, product, search, lifecycle, and effective-pricing routes. Catalogue routes are not yet registered in API Gateway, so these are internal service contracts rather than externally exposed gateway paths.
+Catalogue-service implements `/api/v1` category, product, search, lifecycle, effective-pricing, inventory, availability, movement, and statistics routes. The API Gateway registers the exact same external method/path combinations and forwards them to its fixed `CATALOGUE_SERVICE_URL`; arbitrary catalogue subpaths are not proxied.
 
 | Method | Path | Roles | Behavior |
 | --- | --- | --- | --- |

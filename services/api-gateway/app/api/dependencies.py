@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
+from app.application.catalogue_proxy import CatalogueServiceProxy
 from app.application.customer_proxy import CustomerServiceProxy
 
 
@@ -12,3 +13,10 @@ async def get_customer_proxy(request: Request) -> CustomerServiceProxy:
 
 
 CustomerProxy = Annotated[CustomerServiceProxy, Depends(get_customer_proxy)]
+
+
+async def get_catalogue_proxy(request: Request) -> CatalogueServiceProxy:
+    return request.app.state.catalogue_service_proxy
+
+
+CatalogueProxy = Annotated[CatalogueServiceProxy, Depends(get_catalogue_proxy)]

@@ -56,6 +56,16 @@ async def unexpected_exception_handler(request: Request, exc: Exception) -> JSON
         exc_info=exc,
         extra={"event": "unhandled_exception"},
     )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": "internal_server_error",
+                "message": "An unexpected error occurred.",
+            },
+            "correlation_id": _request_id(request),
+        },
+    )
 
 
 async def gateway_exception_handler(request: Request, exc: GatewayError) -> JSONResponse:
@@ -65,16 +75,6 @@ async def gateway_exception_handler(request: Request, exc: GatewayError) -> JSON
         status_code=exc.status_code,
         content={
             "error": {"code": exc.code, "message": exc.message},
-            "correlation_id": _request_id(request),
-        },
-    )
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": {
-                "code": "internal_server_error",
-                "message": "An unexpected error occurred.",
-            },
             "correlation_id": _request_id(request),
         },
     )

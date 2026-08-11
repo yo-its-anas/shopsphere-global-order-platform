@@ -2,7 +2,7 @@
 
 ## Status and evidence boundary
 
-This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, internal service APIs, a transactional event outbox, and Kafka production are implemented. Order reservations, API Gateway catalogue routes, and event consumers remain **Planned** and must not be presented as implemented evidence.
+This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, internal service APIs, a transactional event outbox, Kafka production, and explicit API Gateway transport routes are implemented. Order reservations, gateway deployment, authenticated live catalogue journeys, and event consumers remain **Planned** and must not be presented as implemented evidence.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md), [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md), [ADR-005](../adr/ADR-005-keycloak-identity-rbac.md), [ADR-006](../adr/ADR-006-postgresql-redis-data-platform.md), [ADR-007](../adr/ADR-007-kafka-domain-events.md), and [ADR-010](../adr/ADR-010-utc-timestamps-json-logs.md).
 
@@ -12,8 +12,8 @@ The PoC keeps two logical bounded contexts in one deployable `catalogue-service`
 
 ```mermaid
 flowchart LR
-    UI[React client] -->|planned /api/v1 routes| GW[API Gateway]
-    GW -->|validated route and bearer propagation| CAT
+    UI[React client] -->|fixed /api/v1 routes| GW[API Gateway]
+    GW -->|allow-listed route, query/body and bearer propagation| CAT
 
     subgraph SVC[catalogue-service process]
         CAT[Catalogue context\nproducts, categories, prices]
@@ -121,7 +121,7 @@ Redis now accelerates bounded category, product-detail/search, price, availabili
 
 ## API and authorization model
 
-Routes will follow `/api/v1`, remain explicitly registered in the API Gateway, and preserve the current fixed-upstream, correlation-ID, timeout, safe-logging, and bearer-propagation conventions. Exact schemas remain an implementation concern, but the resource families are expected to include `/products`, `/categories`, `/prices`, `/inventory`, `/inventory/movements`, and `/inventory/statistics`.
+Routes follow `/api/v1` and are explicitly registered in the API Gateway with fixed-upstream, correlation-ID, timeout, safe-logging, query/body, and bearer-propagation controls. The gateway contains no Catalogue or Inventory business rules; catalogue-service remains authoritative for JWT/RBAC and domain invariants. Registered resource families include `/products`, `/categories`, product pricing, `/inventory`, per-product availability/movements, and `/inventory/statistics`.
 
 | Role | Catalogue access | Inventory access |
 | --- | --- | --- |
@@ -160,7 +160,7 @@ Each envelope has an immutable event/aggregate ID, UTC occurrence time, correlat
 
 ## PoC implementation boundary
 
-The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, transactional outbox, Kafka producer relay, Kubernetes workload, and automated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. Kafka is a single internal combined KRaft broker/controller with a retained PVC. API Gateway catalogue mapping, Order reservations, and event consumers are not implemented.
+The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, transactional outbox, Kafka producer relay, Kubernetes workload, gateway mappings, and automated isolated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. Kafka is a single internal combined KRaft broker/controller with a retained PVC. API Gateway deployment, an authenticated gateway-to-catalogue live journey, Order reservations, and event consumers are not implemented or validated.
 
 `catalogue_db`, `customer_db`, and `keycloak_db` share one PostgreSQL server and persistent volume. Logical ownership reduces accidental cross-capability access but does not provide infrastructure-level isolation or independent scaling.
 
