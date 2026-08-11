@@ -95,6 +95,47 @@ echo 'Repository structure validation passed.'
             }
         }
 
+        stage('Integration validation classification') {
+            options {
+                timeout(time: 2, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Record explicit integration execution policy', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/status
+
+classify_suite() {
+    local flag_name="$1"
+    local status_file="$2"
+    local enabled="${!flag_name:-false}"
+
+    case "$enabled" in
+        true)
+            printf 'status=skipped/not applicable\nreason=enabled but pipeline stage not yet reached\n' \
+                >"$status_file"
+            ;;
+        false|'')
+            printf 'status=skipped/not applicable\nreason=live PoC execution was not enabled\n' \
+                >"$status_file"
+            ;;
+        *)
+            echo "ERROR: ${flag_name} must be true or false." >&2
+            exit 1
+            ;;
+    esac
+}
+
+classify_suite SHOPSPHERE_RUN_CUSTOMER_INTEGRATION \
+    test-results/status/customer-integration.properties
+classify_suite SHOPSPHERE_RUN_CATALOGUE_INTEGRATION \
+    test-results/status/catalogue-inventory-integration.properties
+
+echo 'Integration suites are classified explicitly; disabled suites are skipped/not applicable.'
+''')
+            }
+        }
+
         stage('Customer-service dependency installation') {
             options {
                 timeout(time: 10, unit: 'MINUTES')
@@ -105,6 +146,20 @@ set -Eeuo pipefail
 
 python3 -m venv "$CI_VENV"
 "$CI_VENV/bin/python" -m pip install -e 'services/customer-service[dev]'
+"$CI_VENV/bin/python" -m pip check
+''')
+            }
+        }
+
+        stage('Catalogue-service dependency installation') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Install pinned catalogue-service dependencies', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+"$CI_VENV/bin/python" -m pip install -e 'services/catalogue-service[dev]'
 "$CI_VENV/bin/python" -m pip check
 ''')
             }
@@ -130,7 +185,17 @@ for service in "${services[@]}"; do
     echo "== Black: $service =="
     (
         cd "$service"
-        "$WORKSPACE/$CI_VENV/bin/python" -m black --workers 1 --check app tests
+        checked=0
+        while IFS= read -r -d '' source_file; do
+            "$WORKSPACE/$CI_VENV/bin/python" -m black \
+                --workers 1 --check --quiet "$source_file"
+            checked=$((checked + 1))
+        done < <(find app tests -type f -name '*.py' -print0)
+        [[ "$checked" -gt 0 ]] || {
+            echo "ERROR: No Python sources were found under $service." >&2
+            exit 1
+        }
+        echo "Black formatting passed for $checked Python files."
     )
 done
 ''')
@@ -145,6 +210,8 @@ done
                 sh(label: 'Run Ruff for every Python service', script: '''#!/usr/bin/env bash
 set -Eeuo pipefail
 
+mkdir -p test-results/lint
+
 services=(
     services/customer-service
     services/catalogue-service
@@ -154,10 +221,18 @@ services=(
 )
 
 for service in "${services[@]}"; do
+    service_name="${service##*/}"
     echo "== Ruff: $service =="
     (
         cd "$service"
-        "$WORKSPACE/$CI_VENV/bin/python" -m ruff check .
+        if [[ "$service_name" == 'catalogue-service' ]]; then
+            "$WORKSPACE/$CI_VENV/bin/python" -m ruff check \
+                --output-format=json \
+                --output-file="$WORKSPACE/test-results/lint/catalogue-service-ruff.json" \
+                .
+        else
+            "$WORKSPACE/$CI_VENV/bin/python" -m ruff check .
+        fi
     )
 done
 ''')
@@ -180,6 +255,27 @@ mkdir -p test-results/security
         --recursive app \
         --format json \
         --output "$WORKSPACE/test-results/security/customer-service-bandit.json"
+)
+''')
+            }
+        }
+
+        stage('Catalogue-service Bandit') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Scan catalogue-service Python code with Bandit', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/security
+(
+    cd services/catalogue-service
+    "$WORKSPACE/$CI_VENV/bin/python" -m bandit \
+        --quiet \
+        --recursive app \
+        --format json \
+        --output "$WORKSPACE/test-results/security/catalogue-service-bandit.json"
 )
 ''')
             }
@@ -227,10 +323,15 @@ done
 set -Eeuo pipefail
 
 mkdir -p test-results/integration
+status_file='test-results/status/customer-integration.properties'
+printf 'status=failed\nreason=integration suite exited unsuccessfully\n' >"$status_file"
 "$CI_VENV/bin/python" -m pytest \
     -c tests/integration/pytest.ini \
     tests/integration/customer_identity \
     --junitxml=test-results/integration/customer-identity.xml
+"$CI_VENV/bin/python" scripts/classify-junit.py \
+    --report test-results/integration/customer-identity.xml \
+    --status-file "$status_file"
 ''')
             }
         }
@@ -247,10 +348,15 @@ mkdir -p test-results/integration
 set -Eeuo pipefail
 
 mkdir -p test-results/integration
+status_file='test-results/status/catalogue-inventory-integration.properties'
+printf 'status=failed\nreason=integration suite exited unsuccessfully\n' >"$status_file"
 "$CI_VENV/bin/python" -m pytest \
     -c tests/integration/pytest.ini \
     tests/integration/catalogue_inventory \
     --junitxml=test-results/integration/catalogue-inventory.xml
+"$CI_VENV/bin/python" scripts/classify-junit.py \
+    --report test-results/integration/catalogue-inventory.xml \
+    --status-file "$status_file"
 ''')
             }
         }
@@ -300,6 +406,24 @@ npm test -- \
             }
         }
 
+        stage('Frontend catalogue and inventory tests') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run focused catalogue and inventory frontend tests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/frontend
+cd frontend
+npm test -- \
+    src/features/catalogue/CatalogueFeature.test.tsx \
+    --reporter=junit \
+    --outputFile="$WORKSPACE/test-results/frontend/catalogue-inventory.xml"
+''')
+            }
+        }
+
         stage('Frontend production build') {
             options {
                 timeout(time: 10, unit: 'MINUTES')
@@ -330,6 +454,22 @@ docker build \
             }
         }
 
+        stage('Catalogue-service Docker build') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Build the catalogue-service image', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+docker build \
+    --label "shopsphere.ci.build=${BUILD_NUMBER}" \
+    --tag "shopsphere/catalogue-service:ci-${BUILD_NUMBER}" \
+    services/catalogue-service
+''')
+            }
+        }
+
         stage('Remaining Docker image build validation') {
             options {
                 timeout(time: 25, unit: 'MINUTES')
@@ -339,7 +479,6 @@ docker build \
 set -Eeuo pipefail
 
 services=(
-    services/catalogue-service
     services/order-service
     services/analytics-service
     services/api-gateway
@@ -396,6 +535,83 @@ terraform -chdir=infrastructure/terraform validate
 set -Eeuo pipefail
 make validate-kubernetes
 make validate-customer-service
+make validate-catalogue-service
+make validate-api-gateway
+''')
+            }
+        }
+
+        stage('Redis manifest validation') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Validate internal Redis manifests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+make validate-redis
+''')
+            }
+        }
+
+        stage('Kafka manifest validation') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Validate single-broker KRaft manifests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+make validate-kafka
+''')
+            }
+        }
+
+        stage('Catalogue database migration integrity') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Validate Alembic graph and compile offline migration SQL', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/migrations
+"$CI_VENV/bin/python" scripts/validate-catalogue-migrations.py \
+    --report test-results/migrations/catalogue-migration-integrity.json
+(
+    cd services/catalogue-service
+    DATABASE_URL='postgresql+psycopg://validation:validation@127.0.0.1/catalogue_validation' \
+        "$WORKSPACE/$CI_VENV/bin/python" -m alembic upgrade head --sql \
+        >"$WORKSPACE/test-results/migrations/catalogue-upgrade.sql"
+)
+''')
+            }
+        }
+
+        stage('Integration validation summary') {
+            options {
+                timeout(time: 2, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Print passed or skipped integration classifications', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+for status_file in test-results/status/*.properties; do
+    capability="${status_file##*/}"
+    status="$(sed -n 's/^status=//p' "$status_file")"
+    reason="$(sed -n 's/^reason=//p' "$status_file")"
+    case "$status" in
+        passed|'skipped/not applicable')
+            printf '%s: %s (%s)\n' "$capability" "$status" "$reason"
+            ;;
+        failed)
+            echo "ERROR: ${capability}: failed (${reason})" >&2
+            exit 1
+            ;;
+        *)
+            echo "ERROR: ${capability} has an unknown validation status." >&2
+            exit 1
+            ;;
+    esac
+done
 ''')
             }
         }
@@ -411,7 +627,7 @@ make validate-customer-service
                     keepLongStdio: true
                 )
                 archiveArtifacts(
-                    artifacts: 'test-results/**/*',
+                    artifacts: 'test-results/**/*,docs/evidence/catalogue-inventory-integration-evidence.md',
                     allowEmptyArchive: false,
                     fingerprint: true
                 )
@@ -428,7 +644,7 @@ make validate-customer-service
                 keepLongStdio: true
             )
             archiveArtifacts(
-                artifacts: 'test-results/**/*',
+                artifacts: 'test-results/**/*,docs/evidence/catalogue-inventory-integration-evidence.md',
                 allowEmptyArchive: true,
                 fingerprint: true
             )

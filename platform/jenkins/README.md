@@ -90,4 +90,17 @@ Kafka outage/recovery tests require their own explicit opt-ins; a skipped outage
 reported as skipped and is never converted into a pass. The required environment and
 cleanup boundary are documented in `tests/integration/README.md`.
 
+Catalogue validation also installs the catalogue service's pinned dependency set and
+runs Black, Ruff, Bandit, Pytest, a dedicated Docker build, focused frontend catalogue
+tests, the full frontend production build, Redis/Kafka/catalogue Kubernetes manifest
+validation, and an offline Alembic revision-graph/SQL compilation check. Machine-readable
+Ruff, Bandit, migration, frontend, backend, and integration evidence is archived.
+
+The pipeline writes capability status files under `test-results/status`. An enabled
+suite is pessimistically marked failed before execution and is reclassified from its
+JUnit XML afterward. A report containing only skipped tests becomes
+`skipped/not applicable`, not passed; partially skipped reports retain exact passed,
+failed, and skipped counts. Disabled live suites are explicitly classified
+`skipped/not applicable` with a reason.
+
 Jenkins credentials must be bound as masked environment variables by job configuration. The pipeline never echoes configuration values, credentials, access tokens, or refresh tokens.
