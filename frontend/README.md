@@ -97,6 +97,12 @@ npm run build
 
 Tests cover application rendering, authenticated and unauthenticated routing, PKCE adapter initialization, role-aware navigation, profile rendering, address creation/deletion, product rendering/search/filtering, customer write restrictions, product/category/price commands, inventory display/adjustment confirmation, movement history, statistics, unauthorized routes, and safe API-unavailable behavior.
 
+The focused catalogue/inventory file currently records 6 passing component tests, and
+the production build passes. These tests validate presentation, routing and API-adapter
+behavior with controlled responses; they are not a live browser journey. The retained
+catalogue integration report contains 11 skips, so the catalogue UI is **Implemented**
+and **Unit Validated**, but **End-to-End Pending / Not Verified**.
+
 ## Container build
 
 ```bash
