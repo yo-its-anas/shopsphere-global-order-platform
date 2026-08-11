@@ -1,10 +1,10 @@
 # Product Catalogue Validation Record
 
-This record covers the implemented Product Catalogue, Inventory, cache-aside, transactional outbox/event producer, internal PoC deployment boundary, and isolated API Gateway transport validation. Order reservations, gateway deployment, event consumers, frontend integration, and authenticated end-to-end catalogue journeys remain outside this evidence.
+This record covers the implemented Product Catalogue, Inventory, cache-aside, transactional outbox/event producer, internal PoC deployment boundary, API Gateway transport, and frontend component validation. Order reservations, event consumers, and authenticated end-to-end catalogue journeys remain outside this evidence. API Gateway is internally deployed; the React frontend is implemented and build-validated but is not deployed in Kubernetes.
 
 ## Kafka and outbox validation
 
-The catalogue suite executes 48 tests and includes versioned-envelope, product-created, product-updated, price-changed, inventory-adjusted, low-stock, out-of-stock, acknowledgement-loss duplicate, and broker-unavailable retry behavior. Alembic reports `003_domain_event_outbox` as the deployed head.
+The catalogue suite executes 48 tests and includes versioned-envelope, product-created, product-updated, price-changed, inventory-adjusted, low-stock, out-of-stock, acknowledgement-loss duplicate, and broker-unavailable retry behavior. The migration graph and offline PostgreSQL SQL validation report one connected chain with `003_domain_event_outbox` as its head.
 
 The live PoC validation created six governed one-partition topics on the internal Kafka 4.3.1 KRaft broker. A temporary service-account client received only the `operations_admin` role, submitted simulated category/product/update/price/inventory operations, and was deleted immediately afterward. Eight outbox rows for the correlation prefix reached `published`: three catalogue facts, three inventory-adjusted facts, and the low/out-of-stock transition facts. A consumer read all six event types from Kafka and confirmed the documented envelope and safe payload projection. No credential or token was printed. Kafka remained Ready, its client Service remained ClusterIP-only, and `kafka-data-kafka-0` remained Bound.
 
@@ -18,9 +18,9 @@ This evidence does not prove broker failover or high availability. Kafka and the
 | Formatting | Black checked 46 Python files individually | Passed |
 | Lint | Ruff | Passed |
 | Security static analysis | Bandit over `app` | Passed |
-| Service tests | Pytest with signed simulated JWTs and repository-isolated API/domain/cache tests | 42 tests passed; 81% application coverage |
+| Service tests | Pytest with signed simulated JWTs and repository-isolated API/domain/cache tests | 48 tests passed; 80% application coverage |
 | Persistence contract | SQLAlchemy metadata tests | Passed; price precision, inventory balance/version constraints, idempotency uniqueness, and movement constraints are present |
-| Alembic offline | Revision graph and PostgreSQL SQL generation | Passed; one head: `002_enterprise_inventory` |
+| Alembic offline | Revision graph and PostgreSQL SQL generation | Passed; three revisions and one head: `003_domain_event_outbox` |
 | Alembic PostgreSQL round trip | Upgrade, five-table verification, constraint/trigger execution, downgrade, and re-upgrade against disposable PostgreSQL 16 | Passed |
 | Alembic drift | `alembic check` after upgrade against disposable PostgreSQL 16 | Passed; no new upgrade operations detected |
 | Container | `docker build --tag shopsphere/catalogue-service:poc services/catalogue-service` | Passed |
@@ -31,8 +31,10 @@ This evidence does not prove broker failover or high availability. Kafka and the
 | Controlled Redis outage | Redis scaled to zero, catalogue liveness/readiness/info and safe cache miss verified, Redis restored to one Ready replica | Passed |
 | API Gateway transport | Fixed Catalogue/Inventory route allow-list, query/pagination/body forwarding, bearer and correlation propagation, normalized timeout/unavailable/protocol failures, safe logging, readiness dependency status, and OpenAPI exposure | Passed in the isolated gateway suite; deployed gateway Ready and live route reached backend authentication |
 | Catalogue dependency access | `catalogue_db` identity, authenticated Redis ping, Keycloak JWKS retrieval, Kafka socket connectivity, and outbox acknowledgement | Passed without displaying credentials; eight simulated events reached `published` |
+| Frontend catalogue/inventory | Focused Vitest component/route/API-adapter coverage | 6 tests passed; production build passed |
+| Live catalogue integration suite | Explicitly enabled authenticated Gateway scenarios | 11 tests collected and 11 skipped; **not passed and not end-to-end evidence** |
 
-Catalogue revisions `001_product_catalogue` and `002_enterprise_inventory` were applied by the deployment init container to the existing PoC `catalogue_db`. No database, PostgreSQL pod, or persistent volume was recreated. Redis runtime credentials exist only in namespace-scoped Kubernetes Secrets and were not displayed.
+Catalogue revisions `001_product_catalogue`, `002_enterprise_inventory`, and `003_domain_event_outbox` are present in the connected migration chain. Earlier deployment evidence confirms the init container applied the catalogue schema without recreating the database, PostgreSQL pod, or persistent volume. Redis runtime credentials exist only in namespace-scoped Kubernetes Secrets and were not displayed.
 
 ## Covered behavior
 

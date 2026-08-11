@@ -2,7 +2,7 @@
 
 ## Status and evidence boundary
 
-This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, internal service APIs, a transactional event outbox, Kafka production, explicit API Gateway transport routes, and internal Kubernetes workloads are implemented. Order reservations, authenticated live catalogue journeys, and event consumers remain **Planned** and must not be presented as implemented evidence.
+This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, internal service APIs, a transactional event outbox, Kafka production, explicit API Gateway transport routes, React catalogue/inventory screens, and internal Kubernetes workloads are implemented. Backend and frontend unit/component suites and stated platform checks passed. The retained live integration report contains 11 skips, so authenticated live catalogue journeys are **Pending / Not Verified**. Order reservations and event consumers remain **Planned**.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md), [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md), [ADR-005](../adr/ADR-005-keycloak-identity-rbac.md), [ADR-006](../adr/ADR-006-postgresql-redis-data-platform.md), [ADR-007](../adr/ADR-007-kafka-domain-events.md), and [ADR-010](../adr/ADR-010-utc-timestamps-json-logs.md).
 
@@ -34,7 +34,7 @@ flowchart LR
 
 Catalogue may expose a composed read model containing product, current price, and availability. Composition does not transfer source-of-truth ownership. Neither context may read another service's database directly.
 
-## Proposed domain model
+## Implemented domain model
 
 All domain identifiers are UUIDs. All stored instants are timezone-aware UTC values. Human-readable codes are alternate keys, not primary keys.
 
@@ -46,7 +46,7 @@ The Product aggregate owns:
 - `sku`: normalized, immutable business identifier with a database uniqueness constraint;
 - `name` and validated descriptive metadata;
 - `status`: `draft`, `active`, `inactive`, or `discontinued`;
-- zero or more category assignments, with at most one designated primary category; and
+- one required category assignment; and
 - `created_at` and `updated_at` UTC timestamps.
 
 SKU comparison is case-insensitive after one documented normalization rule, such as trimming and upper-casing. A SKU cannot be silently reused after discontinuation. Changing an entered SKU requires an explicit governed correction workflow because external systems may retain it.
@@ -68,7 +68,7 @@ Category invariants are:
 
 ProductPrice is an effective-dated value record with its own UUID, `product_id`, ISO 4217 three-letter `currency_code`, exact decimal `amount`, `effective_from`, optional `effective_to`, actor/correlation metadata, and UTC creation timestamp.
 
-Money must use `Decimal` in Python and a fixed-precision PostgreSQL `NUMERIC` column; binary floating point is prohibited. The proposed baseline is `NUMERIC(19,4)`, with currency-specific display rounding kept separate from stored precision. Amounts must be non-negative. Effective intervals for the same product and currency must not overlap, and at most one current price may exist at an instant. Price changes append a new effective record rather than overwriting financial history.
+Money uses `Decimal` in Python and PostgreSQL `NUMERIC(19,4)`; binary floating point is prohibited. Amounts must be positive. The PoC supports an immediately effective price per product/currency: setting a price closes the prior active row and appends a new active row. Currency-specific display rounding remains separate from stored precision.
 
 ### InventoryItem
 
@@ -92,7 +92,7 @@ It is never accepted as an independently editable input. The database and domain
 
 InventoryMovement is an append-only fact created for every accepted stock or reservation change. It contains an immutable UUID, `inventory_item_id`, movement type, signed `on_hand_delta`, signed `reserved_delta`, resulting balances, reason code, safe reference, actor subject/service identity, correlation ID, idempotency key, and UTC `occurred_at`.
 
-Representative movement types are `receipt`, `adjustment`, `reservation`, `release`, and `fulfilment`. Free-text reasons are constrained and must not contain credentials, tokens, or unnecessary personal data. Update and delete operations on movement rows are prohibited at the repository and database layers. Corrections create compensating movements.
+Current command types are `INITIAL_STOCK`, `STOCK_RECEIPT`, `MANUAL_ADJUSTMENT`, `DAMAGE`, and `CORRECTION`. `RESERVATION`, `RELEASE`, and `FULFILMENT` are schema-compatible future types and are rejected by the current API. Free-text reasons are constrained and must not contain credentials, tokens, or unnecessary personal data. Update and delete operations on movement rows are prohibited at the repository and database layers. Corrections create compensating movements.
 
 ## Aggregate invariants and transaction rules
 
@@ -160,7 +160,7 @@ Each envelope has an immutable event/aggregate ID, UTC occurrence time, correlat
 
 ## PoC implementation boundary
 
-The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, transactional outbox, Kafka producer relay, Kubernetes workload, gateway mappings, an internal gateway workload, and automated isolated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. Kafka is a single internal combined KRaft broker/controller with a retained PVC. The gateway-to-catalogue route and backend authentication rejection are live-validated, but an authenticated gateway catalogue journey, Order reservations, and event consumers are not implemented or validated.
+The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, transactional outbox, Kafka producer relay, Kubernetes workload, gateway mappings, an internal gateway workload, React screens, and automated isolated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. Kafka is a single internal combined KRaft broker/controller with a retained PVC. The gateway-to-catalogue route and backend authentication rejection are live-validated; six focused frontend tests passed. The 11 live integration scenarios were skipped, so an authenticated Gateway/browser catalogue journey remains unverified. Order reservations and event consumers are not implemented.
 
 `catalogue_db`, `customer_db`, and `keycloak_db` share one PostgreSQL server and persistent volume. Logical ownership reduces accidental cross-capability access but does not provide infrastructure-level isolation or independent scaling.
 
@@ -168,9 +168,9 @@ The single-node kind cluster and single PostgreSQL pod share one physical GCP VM
 
 ## Production evolution
 
-Production may separate Catalogue and Inventory into independently deployable services when scaling, ownership, or change cadence justifies the operational cost. Each service then owns its database and API/event contracts. Inventory should use a managed regional PostgreSQL service, tested backups and PITR, connection pooling, replicas for non-authoritative queries, explicit partitioning/archival for movement history, and monitored contention. Catalogue search may use a dedicated indexed projection, and pricing may evolve into a separate capability for market, tax, promotion, and validity complexity.
+Production may separate Catalogue and Inventory into independently deployable services when scaling, ownership, or change cadence justifies the operational cost. Each service then owns its database and API/event contracts. Inventory should use managed regional/high-availability PostgreSQL, encrypted automated backups, PITR, tested failover, connection pooling, replicas for non-authoritative queries, explicit partitioning/archival for movement history, and monitored contention. Redis should be replicated across zones with TLS, authentication and automatic failover while remaining disposable. Catalogue search may use a dedicated indexed projection, and pricing may evolve into a separate capability for market, tax, promotion, and validity complexity.
 
-Use multi-zone Kubernetes, workload identity, external secret management, private connectivity, policy enforcement, rate limits, resilient Kafka with schema governance, an outbox relay, cache invalidation telemetry, SLOs, and reconciliation jobs. Separation must follow evidence of need; it must not create distributed transactions or shared-database coupling.
+Use multiple Kubernetes nodes across zones, workload identity, external secret management, private connectivity, enforced ingress/egress and network policy, rate limits, measured horizontal autoscaling, and disruption budgets. Kafka should be managed or use multiple zone-aware brokers/controllers with replicated topics, TLS, ACLs and schema governance. Add outbox-lag/cache telemetry, SLOs, reconciliation jobs and tested disaster recovery. Separation must follow evidence of need; it must not create distributed transactions or shared-database coupling.
 
 ## Architecture defence notes
 

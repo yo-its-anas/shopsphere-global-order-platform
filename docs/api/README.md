@@ -82,4 +82,18 @@ Catalogue-service independently validates the same Keycloak issuer/audience/role
 
 ## Evidence boundary
 
-Route implementations, OpenAPI metadata, gateway mappings, schemas, and automated tests exist. Frontend API-consumer tests passed in the current review. The customer-service test run did not complete, and the retained live integration report contains seven skips. These APIs are therefore documented as implemented, not as a successfully executed end-to-end contract. Run the documented service and live integration suites before presenting functional execution evidence.
+Catalogue route implementations, OpenAPI metadata, fixed Gateway mappings, schemas and
+automated tests exist. The catalogue-service suite passed 48 tests; the focused React
+catalogue/inventory suite passed 6 tests; Gateway proxy tests cover the allow-listed
+transport. Current platform checks observed Ready internal Gateway and catalogue-service
+workloads, and an unauthenticated live route reached backend JWT enforcement.
+
+The catalogue integration report contains **11 skipped tests**. It does not prove an
+authenticated browser or API workflow and must not be reported as passed. Accordingly,
+the routes above are **Implemented**, **Unit Validated**, and platform-deployed at the
+stated boundaries, but are **Pending / Not Verified** end to end.
+
+PostgreSQL is authoritative for catalogue, pricing and inventory data. Redis caches
+bounded read responses only and may be unavailable without invalidating PostgreSQL.
+Kafka carries asynchronous versioned facts produced through the transactional outbox;
+it is not part of the synchronous commit decision.

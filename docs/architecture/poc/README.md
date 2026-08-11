@@ -20,4 +20,9 @@ PostgreSQL and Keycloak run as separate pods and logical databases but share the
 
 ## Catalogue and inventory boundary
 
-The [Product Catalogue and Inventory domain design](../catalogue-inventory-domain-design.md) defines the Catalogue and Inventory bounded contexts within one PoC `catalogue-service`. PostgreSQL schema, internal business APIs, Redis cache-aside behavior, a transactional outbox, Kafka production, internal Kubernetes workloads, and fixed API Gateway transport mappings are implemented. Catalogue and gateway pods are Ready, the gateway route reaches authoritative backend authentication, and simulated catalogue events reached `published` outbox state. An authenticated live gateway journey, frontend integration, Order reservations, and event consumers remain Planned.
+The [Product Catalogue and Inventory domain design](../catalogue-inventory-domain-design.md) defines the Catalogue and Inventory bounded contexts within one PoC `catalogue-service`. PostgreSQL schema, internal business APIs, Redis cache-aside behavior, a transactional outbox, Kafka production, React screens, internal Kubernetes workloads, and fixed API Gateway transport mappings are implemented. Forty-eight backend tests and six focused frontend tests passed. Catalogue and gateway pods are Ready, the gateway route reaches authoritative backend authentication, and simulated catalogue events reached `published` outbox state. The live integration report contains 11 skips, so no authenticated end-to-end catalogue journey is validated. Order reservations and event consumers remain Planned.
+
+PostgreSQL is the sole transactional source of truth. Redis is an ephemeral performance
+optimization, and Kafka transports asynchronous facts after the authoritative commit.
+This PoC uses one PostgreSQL instance, one Redis instance, one Kafka broker/controller,
+one kind node and one physical VM; it provides no host-level high availability.

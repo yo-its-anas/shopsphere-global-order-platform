@@ -93,7 +93,8 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 
 ## Current limitations
 
-- Fixed Catalogue and Inventory routes are registered in API Gateway source and covered by isolated gateway tests; the gateway is not yet deployed in the PoC cluster or validated through an authenticated live catalogue journey.
+- Fixed Catalogue and Inventory routes are registered in API Gateway source, covered by isolated gateway tests, and the internal Gateway workload is Ready. A live unauthenticated route reached catalogue-service and returned its authoritative `401`; an authenticated catalogue journey has not passed.
+- The React catalogue/inventory feature and API Gateway-only client are implemented; six focused frontend tests and the production build passed. The frontend is not deployed in Kubernetes and this is not end-to-end evidence.
 - The PoC uses one `PRIMARY` inventory location; multi-warehouse workflows are not exposed yet.
 - Order reservations, releases, fulfilment, and cross-service order integration are not implemented.
 - Price scheduling, markets, tax, promotions, and multiple price books are outside the PoC pricing model.
@@ -101,3 +102,23 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 - No catalogue/inventory Kafka consumer, schema registry, outbox archival job, or event-driven dashboard is implemented.
 - Redis is one ephemeral pod on the same VM and is neither replicated nor highly available. Cache loss is tolerated by PostgreSQL fallback.
 - Kafka is one combined broker/controller and retained PVC on the same VM. It is not highly available and its private PoC listener has no TLS, authentication, or ACLs.
+
+## Current validation evidence
+
+- 48 catalogue-service tests passed with 80% aggregate statement coverage.
+- Ruff and Bandit completed with zero findings; 46 catalogue Python files passed Black checks.
+- The three-revision Alembic chain has one base and one head (`003_domain_event_outbox`), and the PostgreSQL offline upgrade SQL compiled.
+- Catalogue-service, Redis, Kafka and API Gateway manifests passed non-destructive validation; current read-only checks observed one Ready instance of each.
+- Earlier controlled platform evidence records simulated category/product/price/inventory changes and successful outbox/Kafka publication.
+- The new live catalogue integration report contains 11 skipped tests and therefore provides no authenticated end-to-end pass.
+
+PostgreSQL is the source of truth. Redis is a disposable performance optimization only.
+Kafka is asynchronous domain-event transport; it does not determine whether a command
+committed. The transactional outbox provides at-least-once delivery, so consumers must
+deduplicate by `event_id`.
+
+The PoC runs one PostgreSQL instance, one Redis instance, one Kafka broker/controller,
+one Kubernetes node and one physical VM. It has no host-level high availability.
+Production should use managed/HA PostgreSQL with backups and PITR, replicated Redis,
+multi-broker or managed Kafka, multiple Kubernetes nodes and zones, measured autoscaling,
+and stronger private network, workload identity, secret-management and policy boundaries.

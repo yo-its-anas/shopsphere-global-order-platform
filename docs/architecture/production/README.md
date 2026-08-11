@@ -12,4 +12,12 @@ Production also requires private administrative access, TLS throughout exposed p
 
 ## Catalogue and inventory evolution
 
-The [Product Catalogue and Inventory domain design](../catalogue-inventory-domain-design.md) preserves separate Catalogue and Inventory ownership while allowing one PoC deployment. Production may split these contexts when independently measured scale, availability, ownership, or release cadence warrants it. Inventory requires an authoritative managed regional datastore, contention monitoring, reconciliation, durable movement history, and tested recovery; search, statistics, and Redis-based views remain disposable projections. The PoC transactional outbox and producer must evolve to resilient multi-zone or managed Kafka, replicated topics, governed schemas, authenticated/authorized clients, monitored relay lag, and independently idempotent consumers.
+The [Product Catalogue and Inventory domain design](../catalogue-inventory-domain-design.md) preserves separate Catalogue and Inventory ownership while allowing one PoC deployment. Production may split these contexts when independently measured scale, availability, ownership, or release cadence warrants it. Inventory requires managed regional/high-availability PostgreSQL, encrypted automated backups, PITR, tested failover, contention monitoring, reconciliation and durable movement history. Search, statistics and Redis-based views remain disposable projections; Redis should be replicated across zones with TLS, authentication and automatic failover.
+
+The PoC transactional outbox and producer must evolve to managed or multi-broker Kafka
+across zones, replicated topics, durable encrypted storage, governed schemas, TLS,
+least-privilege ACLs, monitored relay lag and independently idempotent consumers. Run
+application workloads on multiple Kubernetes nodes/zones with disruption budgets,
+measured horizontal autoscaling, private connectivity, workload identity, external
+secret management, and enforced network/ingress/egress policy. These are production
+recommendations, not evidence that the current single-VM PoC is highly available.
