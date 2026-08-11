@@ -33,3 +33,5 @@ Run all checks with `make doctor`. A non-zero result means one or more prerequis
 - `check-redis.sh` verifies Redis readiness, authenticated ping, and ClusterIP-only exposure without reading credentials.
 - `validate-catalogue-service-manifests.sh` checks the internal cache-enabled catalogue-service workload and dependency references.
 - `check-catalogue-service.sh` verifies catalogue-service health, ClusterIP-only exposure, and authenticated Redis connectivity without displaying credentials.
+- `validate-api-gateway-manifests.sh` checks the hardened internal API Gateway workload, fixed upstream origins, probes, and ClusterIP-only exposure.
+- `check-api-gateway.sh` verifies gateway readiness and proves that the fixed catalogue route reaches authoritative backend authentication without displaying a token.

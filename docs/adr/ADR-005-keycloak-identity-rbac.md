@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — PostgreSQL, Keycloak, and customer-service are deployed and healthy in the PoC. Realm import, roles, clients, security defaults, PKCE policy, event recording, and least-privilege activity-reader access are implemented and live-validated. React and API Gateway integrations exist in source but are not deployed, and the end-to-end identity journey has not been validated.
+Accepted — PostgreSQL, Keycloak, customer-service, and the internal API Gateway are deployed and healthy in the PoC. Realm import, roles, clients, security defaults, PKCE policy, event recording, and least-privilege activity-reader access are implemented and live-validated. React integration exists in source but is not deployed, and the end-to-end identity journey has not been validated.
 
 ## Context
 

@@ -38,7 +38,7 @@ Each service requires least-privilege identity, network access, secrets, authori
 
 ## PoC limitations
 
-Catalogue categories, products, effective pricing, search, inventory balances/movements/statistics, persistence adapters, migrations, internal APIs, RBAC enforcement, Redis cache-aside reads, a transactional Kafka outbox/producer, Kubernetes workloads, fixed API Gateway routes, and isolated service/gateway tests are implemented. API Gateway deployment, Order Processing reservations, event consumers, and deployed authenticated end-to-end tests are not implemented. Services share a VM and supporting platforms, so the PoC does not prove independent infrastructure failure isolation or high availability.
+Catalogue categories, products, effective pricing, search, inventory balances/movements/statistics, persistence adapters, migrations, internal APIs, RBAC enforcement, Redis cache-aside reads, a transactional Kafka outbox/producer, Kubernetes workloads, fixed API Gateway routes, isolated service/gateway tests, and an internal API Gateway workload are implemented. Order Processing reservations, event consumers, and deployed authenticated end-to-end tests are not implemented. Services share a VM and supporting platforms, so the PoC does not prove independent infrastructure failure isolation or high availability.
 
 ## Production evolution
 

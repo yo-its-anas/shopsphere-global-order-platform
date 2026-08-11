@@ -5,9 +5,11 @@ KEYCLOAK_OVERLAY := platform/kubernetes/overlays/poc/keycloak
 CUSTOMER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/customer-service
 REDIS_OVERLAY := platform/kubernetes/overlays/poc/redis
 CATALOGUE_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/catalogue-service
+API_GATEWAY_OVERLAY := platform/kubernetes/overlays/poc/api-gateway
 KAFKA_OVERLAY := platform/kubernetes/overlays/poc/kafka
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
+API_GATEWAY_IMAGE ?= shopsphere/api-gateway:poc
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -24,6 +26,8 @@ SERVICE_DIRS := \
 	validate-redis redis-secret redis-secret-generate redis-apply redis-status \
 	validate-catalogue-service catalogue-service-build catalogue-service-load \
 	catalogue-service-apply catalogue-service-status \
+	validate-api-gateway api-gateway-build api-gateway-load \
+	api-gateway-apply api-gateway-status \
 	validate-kafka kafka-apply kafka-topics kafka-status \
 	catalogue-event-smoke \
 	customer-integration customer-integration-collect
@@ -56,7 +60,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-api-gateway ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -175,6 +179,26 @@ catalogue-service-apply: validate-catalogue-service ## Apply the internal catalo
 
 catalogue-service-status: ## Verify catalogue-service health, Redis connectivity, and internal exposure
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-catalogue-service.sh
+
+validate-api-gateway: ## Validate API Gateway manifests without changing the cluster
+	@./scripts/validate-api-gateway-manifests.sh
+
+api-gateway-build: ## Build the internal API Gateway PoC image
+	@docker build --tag "$(API_GATEWAY_IMAGE)" services/api-gateway
+
+api-gateway-load: ## Load the existing API Gateway image into the kind node
+	@./platform/kind/load-images.sh "$(API_GATEWAY_IMAGE)"
+
+api-gateway-apply: validate-api-gateway ## Apply the internal API Gateway after its upstream services
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service customer-service >/dev/null 2>&1 || { \
+		echo "Deploy customer-service before the API Gateway." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service catalogue-service >/dev/null 2>&1 || { \
+		echo "Deploy catalogue-service before the API Gateway." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(API_GATEWAY_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/api-gateway --timeout=180s
+
+api-gateway-status: ## Verify API Gateway readiness, exposure, and catalogue forwarding
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-api-gateway.sh
 
 validate-kafka: ## Validate the single-broker KRaft manifests without changing the cluster
 	@./scripts/validate-kafka-manifests.sh

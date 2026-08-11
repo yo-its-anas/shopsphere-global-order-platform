@@ -68,4 +68,4 @@ python3 -m venv .venv
 .venv/bin/uvicorn app.main:app --reload
 ```
 
-The generated OpenAPI document describes the fixed customer and catalogue/inventory transport routes and normalized `502`, `503`, and `504` responses. Order and analytics routing, gateway-side JWT enforcement, rate limits, workload-to-workload identity, circuit breaking, and Kubernetes deployment of the gateway remain planned.
+The generated OpenAPI document describes the fixed customer and catalogue/inventory transport routes and normalized `502`, `503`, and `504` responses. A hardened, ClusterIP-only Kubernetes PoC workload is defined under `platform/kubernetes`; public ingress is not configured. Order and analytics routing, gateway-side JWT defence in depth, rate limits, workload-to-workload identity, and circuit breaking remain planned.

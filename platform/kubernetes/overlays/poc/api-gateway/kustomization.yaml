@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: shopsphere-apps
+
+resources:
+  - ../../../base/api-gateway
+
+configMapGenerator:
+  - name: api-gateway-environment
+    literals:
+      - APP_ENV=poc
+      - LOG_LEVEL=INFO
+      - SERVICE_NAME=api-gateway
+      - SERVICE_VERSION=0.1.0
+      - CUSTOMER_SERVICE_URL=http://customer-service.shopsphere-apps.svc.cluster.local:8000
+      - CUSTOMER_SERVICE_TIMEOUT_SECONDS=5
+      - CATALOGUE_SERVICE_URL=http://catalogue-service.shopsphere-apps.svc.cluster.local:8000
+      - CATALOGUE_SERVICE_TIMEOUT_SECONDS=5
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+labels:
+  - pairs:
+      shopsphere.io/environment: poc
