@@ -7,3 +7,5 @@ Stateful components are opt-in child overlays so a missing local Secret cannot c
 The [Keycloak overlay](keycloak/README.md) deploys the internal identity provider after PostgreSQL is Ready and Keycloak's namespace-scoped Secret has been created explicitly.
 
 The [customer-service overlay](customer-service/README.md) deploys the internal customer capability after PostgreSQL, Keycloak, and its namespace-scoped runtime Secrets are available. It creates no external service endpoint.
+
+The [Redis overlay](redis/README.md) deploys an authenticated internal cache after matching data/application runtime Secrets are created. The [catalogue-service overlay](catalogue-service/README.md) deploys the internal Catalogue and Inventory capability with PostgreSQL authoritative and Redis optional at runtime.

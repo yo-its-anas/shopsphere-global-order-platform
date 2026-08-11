@@ -1,6 +1,6 @@
 # Catalogue Service
 
-FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, effective pricing, and transactional inventory management. Order reservations, Redis, Kafka, API Gateway routing, and Kubernetes application deployment are not implemented here.
+FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, effective pricing, transactional inventory management, and optional Redis read caching. Order reservations, Kafka, and API Gateway routing are not implemented here.
 
 The service follows the [Product Catalogue and Inventory domain design](../../docs/architecture/catalogue-inventory-domain-design.md). Catalogue and Inventory remain separate bounded contexts even though both are allocated to this service for the PoC.
 
@@ -42,6 +42,18 @@ Stock adjustments use `SELECT ... FOR UPDATE` and an atomic version predicate to
 
 Customer availability responses expose only derived available quantity, state, and timestamp for active/searchable products. Support is read-only and may inspect balances, history, filtering, and calculated statistics. Operations administrators own initialization, adjustments, and reorder-threshold settings.
 
+## Redis cache-aside policy
+
+PostgreSQL remains authoritative for products, categories, prices, inventory balances, movements, and statistics. Redis contains only reconstructable response snapshots for category reads, product details/search, current prices, safe availability, inventory lists, and inventory statistics.
+
+Keys use the `shopsphere:catalogue:v1:<environment>` namespace and role-safe/query-hash suffixes. Default TTLs are 300 seconds for categories, 180 for product details, 60 for searches, 120 for prices, and 15 for availability/inventory snapshots. Availability TTL is capped at 60 seconds by configuration validation.
+
+Reads use cache-aside behavior. Misses, expired entries, malformed JSON/schema data, timeouts, and connection failures fall back to PostgreSQL. Successful catalogue, pricing, and inventory mutations invalidate affected key families after the database transaction commits. Cache hit/miss/outage/invalidation events are structured and contain only the cache family, never tokens, credentials, query text, or cached payloads. Redis does not participate in readiness because cache loss must not take the catalogue capability offline.
+
+Cache-aside permits a bounded stale-read window during concurrent read/repopulate and mutation races. TTLs bound that window, and broad post-commit invalidation reduces it. Inventory mutation and future reservation decisions must always use PostgreSQL rather than cached availability. Production can add versioned keys, event-driven invalidation, and observed staleness metrics where measurements justify the complexity.
+
+Production should use managed Redis with private connectivity, TLS, authentication/ACL integration, cross-zone replication, automatic failover, maintenance controls, monitored memory/eviction pressure, and tested application fallback. Replication improves cache availability but does not make Redis authoritative.
+
 Operational endpoints remain:
 
 - `GET /health/live`
@@ -52,7 +64,7 @@ Interactive OpenAPI is available at `/docs`; the machine-readable contract is `/
 
 ## Configuration
 
-Copy values from `.env.example` into an environment-specific secret/configuration mechanism. `DATABASE_URL` and bearer tokens must never be committed or logged. The Kubernetes platform already provides the `shopsphere-catalogue-service-database` runtime Secret, but no catalogue-service Deployment consumes it yet.
+Copy values from `.env.example` into an environment-specific secret/configuration mechanism. `DATABASE_URL`, `REDIS_PASSWORD`, and bearer tokens must never be committed or logged. Kubernetes uses separate database and cache Secrets in `shopsphere-apps`; Redis receives its matching password through a Secret in `shopsphere-data`.
 
 JWT validation verifies RS256 signature, issuer, audience, expiry, subject, and allow-listed realm/client roles. The service remains authoritative for authorization even when a future API Gateway route is added.
 
@@ -76,9 +88,9 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 ## Current limitations
 
 - Catalogue routes are not yet registered in API Gateway.
-- The catalogue-service is not yet deployed to Kubernetes.
 - The PoC uses one `PRIMARY` inventory location; multi-warehouse workflows are not exposed yet.
 - Order reservations, releases, fulfilment, and cross-service order integration are not implemented.
 - Price scheduling, markets, tax, promotions, and multiple price books are outside the PoC pricing model.
 - Search uses PostgreSQL rather than Elasticsearch/OpenSearch.
 - Domain-event publication remains Planned; no Kafka claim is made.
+- Redis is one ephemeral pod on the same VM and is neither replicated nor highly available. Cache loss is tolerated by PostgreSQL fallback.

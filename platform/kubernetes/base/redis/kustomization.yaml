@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: shopsphere-data
+
+resources:
+  - service.yaml
+  - deployment.yaml
+  - network-policy.yaml
+
+configMapGenerator:
+  - name: redis-configuration
+    files:
+      - redis.conf
+
+generatorOptions:
+  disableNameSuffixHash: false
+
+labels:
+  - pairs:
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/component: cache
+      app.kubernetes.io/part-of: shopsphere
+      app.kubernetes.io/managed-by: kustomize

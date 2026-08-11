@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Iterator
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -147,6 +148,54 @@ class ApiClient:
         return self.request(
             "PATCH", url, headers=kwargs.get("headers"), json_body=kwargs.get("json")
         )
+
+
+class TestCache:
+    """Deterministic JSON cache with controllable time and outage behavior."""
+
+    __test__ = False
+
+    def __init__(self) -> None:
+        self.entries: dict[str, tuple[float, object]] = {}
+        self.now = 0.0
+        self.hits = 0
+        self.misses = 0
+        self.unavailable = False
+
+    async def get_json(self, key: str, family: str) -> object | None:
+        if self.unavailable:
+            self.misses += 1
+            return None
+        entry = self.entries.get(key)
+        if entry is None or entry[0] <= self.now:
+            self.entries.pop(key, None)
+            self.misses += 1
+            return None
+        self.hits += 1
+        return deepcopy(entry[1])
+
+    async def set_json(self, key: str, value: object, ttl: int, family: str) -> None:
+        if not self.unavailable:
+            self.entries[key] = (self.now + ttl, deepcopy(value))
+
+    async def delete(self, *keys: str, family: str) -> None:
+        if self.unavailable:
+            return
+        for key in keys:
+            self.entries.pop(key, None)
+
+    async def delete_prefix(self, prefix: str, family: str) -> None:
+        if self.unavailable:
+            return
+        for key in tuple(self.entries):
+            if key.startswith(prefix):
+                self.entries.pop(key, None)
+
+    async def close(self) -> None:
+        return None
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
 
 
 class InMemoryCatalogueRepository:
@@ -446,6 +495,7 @@ def client(settings: Settings, private_key: rsa.RSAPrivateKey) -> Iterator[ApiCl
     verifier._keys_loaded_at = float("inf")
     repository = InMemoryCatalogueRepository()
     inventory_store = InMemoryInventoryStore()
+    cache = TestCache()
 
     async def ready(_: object) -> bool:
         return True
@@ -456,8 +506,12 @@ def client(settings: Settings, private_key: rsa.RSAPrivateKey) -> Iterator[ApiCl
             token_verifier=verifier,
             unit_of_work_factory=lambda: InMemoryUnitOfWork(repository, inventory_store),
             database_readiness_checker=ready,
+            cache_backend=cache,
         )
     )
+    test_client.application.state.test_catalogue_repository = repository
+    test_client.application.state.test_inventory_store = inventory_store
+    test_client.application.state.test_cache = cache
     yield test_client
     test_client.close()
 

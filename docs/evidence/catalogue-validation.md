@@ -1,23 +1,28 @@
 # Product Catalogue Validation Record
 
-This record covers the implemented Product Catalogue and Inventory service boundary only. Order reservations, API Gateway catalogue/inventory routing, Kubernetes catalogue-service deployment, Redis, Kafka, and frontend integration remain outside this evidence.
+This record covers the implemented Product Catalogue, Inventory, cache-aside, and internal PoC deployment boundary. Order reservations, API Gateway catalogue/inventory routing, Kafka, frontend integration, and authenticated end-to-end catalogue journeys remain outside this evidence.
 
 ## Automated results
 
 | Boundary | Validation | Result |
 | --- | --- | --- |
 | Formatting | Ruff formatter check across `app`, `tests`, and `migrations` | Passed |
-| Formatting | Black checked 43 Python files individually | Passed |
+| Formatting | Black checked 46 Python files individually | Passed |
 | Lint | Ruff | Passed |
 | Security static analysis | Bandit over `app` | Passed |
-| Service tests | Pytest with signed simulated JWTs and repository-isolated API/domain tests | 34 tests passed; 81% application coverage |
+| Service tests | Pytest with signed simulated JWTs and repository-isolated API/domain/cache tests | 42 tests passed; 81% application coverage |
 | Persistence contract | SQLAlchemy metadata tests | Passed; price precision, inventory balance/version constraints, idempotency uniqueness, and movement constraints are present |
 | Alembic offline | Revision graph and PostgreSQL SQL generation | Passed; one head: `002_enterprise_inventory` |
 | Alembic PostgreSQL round trip | Upgrade, five-table verification, constraint/trigger execution, downgrade, and re-upgrade against disposable PostgreSQL 16 | Passed |
 | Alembic drift | `alembic check` after upgrade against disposable PostgreSQL 16 | Passed; no new upgrade operations detected |
 | Container | `docker build --tag shopsphere/catalogue-service:poc services/catalogue-service` | Passed |
+| Redis/cache manifests | Kustomize render, client dry run, secret/reference/exposure/security/probe checks | Passed |
+| Catalogue workload manifests | Kustomize render, client dry run, dependency/exposure/security/probe checks | Passed |
+| Live Redis | Ready authenticated pod and ClusterIP-only Service in `shopsphere-data` | Passed |
+| Live catalogue-service | Ready pod, successful database migration init container, health probes, authenticated Redis connectivity, and ClusterIP-only Service | Passed |
+| Controlled Redis outage | Redis scaled to zero, catalogue liveness/readiness/info and safe cache miss verified, Redis restored to one Ready replica | Passed |
 
-No live PoC schema migration or catalogue-service deployment was performed. Disposable PostgreSQL containers were bound to localhost, contained no real data or credentials, and were removed after validation.
+Catalogue revisions `001_product_catalogue` and `002_enterprise_inventory` were applied by the deployment init container to the existing PoC `catalogue_db`. No database, PostgreSQL pod, or persistent volume was recreated. Redis runtime credentials exist only in namespace-scoped Kubernetes Secrets and were not displayed.
 
 ## Covered behavior
 
@@ -35,7 +40,8 @@ No live PoC schema migration or catalogue-service deployment was performed. Disp
 - customer/support/operations authorization boundaries and inactive-product hiding;
 - calculated in-stock/low-stock/out-of-stock and unit-total statistics;
 - PostgreSQL rejection of movement update/delete and negative on-hand balances.
+- cache miss/hit, TTL expiry, namespaced and hashed keys, product/search invalidation, price invalidation, availability invalidation, malformed payload eviction, and Redis outage fallback.
 
 ## Evidence limitations
 
-API/domain tests use an in-memory implementation of the repository contract because the available aiosqlite driver blocks before executing SQL in this host environment. SQLAlchemy metadata and Alembic are validated separately, including a real PostgreSQL migration round trip, drift check, append-only-trigger execution, and balance-constraint execution. A deployed catalogue-service-to-`catalogue_db` integration test remains required before claiming live persistence behavior. Order reservation/release/fulfilment behavior is not implemented.
+API/domain/cache tests use in-memory repository and cache contract implementations for deterministic behavior. Redis adapter tests cover TTL forwarding, malformed JSON, and Redis exceptions. SQLAlchemy metadata and Alembic were also validated against disposable PostgreSQL, including migration round trip, drift, append-only trigger, and balance constraints. The deployed service is PostgreSQL-ready and its migration completed, but no authenticated live product mutation/read journey was executed. Order reservation/release/fulfilment behavior is not implemented. Redis and catalogue-service each have one pod on the same kind node and are not highly available.

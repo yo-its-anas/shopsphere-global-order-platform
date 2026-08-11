@@ -7,7 +7,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
 
-from app.api.dependencies import get_inventory_service, require_roles
+from app.api.dependencies import get_cache, get_inventory_service, require_roles
+from app.application.cache import CacheBackend, cache_scope, get_cached_model, set_cached_model
 from app.application.inventory import DEFAULT_LOCATION, InventoryService
 from app.core.security import Principal, Role
 from app.domain.models import AvailabilityState, InventoryItem, InventoryMovement, utc_now
@@ -32,6 +33,7 @@ AvailabilityReader = Annotated[Principal, Depends(availability_reader)]
 InventoryReader = Annotated[Principal, Depends(inventory_reader)]
 InventoryWriter = Annotated[Principal, Depends(inventory_writer)]
 InventoryApplication = Annotated[InventoryService, Depends(get_inventory_service)]
+Cache = Annotated[CacheBackend, Depends(get_cache)]
 
 
 def _request_id(request: Request) -> str:
@@ -75,6 +77,16 @@ def _movement_response(movement: InventoryMovement) -> InventoryMovementResponse
     )
 
 
+async def _invalidate_inventory_reads(
+    request: Request, cache: CacheBackend, product_id: UUID
+) -> None:
+    keys = request.app.state.cache_keys
+    await cache.delete_prefix(keys.family_prefix("availability"), family="availability")
+    await cache.delete(keys.inventory_item(product_id), family="inventory-item")
+    await cache.delete_prefix(keys.family_prefix("inventory-list"), family="inventory-list")
+    await cache.delete(keys.inventory_statistics, family="inventory-statistics")
+
+
 @router.get(
     "/products/{product_id}/availability",
     response_model=AvailabilityResponse,
@@ -83,16 +95,30 @@ def _movement_response(movement: InventoryMovement) -> InventoryMovementResponse
 )
 async def get_availability(
     product_id: UUID,
+    request: Request,
     actor: AvailabilityReader,
     service: InventoryApplication,
+    cache: Cache,
 ) -> AvailabilityResponse:
+    key = request.app.state.cache_keys.availability(product_id, cache_scope(actor.roles))
+    cached = await get_cached_model(cache, key, "availability", AvailabilityResponse)
+    if cached is not None:
+        return cached
     item = await service.get_availability(actor, product_id)
-    return AvailabilityResponse(
+    response = AvailabilityResponse(
         product_id=item.product_id,
         quantity_available=item.quantity_available,
         state=item.availability_state,
         as_of=item.updated_at,
     )
+    await set_cached_model(
+        cache,
+        key,
+        "availability",
+        response,
+        request.app.state.settings.availability_cache_ttl_seconds,
+    )
+    return response
 
 
 @router.get(
@@ -103,10 +129,24 @@ async def get_availability(
 )
 async def get_inventory_item(
     product_id: UUID,
+    request: Request,
     _: InventoryReader,
     service: InventoryApplication,
+    cache: Cache,
 ) -> InventoryItemResponse:
-    return _item_response(await service.get_item(product_id))
+    key = request.app.state.cache_keys.inventory_item(product_id)
+    cached = await get_cached_model(cache, key, "inventory-item", InventoryItemResponse)
+    if cached is not None:
+        return cached
+    response = _item_response(await service.get_item(product_id))
+    await set_cached_model(
+        cache,
+        key,
+        "inventory-item",
+        response,
+        request.app.state.settings.availability_cache_ttl_seconds,
+    )
+    return response
 
 
 @router.post(
@@ -122,6 +162,7 @@ async def initialize_inventory(
     request: Request,
     actor: InventoryWriter,
     service: InventoryApplication,
+    cache: Cache,
 ) -> InventoryMutationResponse:
     item, movement = await service.initialize(
         actor,
@@ -133,6 +174,7 @@ async def initialize_inventory(
         payload.idempotency_key,
         _request_id(request),
     )
+    await _invalidate_inventory_reads(request, cache, product_id)
     return InventoryMutationResponse(
         inventory=_item_response(item), movement=_movement_response(movement)
     )
@@ -150,6 +192,7 @@ async def adjust_inventory(
     request: Request,
     actor: InventoryWriter,
     service: InventoryApplication,
+    cache: Cache,
 ) -> InventoryMutationResponse:
     item, movement = await service.adjust(
         actor,
@@ -162,6 +205,7 @@ async def adjust_inventory(
         payload.expected_version,
         _request_id(request),
     )
+    await _invalidate_inventory_reads(request, cache, product_id)
     return InventoryMutationResponse(
         inventory=_item_response(item), movement=_movement_response(movement)
     )
@@ -175,15 +219,19 @@ async def adjust_inventory(
 )
 async def update_inventory_settings(
     product_id: UUID,
+    request: Request,
     payload: InventorySettingsUpdate,
     _: InventoryWriter,
     service: InventoryApplication,
+    cache: Cache,
 ) -> InventoryItemResponse:
-    return _item_response(
+    response = _item_response(
         await service.update_settings(
             product_id, payload.reorder_threshold, payload.expected_version
         )
     )
+    await _invalidate_inventory_reads(request, cache, product_id)
+    return response
 
 
 @router.get(
@@ -215,19 +263,33 @@ async def list_inventory_movements(
     summary="List and filter tracked inventory",
 )
 async def list_inventory(
+    request: Request,
     _: InventoryReader,
     service: InventoryApplication,
+    cache: Cache,
     inventory_state: Annotated[AvailabilityState | None, Query(alias="state")] = None,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> InventoryItemListResponse:
+    key = request.app.state.cache_keys.inventory_list(inventory_state, offset, limit)
+    cached = await get_cached_model(cache, key, "inventory-list", InventoryItemListResponse)
+    if cached is not None:
+        return cached
     items, total = await service.list_items(inventory_state, offset, limit)
-    return InventoryItemListResponse(
+    response = InventoryItemListResponse(
         items=[_item_response(item) for item in items],
         offset=offset,
         limit=limit,
         total=total,
     )
+    await set_cached_model(
+        cache,
+        key,
+        "inventory-list",
+        response,
+        request.app.state.settings.availability_cache_ttl_seconds,
+    )
+    return response
 
 
 @router.get(
@@ -237,12 +299,26 @@ async def list_inventory(
     summary="Calculate inventory statistics from persisted balances",
 )
 async def get_inventory_statistics(
+    request: Request,
     _: InventoryReader,
     service: InventoryApplication,
+    cache: Cache,
 ) -> InventoryStatisticsResponse:
+    key = request.app.state.cache_keys.inventory_statistics
+    cached = await get_cached_model(cache, key, "inventory-statistics", InventoryStatisticsResponse)
+    if cached is not None:
+        return cached
     values = await service.statistics()
-    return InventoryStatisticsResponse(
+    response = InventoryStatisticsResponse(
         location_code=DEFAULT_LOCATION,
         calculated_at=utc_now(),
         **values,
     )
+    await set_cached_model(
+        cache,
+        key,
+        "inventory-statistics",
+        response,
+        request.app.state.settings.availability_cache_ttl_seconds,
+    )
+    return response

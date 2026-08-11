@@ -3,7 +3,10 @@ KUBE_CONTEXT ?= kind-shopsphere-poc
 POSTGRESQL_OVERLAY := platform/kubernetes/overlays/poc/postgresql
 KEYCLOAK_OVERLAY := platform/kubernetes/overlays/poc/keycloak
 CUSTOMER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/customer-service
+REDIS_OVERLAY := platform/kubernetes/overlays/poc/redis
+CATALOGUE_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/catalogue-service
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
+CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -17,6 +20,9 @@ SERVICE_DIRS := \
 	validate-keycloak keycloak-secret keycloak-apply keycloak-configure keycloak-status doctor clean \
 	validate-customer-service customer-service-secret customer-service-build \
 	customer-service-load customer-service-apply customer-service-status \
+	validate-redis redis-secret redis-secret-generate redis-apply redis-status \
+	validate-catalogue-service catalogue-service-build catalogue-service-load \
+	catalogue-service-apply catalogue-service-status \
 	customer-integration customer-integration-collect
 
 help: ## Show available foundation targets
@@ -47,7 +53,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-catalogue-service ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -124,6 +130,48 @@ customer-service-apply: validate-customer-service ## Apply the internal customer
 
 customer-service-status: ## Run read-only customer-service workload, probe, and exposure checks
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-customer-service.sh
+
+validate-redis: ## Validate Redis manifests without changing the cluster
+	@./scripts/validate-redis-manifests.sh
+
+redis-secret: ## Create Redis runtime Secrets through hidden interactive input
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-redis-secret.sh
+
+redis-secret-generate: ## Explicitly generate Redis runtime Secrets without displaying values
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-redis-secret.sh --generate
+
+redis-apply: validate-redis ## Apply the internal PoC Redis cache; requires runtime Secrets
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get secret shopsphere-redis-credentials >/dev/null 2>&1 || { \
+		echo "Create Redis runtime Secrets first with 'make redis-secret' or 'make redis-secret-generate'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-catalogue-cache >/dev/null 2>&1 || { \
+		echo "Create Redis runtime Secrets first with 'make redis-secret' or 'make redis-secret-generate'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(REDIS_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data rollout status deployment/redis --timeout=180s
+
+redis-status: ## Verify Redis readiness, authentication, and internal exposure
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-redis.sh
+
+validate-catalogue-service: ## Validate catalogue-service manifests without changing the cluster
+	@./scripts/validate-catalogue-service-manifests.sh
+
+catalogue-service-build: ## Build the cache-enabled catalogue-service PoC image
+	@docker build --tag "$(CATALOGUE_SERVICE_IMAGE)" services/catalogue-service
+
+catalogue-service-load: ## Load the existing catalogue-service image into the kind node
+	@./platform/kind/load-images.sh "$(CATALOGUE_SERVICE_IMAGE)"
+
+catalogue-service-apply: validate-catalogue-service ## Apply the internal catalogue-service workload
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-catalogue-service-database >/dev/null 2>&1 || { \
+		echo "Create the catalogue database Secret first with 'make catalogue-service-secret'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-catalogue-cache >/dev/null 2>&1 || { \
+		echo "Create Redis runtime Secrets first with 'make redis-secret' or 'make redis-secret-generate'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get service redis >/dev/null 2>&1 || { \
+		echo "Apply Redis first with 'make redis-apply'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(CATALOGUE_SERVICE_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/catalogue-service --timeout=300s
+
+catalogue-service-status: ## Verify catalogue-service health, Redis connectivity, and internal exposure
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-catalogue-service.sh
 
 customer-integration: ## Run opt-in live customer capability integration tests with JUnit output
 	@mkdir -p test-results/integration

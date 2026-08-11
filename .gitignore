@@ -77,6 +77,10 @@ platform/kubernetes/**/customer-service-secret.yaml
 platform/kubernetes/**/customer-service-secret.env
 platform/kubernetes/**/catalogue-service-secret.yaml
 platform/kubernetes/**/catalogue-service-secret.env
+platform/kubernetes/**/redis-secret.yaml
+platform/kubernetes/**/redis-secret.env
+platform/kubernetes/**/catalogue-cache-secret.yaml
+platform/kubernetes/**/catalogue-cache-secret.env
 charts/**/charts/
 charts/**/tmpcharts/
 

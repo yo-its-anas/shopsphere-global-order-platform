@@ -11,12 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api.health import router as health_router
 from app.api.v1.router import api_v1_router
+from app.application.cache import CacheBackend, CacheKeys, NullCache
 from app.application.catalogue import UnitOfWorkFactory
 from app.core.config import Settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import CorrelationIdMiddleware
 from app.core.security import KeycloakTokenVerifier, TokenVerifier
+from app.infrastructure.cache import RedisJsonCache
 from app.infrastructure.database import (
     create_database_engine,
     create_session_factory,
@@ -65,6 +67,7 @@ def create_app(
     database_engine: AsyncEngine | None = None,
     token_verifier: TokenVerifier | None = None,
     unit_of_work_factory: UnitOfWorkFactory | None = None,
+    cache_backend: CacheBackend | None = None,
     database_readiness_checker: DatabaseReadinessChecker = database_is_ready,
 ) -> FastAPI:
     """Create an independently configurable FastAPI application."""
@@ -81,6 +84,15 @@ def create_app(
     if resolved_verifier is None and resolved_settings.keycloak_issuer:
         resolved_verifier = KeycloakTokenVerifier(resolved_settings)
     resolved_unit_of_work_factory = unit_of_work_factory
+    resolved_cache = cache_backend
+    if resolved_cache is None and resolved_settings.redis_url and resolved_settings.redis_password:
+        resolved_cache = RedisJsonCache(
+            resolved_settings.redis_url,
+            resolved_settings.redis_password,
+            resolved_settings.redis_connect_timeout_seconds,
+        )
+    if resolved_cache is None:
+        resolved_cache = NullCache()
     if resolved_unit_of_work_factory is None and resolved_engine is not None:
         resolved_session_factory = create_session_factory(resolved_engine)
 
@@ -95,6 +107,7 @@ def create_app(
         yield
         if resolved_engine is not None:
             await resolved_engine.dispose()
+        await resolved_cache.close()
         logger.info("service_stopped", extra={"event": "service_stopped"})
 
     application = FastAPI(
@@ -114,6 +127,10 @@ def create_app(
     application.state.database_readiness_checker = database_readiness_checker
     application.state.token_verifier = resolved_verifier
     application.state.unit_of_work_factory = resolved_unit_of_work_factory
+    application.state.cache = resolved_cache
+    application.state.cache_keys = CacheKeys(
+        resolved_settings.cache_key_prefix, resolved_settings.environment
+    )
     application.add_middleware(CorrelationIdMiddleware)
     register_exception_handlers(application)
     application.include_router(health_router)

@@ -7,7 +7,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Query, Request, status
 
-from app.api.dependencies import get_catalogue_service, require_roles
+from app.api.dependencies import get_cache, get_catalogue_service, require_roles
+from app.application.cache import (
+    CacheBackend,
+    cache_scope,
+    get_cached_model,
+    set_cached_model,
+)
 from app.application.catalogue import CatalogueService
 from app.core.security import Principal, Role
 from app.domain.models import Product, ProductCategory, ProductPrice, ProductStatus
@@ -31,6 +37,7 @@ operations_writer = require_roles(Role.OPERATIONS_ADMIN)
 CatalogueReader = Annotated[Principal, Depends(catalogue_reader)]
 OperationsWriter = Annotated[Principal, Depends(operations_writer)]
 CatalogueApplication = Annotated[CatalogueService, Depends(get_catalogue_service)]
+Cache = Annotated[CacheBackend, Depends(get_cache)]
 
 
 def _request_id(request: Request) -> str:
@@ -78,6 +85,28 @@ def _price_response(price: ProductPrice) -> PriceResponse:
     )
 
 
+async def _invalidate_category_reads(request: Request, cache: CacheBackend) -> None:
+    keys = request.app.state.cache_keys
+    for family in (
+        "category",
+        "category-list",
+        "product",
+        "product-search",
+        "availability",
+    ):
+        await cache.delete_prefix(keys.family_prefix(family), family=family)
+
+
+async def _invalidate_product_reads(
+    request: Request, cache: CacheBackend, product_id: UUID | None = None
+) -> None:
+    keys = request.app.state.cache_keys
+    if product_id is not None:
+        await cache.delete_prefix(keys.family_prefix("product"), family="product")
+        await cache.delete_prefix(keys.family_prefix("availability"), family="availability")
+    await cache.delete_prefix(keys.family_prefix("product-search"), family="product-search")
+
+
 @router.post(
     "/categories",
     response_model=CategoryResponse,
@@ -90,8 +119,10 @@ async def create_category(
     request: Request,
     actor: OperationsWriter,
     service: CatalogueApplication,
+    cache: Cache,
 ) -> CategoryResponse:
     category = await service.create_category(actor, payload.model_dump(), _request_id(request))
+    await _invalidate_category_reads(request, cache)
     return _category_response(category)
 
 
@@ -102,19 +133,34 @@ async def create_category(
     summary="List product categories",
 )
 async def list_categories(
+    request: Request,
     actor: CatalogueReader,
     service: CatalogueApplication,
+    cache: Cache,
     active: Annotated[bool | None, Query()] = None,
     offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> CategoryListResponse:
+    scope = cache_scope(actor.roles)
+    key = request.app.state.cache_keys.category_list(scope, active, offset, limit)
+    cached = await get_cached_model(cache, key, "category-list", CategoryListResponse)
+    if cached is not None:
+        return cached
     categories, total = await service.list_categories(actor, active, offset, limit)
-    return CategoryListResponse(
+    response = CategoryListResponse(
         items=[_category_response(category) for category in categories],
         offset=offset,
         limit=limit,
         total=total,
     )
+    await set_cached_model(
+        cache,
+        key,
+        "category-list",
+        response,
+        request.app.state.settings.category_cache_ttl_seconds,
+    )
+    return response
 
 
 @router.get(
@@ -125,10 +171,24 @@ async def list_categories(
 )
 async def get_category(
     category_id: UUID,
+    request: Request,
     actor: CatalogueReader,
     service: CatalogueApplication,
+    cache: Cache,
 ) -> CategoryResponse:
-    return _category_response(await service.get_category(actor, category_id))
+    key = request.app.state.cache_keys.category(category_id, cache_scope(actor.roles))
+    cached = await get_cached_model(cache, key, "category", CategoryResponse)
+    if cached is not None:
+        return cached
+    response = _category_response(await service.get_category(actor, category_id))
+    await set_cached_model(
+        cache,
+        key,
+        "category",
+        response,
+        request.app.state.settings.category_cache_ttl_seconds,
+    )
+    return response
 
 
 @router.patch(
@@ -143,6 +203,7 @@ async def update_category(
     request: Request,
     actor: OperationsWriter,
     service: CatalogueApplication,
+    cache: Cache,
 ) -> CategoryResponse:
     category = await service.update_category(
         actor,
@@ -150,6 +211,7 @@ async def update_category(
         payload.model_dump(exclude_unset=True),
         _request_id(request),
     )
+    await _invalidate_category_reads(request, cache)
     return _category_response(category)
 
 
@@ -165,8 +227,10 @@ async def create_product(
     request: Request,
     actor: OperationsWriter,
     service: CatalogueApplication,
+    cache: Cache,
 ) -> ProductResponse:
     product = await service.create_product(actor, payload.model_dump(), _request_id(request))
+    await _invalidate_product_reads(request, cache)
     return _product_response(product)
 
 
@@ -177,8 +241,10 @@ async def create_product(
     summary="Search and list products",
 )
 async def list_products(
+    request: Request,
     actor: CatalogueReader,
     service: CatalogueApplication,
+    cache: Cache,
     query: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
     sku: Annotated[str | None, Query(min_length=2, max_length=64)] = None,
     category_id: Annotated[UUID | None, Query()] = None,
@@ -188,6 +254,22 @@ async def list_products(
     sort_by: Annotated[Literal["created_at", "name", "sku", "updated_at"], Query()] = "name",
     sort_direction: Annotated[Literal["asc", "desc"], Query()] = "asc",
 ) -> ProductListResponse:
+    key = request.app.state.cache_keys.product_search(
+        {
+            "scope": cache_scope(actor.roles),
+            "query": query,
+            "sku": sku.upper() if sku else None,
+            "category_id": category_id,
+            "status": product_status.value if product_status else None,
+            "offset": offset,
+            "limit": limit,
+            "sort_by": sort_by,
+            "sort_direction": sort_direction,
+        }
+    )
+    cached = await get_cached_model(cache, key, "product-search", ProductListResponse)
+    if cached is not None:
+        return cached
     products, total = await service.list_products(
         actor,
         query=query,
@@ -199,12 +281,20 @@ async def list_products(
         sort_by=sort_by,
         sort_direction=sort_direction,
     )
-    return ProductListResponse(
+    response = ProductListResponse(
         items=[_product_response(product) for product in products],
         offset=offset,
         limit=limit,
         total=total,
     )
+    await set_cached_model(
+        cache,
+        key,
+        "product-search",
+        response,
+        request.app.state.settings.search_cache_ttl_seconds,
+    )
+    return response
 
 
 @router.get(
@@ -215,10 +305,24 @@ async def list_products(
 )
 async def get_product(
     product_id: UUID,
+    request: Request,
     actor: CatalogueReader,
     service: CatalogueApplication,
+    cache: Cache,
 ) -> ProductResponse:
-    return _product_response(await service.get_product(actor, product_id))
+    key = request.app.state.cache_keys.product(product_id, cache_scope(actor.roles))
+    cached = await get_cached_model(cache, key, "product", ProductResponse)
+    if cached is not None:
+        return cached
+    response = _product_response(await service.get_product(actor, product_id))
+    await set_cached_model(
+        cache,
+        key,
+        "product",
+        response,
+        request.app.state.settings.product_cache_ttl_seconds,
+    )
+    return response
 
 
 @router.patch(
@@ -233,6 +337,7 @@ async def update_product(
     request: Request,
     actor: OperationsWriter,
     service: CatalogueApplication,
+    cache: Cache,
 ) -> ProductResponse:
     product = await service.update_product(
         actor,
@@ -240,6 +345,7 @@ async def update_product(
         payload.model_dump(exclude_unset=True),
         _request_id(request),
     )
+    await _invalidate_product_reads(request, cache, product_id)
     return _product_response(product)
 
 
@@ -254,8 +360,10 @@ async def deactivate_product(
     request: Request,
     actor: OperationsWriter,
     service: CatalogueApplication,
+    cache: Cache,
 ) -> ProductResponse:
     product = await service.deactivate_product(actor, product_id, _request_id(request))
+    await _invalidate_product_reads(request, cache, product_id)
     return _product_response(product)
 
 
@@ -267,12 +375,27 @@ async def deactivate_product(
 )
 async def list_prices(
     product_id: UUID,
+    request: Request,
     actor: CatalogueReader,
     service: CatalogueApplication,
+    cache: Cache,
     include_history: Annotated[bool, Query()] = False,
 ) -> PriceListResponse:
+    scope = cache_scope(actor.roles)
+    key = request.app.state.cache_keys.prices(product_id, scope, include_history)
+    cached = await get_cached_model(cache, key, "prices", PriceListResponse)
+    if cached is not None:
+        return cached
     prices = await service.list_prices(actor, product_id, include_history)
-    return PriceListResponse(items=[_price_response(price) for price in prices])
+    response = PriceListResponse(items=[_price_response(price) for price in prices])
+    await set_cached_model(
+        cache,
+        key,
+        "prices",
+        response,
+        request.app.state.settings.price_cache_ttl_seconds,
+    )
+    return response
 
 
 @router.put(
@@ -288,6 +411,7 @@ async def set_price(
     request: Request,
     actor: OperationsWriter,
     service: CatalogueApplication,
+    cache: Cache,
 ) -> PriceResponse:
     price = await service.set_price(
         actor,
@@ -296,4 +420,5 @@ async def set_price(
         payload.amount,
         _request_id(request),
     )
+    await cache.delete_prefix(request.app.state.cache_keys.family_prefix("prices"), family="prices")
     return _price_response(price)

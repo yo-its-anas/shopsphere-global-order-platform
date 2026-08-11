@@ -2,7 +2,7 @@
 
 ## Status and evidence boundary
 
-This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, and internal service APIs are implemented. Order reservations, API Gateway catalogue routes, Kubernetes application deployment, Redis, Kafka, and domain-event publication remain **Planned** and must not be presented as implemented evidence.
+This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, and internal service APIs are implemented. Order reservations, API Gateway catalogue routes, Kafka, and domain-event publication remain **Planned** and must not be presented as implemented evidence.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md), [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md), [ADR-005](../adr/ADR-005-keycloak-identity-rbac.md), [ADR-006](../adr/ADR-006-postgresql-redis-data-platform.md), [ADR-007](../adr/ADR-007-kafka-domain-events.md), and [ADR-010](../adr/ADR-010-utc-timestamps-json-logs.md).
 
@@ -117,7 +117,7 @@ Inventory is a contention point. A read-then-write sequence without locking can 
 
 Constraint or version conflicts become a stable `409 Conflict`; validation failures become `422` or a governed `400` response. The current implementation does not retry deadlocks or serialization failures; production evolution must add bounded retries with structured, token-free logs. Multi-item reservations will require deterministic lock ordering. Current statistics are calculated directly from authoritative balances rather than an eventually consistent projection.
 
-The initial implementation should prefer PostgreSQL reads over Redis until a measured cache requirement exists. If caching is introduced, product search and availability projections must have explicit TTL/invalidation rules; Redis must never become the stock source of truth.
+Redis now accelerates bounded category, product-detail/search, price, availability, inventory-list, and statistics reads through cache-aside behavior. Keys are environment/version namespaced; search parameters are represented by a deterministic digest rather than exposed in keys. Short TTLs limit staleness, with availability capped at 60 seconds and configured to 15 seconds in the PoC. Successful mutations invalidate affected families after PostgreSQL commits. Cache failures and malformed entries become misses; PostgreSQL remains authoritative and Redis never participates in stock mutation or service readiness.
 
 ## API and authorization model
 
@@ -160,7 +160,7 @@ Events require versioned schemas, aggregate/event IDs, UTC occurrence time, corr
 
 ## PoC implementation boundary
 
-The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe mechanism for deriving a namespace-local catalogue-service database Secret. Catalogue and inventory schema, migrations, repositories, internal service APIs, and automated API/domain tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. API Gateway catalogue mapping and the Kubernetes catalogue-service workload do not exist. Order reservations, Redis, and Kafka are not implemented or deployed.
+The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, Kubernetes workload, and automated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. A controlled Redis outage confirmed that catalogue readiness remains governed by PostgreSQL and cache access becomes a safe miss. API Gateway catalogue mapping, Order reservations, and Kafka are not implemented.
 
 `catalogue_db`, `customer_db`, and `keycloak_db` share one PostgreSQL server and persistent volume. Logical ownership reduces accidental cross-capability access but does not provide infrastructure-level isolation or independent scaling.
 
@@ -176,7 +176,7 @@ Use multi-zone Kubernetes, workload identity, external secret management, privat
 
 - Catalogue and Inventory are separated by ownership and invariants even though the PoC may package them together.
 - Availability is derived because independently editable totals can contradict one another.
-- PostgreSQL constraints and transactional movement recording protect stock correctness; Redis is only a possible projection cache.
+- PostgreSQL constraints and transactional movement recording protect stock correctness; Redis is only a short-lived projection cache.
 - UUIDs provide stable internal identity while SKU remains a governed unique business key.
 - Effective-dated decimal prices preserve precision and history.
 - RBAC controls capability access, while domain invariants remain enforced for every actor.

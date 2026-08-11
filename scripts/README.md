@@ -28,3 +28,8 @@ Run all checks with `make doctor`. A non-zero result means one or more prerequis
 - `create-customer-service-secret.sh` derives a percent-encoded customer database URL from the existing PostgreSQL credential and creates a namespace-scoped Secret directly through the Kubernetes API. It never prints the URL or credential and preserves an existing Secret.
 - `validate-customer-service-manifests.sh` renders and statically checks the internal customer-service Kustomize overlay without changing the cluster.
 - `check-customer-service.sh` verifies the deployed workload, ClusterIP-only Service, and health endpoints without reading credentials.
+- `create-redis-secret.sh` creates matching namespace-scoped Redis runtime Secrets from hidden input or explicit generated mode without displaying values.
+- `validate-redis-manifests.sh` checks authenticated, ephemeral, ClusterIP-only Redis manifests and hardened workload settings.
+- `check-redis.sh` verifies Redis readiness, authenticated ping, and ClusterIP-only exposure without reading credentials.
+- `validate-catalogue-service-manifests.sh` checks the internal cache-enabled catalogue-service workload and dependency references.
+- `check-catalogue-service.sh` verifies catalogue-service health, ClusterIP-only exposure, and authenticated Redis connectivity without displaying credentials.
