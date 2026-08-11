@@ -1,7 +1,7 @@
 import type { DashboardData } from "../types/dashboard";
 
 /**
- * Development-only values derived from the Stitch layout. These are intentionally
+ * Development-only dashboard fixtures. These are intentionally
  * fictional and must be replaced by typed API responses when integration begins.
  */
 export const mockDashboardData: DashboardData = {
