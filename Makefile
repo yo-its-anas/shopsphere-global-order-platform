@@ -5,6 +5,7 @@ KEYCLOAK_OVERLAY := platform/kubernetes/overlays/poc/keycloak
 CUSTOMER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/customer-service
 REDIS_OVERLAY := platform/kubernetes/overlays/poc/redis
 CATALOGUE_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/catalogue-service
+KAFKA_OVERLAY := platform/kubernetes/overlays/poc/kafka
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
 SERVICE_DIRS := \
@@ -23,6 +24,8 @@ SERVICE_DIRS := \
 	validate-redis redis-secret redis-secret-generate redis-apply redis-status \
 	validate-catalogue-service catalogue-service-build catalogue-service-load \
 	catalogue-service-apply catalogue-service-status \
+	validate-kafka kafka-apply kafka-topics kafka-status \
+	catalogue-event-smoke \
 	customer-integration customer-integration-collect
 
 help: ## Show available foundation targets
@@ -53,7 +56,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-catalogue-service ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -172,6 +175,23 @@ catalogue-service-apply: validate-catalogue-service ## Apply the internal catalo
 
 catalogue-service-status: ## Verify catalogue-service health, Redis connectivity, and internal exposure
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-catalogue-service.sh
+
+validate-kafka: ## Validate the single-broker KRaft manifests without changing the cluster
+	@./scripts/validate-kafka-manifests.sh
+
+kafka-apply: validate-kafka ## Apply the internal single-broker Kafka PoC
+	@kubectl --context "$(KUBE_CONTEXT)" apply -f platform/kubernetes/base/resource-quotas.yaml
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(KAFKA_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-platform rollout status statefulset/kafka --timeout=420s
+
+kafka-topics: ## Idempotently create and configure governed domain-event topics
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/reconcile-kafka-topics.sh
+
+kafka-status: ## Verify broker readiness, internal exposure, storage, and topics
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-kafka.sh
+
+catalogue-event-smoke: ## Create simulated catalogue changes and verify producer input safely
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/smoke-test-catalogue-events.sh
 
 customer-integration: ## Run opt-in live customer capability integration tests with JUnit output
 	@mkdir -p test-results/integration
