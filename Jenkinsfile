@@ -235,6 +235,26 @@ mkdir -p test-results/integration
             }
         }
 
+        stage('PoC catalogue and inventory integration tests') {
+            when {
+                environment name: 'SHOPSPHERE_RUN_CATALOGUE_INTEGRATION', value: 'true'
+            }
+            options {
+                timeout(time: 20, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run opt-in catalogue and inventory integration suite', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/integration
+"$CI_VENV/bin/python" -m pytest \
+    -c tests/integration/pytest.ini \
+    tests/integration/catalogue_inventory \
+    --junitxml=test-results/integration/catalogue-inventory.xml
+''')
+            }
+        }
+
         stage('Frontend dependency installation') {
             options {
                 timeout(time: 10, unit: 'MINUTES')

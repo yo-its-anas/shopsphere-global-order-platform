@@ -30,7 +30,8 @@ SERVICE_DIRS := \
 	api-gateway-apply api-gateway-status \
 	validate-kafka kafka-apply kafka-topics kafka-status \
 	catalogue-event-smoke \
-	customer-integration customer-integration-collect
+	customer-integration customer-integration-collect \
+	catalogue-integration catalogue-integration-collect
 
 help: ## Show available foundation targets
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -226,6 +227,16 @@ customer-integration: ## Run opt-in live customer capability integration tests w
 customer-integration-collect: ## Collect customer integration tests without contacting services
 	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
 		tests/integration/customer_identity --collect-only
+
+catalogue-integration: ## Run opt-in catalogue/inventory integration tests with JUnit output
+	@mkdir -p test-results/integration
+	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
+		tests/integration/catalogue_inventory \
+		--junitxml=test-results/integration/catalogue-inventory.xml
+
+catalogue-integration-collect: ## Collect catalogue/inventory integration tests without services
+	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
+		tests/integration/catalogue_inventory --collect-only
 
 doctor: ## Run non-destructive host and tool checks
 	@status=0; \
