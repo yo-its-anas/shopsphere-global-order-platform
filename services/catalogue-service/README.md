@@ -2,6 +2,8 @@
 
 FastAPI foundation for the planned product catalogue, pricing, availability, and inventory boundary. No catalogue business behavior, persistence, Redis caching, or authentication is implemented.
 
+The proposed bounded contexts, entities, invariants, authorization rules, concurrency strategy, events, and production evolution are defined in the [Product Catalogue and Inventory domain design](../../docs/architecture/catalogue-inventory-domain-design.md). That design is not implementation evidence.
+
 ## Local development
 
 ```bash
