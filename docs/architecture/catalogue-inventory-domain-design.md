@@ -160,7 +160,9 @@ Events require versioned schemas, aggregate/event IDs, UTC occurrence time, corr
 
 ## PoC implementation boundary
 
-The proposed PoC keeps both contexts in `catalogue-service` and would use a catalogue-owned logical PostgreSQL database with a least-privilege identity. The existing PostgreSQL deployment currently initializes only `customer_db` and `keycloak_db`; no catalogue database or credentials exist. Redis and Kafka are not deployed. No catalogue gateway mapping, Kubernetes workload, domain schema, migration, or business test exists.
+The proposed PoC keeps both contexts in `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe mechanism for deriving a namespace-local catalogue-service database Secret. This is persistence infrastructure only: no catalogue schema, migration, repository, business API, gateway mapping, Kubernetes application workload, or business test exists. Redis and Kafka are not deployed.
+
+`catalogue_db`, `customer_db`, and `keycloak_db` share one PostgreSQL server and persistent volume. Logical ownership reduces accidental cross-capability access but does not provide infrastructure-level isolation or independent scaling.
 
 The single-node kind cluster and single PostgreSQL pod share one physical GCP VM. Persistent storage improves pod-restart survival but provides no host-level high availability. Multiple service replicas on this node would not change that limitation.
 

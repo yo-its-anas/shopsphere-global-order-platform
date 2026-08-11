@@ -75,6 +75,8 @@ platform/kubernetes/**/customer-activity-reader-secret.yaml
 platform/kubernetes/**/customer-activity-reader-secret.env
 platform/kubernetes/**/customer-service-secret.yaml
 platform/kubernetes/**/customer-service-secret.env
+platform/kubernetes/**/catalogue-service-secret.yaml
+platform/kubernetes/**/catalogue-service-secret.env
 charts/**/charts/
 charts/**/tmpcharts/
 

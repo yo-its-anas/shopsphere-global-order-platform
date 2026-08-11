@@ -13,6 +13,7 @@ SERVICE_DIRS := \
 
 .PHONY: help format lint test build validate validate-shell validate-kubernetes \
 	validate-postgresql postgresql-secret postgresql-apply postgresql-status \
+	postgresql-reconcile catalogue-service-secret \
 	validate-keycloak keycloak-secret keycloak-apply keycloak-configure keycloak-status doctor clean \
 	validate-customer-service customer-service-secret customer-service-build \
 	customer-service-load customer-service-apply customer-service-status \
@@ -68,7 +69,17 @@ postgresql-secret: ## Create the PostgreSQL Secret interactively; existing Secre
 postgresql-apply: validate-postgresql ## Apply the PoC PostgreSQL component; requires its Secret
 	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get secret shopsphere-postgresql-credentials >/dev/null 2>&1 || { \
 		echo "Create shopsphere-postgresql-credentials first with 'make postgresql-secret'." >&2; exit 1; }
+	@test "$$(kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get secret shopsphere-postgresql-credentials -o go-template='{{if index .data "catalogue-password"}}present{{end}}')" = "present" || { \
+		echo "Add the catalogue credential first with 'make postgresql-secret'." >&2; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(POSTGRESQL_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data rollout status statefulset/postgresql --timeout=300s
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/reconcile-postgresql-databases.sh
+
+postgresql-reconcile: ## Idempotently reconcile required logical databases without recreating existing data
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/reconcile-postgresql-databases.sh
+
+catalogue-service-secret: ## Derive the catalogue database URL Secret without displaying credentials
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-catalogue-service-secret.sh
 
 postgresql-status: ## Run read-only PostgreSQL workload, service, PVC, and database checks
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-postgresql.sh

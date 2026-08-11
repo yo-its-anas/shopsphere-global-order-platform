@@ -44,7 +44,7 @@ The Keycloak reconciliation step creates the namespace-scoped activity-reader Se
 
 ## Expected deployed boundary
 
-- `postgresql` StatefulSet and ClusterIP Service in `shopsphere-data`, with a Bound PVC and separate `customer_db` and `keycloak_db` databases;
+- `postgresql` StatefulSet and ClusterIP Service in `shopsphere-data`, with a Bound PVC and separate `customer_db`, `keycloak_db`, and `catalogue_db` logical databases;
 - `keycloak` Deployment and ClusterIP Service in `shopsphere-platform`;
 - `customer-service` Deployment and ClusterIP Service in `shopsphere-apps`; and
 - no PostgreSQL, Keycloak administration, or customer-service NodePort, LoadBalancer, or public ingress.

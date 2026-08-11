@@ -49,6 +49,8 @@ main() {
     local postgres_password=""
     local customer_password=""
     local keycloak_password=""
+    local catalogue_password=""
+    local catalogue_key_state=""
 
     [[ "$mode" == "interactive" || "$mode" == "--generate" ]] || fail "Usage: $0 [--generate]"
     require_command kubectl
@@ -57,32 +59,57 @@ main() {
     kubectl --context "$KUBE_CONTEXT" get namespace "$NAMESPACE" >/dev/null 2>&1 || \
         fail "Namespace '${NAMESPACE}' does not exist in context '${KUBE_CONTEXT}'."
 
+    if [[ "$mode" == "--generate" ]]; then
+        require_command openssl
+    fi
+
     if kubectl --context "$KUBE_CONTEXT" -n "$NAMESPACE" get secret "$SECRET_NAME" >/dev/null 2>&1; then
-        info "Secret '${SECRET_NAME}' already exists; it was preserved without changes."
+        catalogue_key_state="$(kubectl --context "$KUBE_CONTEXT" -n "$NAMESPACE" \
+            get secret "$SECRET_NAME" \
+            -o go-template='{{if index .data "catalogue-password"}}present{{end}}')"
+        if [[ "$catalogue_key_state" == "present" ]]; then
+            info "Secret '${SECRET_NAME}' already contains the catalogue credential; it was preserved without changes."
+            return
+        fi
+
+        if [[ "$mode" == "--generate" ]]; then
+            catalogue_password="$(generate_password)"
+        else
+            [[ -t 0 ]] || fail "Interactive password entry requires a terminal. Use --generate only when automatic generation is explicitly intended."
+            read_password "catalogue-service database password" catalogue_password
+        fi
+
+        printf '{"data":{"catalogue-password":"%s"}}' "$(encode "$catalogue_password")" | \
+            kubectl --context "$KUBE_CONTEXT" -n "$NAMESPACE" patch secret "$SECRET_NAME" \
+                --type merge --patch-file=/dev/stdin >/dev/null
+        unset catalogue_password
+        info "The catalogue credential was added to Secret '${SECRET_NAME}'. Existing credential keys were preserved and no value was displayed."
         return
     fi
 
     if [[ "$mode" == "--generate" ]]; then
-        require_command openssl
         postgres_password="$(generate_password)"
         customer_password="$(generate_password)"
         keycloak_password="$(generate_password)"
+        catalogue_password="$(generate_password)"
     else
         [[ -t 0 ]] || fail "Interactive password entry requires a terminal. Use --generate only when automatic generation is explicitly intended."
         read_password "PostgreSQL administrator password" postgres_password
         read_password "customer-service database password" customer_password
         read_password "Keycloak database password" keycloak_password
+        read_password "catalogue-service database password" catalogue_password
     fi
 
-    printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"%s","namespace":"%s"},"type":"Opaque","data":{"postgres-password":"%s","customer-password":"%s","keycloak-password":"%s"}}' \
+    printf '{"apiVersion":"v1","kind":"Secret","metadata":{"name":"%s","namespace":"%s"},"type":"Opaque","data":{"postgres-password":"%s","customer-password":"%s","keycloak-password":"%s","catalogue-password":"%s"}}' \
         "$SECRET_NAME" \
         "$NAMESPACE" \
         "$(encode "$postgres_password")" \
         "$(encode "$customer_password")" \
-        "$(encode "$keycloak_password")" | \
+        "$(encode "$keycloak_password")" \
+        "$(encode "$catalogue_password")" | \
         kubectl --context "$KUBE_CONTEXT" create -f - >/dev/null
 
-    unset postgres_password customer_password keycloak_password
+    unset postgres_password customer_password keycloak_password catalogue_password
     info "Secret '${SECRET_NAME}' was created in namespace '${NAMESPACE}'. Credential values were not displayed."
 }
 

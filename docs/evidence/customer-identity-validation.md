@@ -8,7 +8,7 @@ This record captures the non-sensitive results used by the Customer Identity and
 | --- | --- | --- |
 | Kubernetes topology | `kubectl --context kind-shopsphere-poc get nodes` | Exactly one kind control-plane node reported Ready. |
 | Workloads and exposure | `kubectl --context kind-shopsphere-poc get deployments,statefulsets,pods,services -A` | PostgreSQL, Keycloak, and customer-service workloads reported Ready; their application services were ClusterIP-only. API Gateway and frontend deployments were absent. |
-| PostgreSQL | `make postgresql-status` | StatefulSet Ready; PVC Bound; `customer_db` and `keycloak_db` exist with distinct owners; no credential values displayed. |
+| PostgreSQL | `make postgresql-status` | StatefulSet Ready; PVC Bound; `customer_db`, `keycloak_db`, and the catalogue persistence foundation `catalogue_db` exist with distinct owners; no credential values displayed. |
 | Keycloak | `make keycloak-status` | Deployment Ready; PostgreSQL connection active; registration, roles, default customer role, password/brute-force/refresh/event settings, public frontend client, S256 PKCE, API audience, and authentication events validated. Activity reader had `view-events` without `manage-events` or `realm-admin`. |
 | customer-service | `make customer-service-status` | Deployment and pod Ready; liveness/readiness returned HTTP 200; Service ClusterIP-only. |
 | Static manifests | `make validate-kubernetes`, `make validate-postgresql`, `make validate-keycloak`, `make validate-customer-service` | Rendering and non-destructive validation passed. |

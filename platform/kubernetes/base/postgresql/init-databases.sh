@@ -10,6 +10,9 @@ required_variables=(
     KEYCLOAK_DB_NAME
     KEYCLOAK_DB_USER
     KEYCLOAK_DB_PASSWORD
+    CATALOGUE_DB_NAME
+    CATALOGUE_DB_USER
+    CATALOGUE_DB_PASSWORD
 )
 
 for variable_name in "${required_variables[@]}"; do
@@ -28,12 +31,18 @@ psql \
     --set=customer_db_password="$CUSTOMER_DB_PASSWORD" \
     --set=keycloak_db_name="$KEYCLOAK_DB_NAME" \
     --set=keycloak_db_user="$KEYCLOAK_DB_USER" \
-    --set=keycloak_db_password="$KEYCLOAK_DB_PASSWORD" <<'SQL'
+    --set=keycloak_db_password="$KEYCLOAK_DB_PASSWORD" \
+    --set=catalogue_db_name="$CATALOGUE_DB_NAME" \
+    --set=catalogue_db_user="$CATALOGUE_DB_USER" \
+    --set=catalogue_db_password="$CATALOGUE_DB_PASSWORD" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'customer_db_user', :'customer_db_password')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'customer_db_user') \gexec
 
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'keycloak_db_user', :'keycloak_db_password')
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'keycloak_db_user') \gexec
+
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'catalogue_db_user', :'catalogue_db_password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'catalogue_db_user') \gexec
 
 SELECT format('CREATE DATABASE %I OWNER %I', :'customer_db_name', :'customer_db_user')
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'customer_db_name') \gexec
@@ -41,8 +50,13 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'customer_db_name') \
 SELECT format('CREATE DATABASE %I OWNER %I', :'keycloak_db_name', :'keycloak_db_user')
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'keycloak_db_name') \gexec
 
+SELECT format('CREATE DATABASE %I OWNER %I', :'catalogue_db_name', :'catalogue_db_user')
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'catalogue_db_name') \gexec
+
 SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'customer_db_name') \gexec
 SELECT format('GRANT CONNECT, TEMPORARY ON DATABASE %I TO %I', :'customer_db_name', :'customer_db_user') \gexec
 SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'keycloak_db_name') \gexec
 SELECT format('GRANT CONNECT, TEMPORARY ON DATABASE %I TO %I', :'keycloak_db_name', :'keycloak_db_user') \gexec
+SELECT format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', :'catalogue_db_name') \gexec
+SELECT format('GRANT CONNECT, TEMPORARY ON DATABASE %I TO %I', :'catalogue_db_name', :'catalogue_db_user') \gexec
 SQL
