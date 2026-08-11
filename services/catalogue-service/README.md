@@ -1,6 +1,6 @@
 # Catalogue Service
 
-FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, effective pricing, transactional inventory management, optional Redis read caching, and recoverable Kafka event production. Order reservations, event consumers, and API Gateway routing are not implemented here.
+FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, effective pricing, transactional inventory management, optional Redis read caching, and recoverable Kafka event production. Order reservations and event consumers are not implemented. The separate API Gateway exposes an explicit transport mapping to these service routes without taking ownership of catalogue business logic.
 
 The service follows the [Product Catalogue and Inventory domain design](../../docs/architecture/catalogue-inventory-domain-design.md). Catalogue and Inventory remain separate bounded contexts even though both are allocated to this service for the PoC.
 
@@ -72,7 +72,7 @@ Interactive OpenAPI is available at `/docs`; the machine-readable contract is `/
 
 Copy values from `.env.example` into an environment-specific secret/configuration mechanism. `DATABASE_URL`, `REDIS_PASSWORD`, and bearer tokens must never be committed or logged. Kafka bootstrap servers and relay tuning contain no credentials. Kubernetes uses separate database and cache Secrets in `shopsphere-apps`; Redis receives its matching password through a Secret in `shopsphere-data`.
 
-JWT validation verifies RS256 signature, issuer, audience, expiry, subject, and allow-listed realm/client roles. The service remains authoritative for authorization even when a future API Gateway route is added.
+JWT validation verifies RS256 signature, issuer, audience, expiry, subject, and allow-listed realm/client roles. The service remains authoritative for authorization when requests arrive through the API Gateway.
 
 ## Local development and validation
 
@@ -93,7 +93,7 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 
 ## Current limitations
 
-- Catalogue routes are not yet registered in API Gateway.
+- Fixed Catalogue and Inventory routes are registered in API Gateway source and covered by isolated gateway tests; the gateway is not yet deployed in the PoC cluster or validated through an authenticated live catalogue journey.
 - The PoC uses one `PRIMARY` inventory location; multi-warehouse workflows are not exposed yet.
 - Order reservations, releases, fulfilment, and cross-service order integration are not implemented.
 - Price scheduling, markets, tax, promotions, and multiple price books are outside the PoC pricing model.
