@@ -17,7 +17,15 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.core.config import Settings
 from app.core.security import KeycloakTokenVerifier
-from app.domain.models import Product, ProductCategory, ProductPrice, ProductStatus
+from app.domain.models import (
+    AvailabilityState,
+    InventoryItem,
+    InventoryMovement,
+    Product,
+    ProductCategory,
+    ProductPrice,
+    ProductStatus,
+)
 from app.main import create_app
 
 TEST_ISSUER = "https://identity.test/realms/shopsphere"
@@ -259,15 +267,125 @@ class InMemoryCatalogueRepository:
                 price.updated_at = effective_to
 
 
+class InMemoryInventoryStore:
+    def __init__(self) -> None:
+        self.items: dict[UUID, InventoryItem] = {}
+        self.movements: dict[UUID, InventoryMovement] = {}
+        self.locks: dict[tuple[UUID, str], asyncio.Lock] = {}
+
+
+class InMemoryInventoryRepository:
+    def __init__(self, store: InMemoryInventoryStore) -> None:
+        self._store = store
+        self._held_locks: list[asyncio.Lock] = []
+
+    async def release_locks(self) -> None:
+        for lock in reversed(self._held_locks):
+            lock.release()
+        self._held_locks.clear()
+
+    def add_item(self, item: InventoryItem) -> None:
+        self._store.items[item.id] = item
+
+    async def get_item(
+        self, product_id: UUID, location_code: str, *, for_update: bool = False
+    ) -> InventoryItem | None:
+        if for_update:
+            lock = self._store.locks.setdefault((product_id, location_code), asyncio.Lock())
+            await lock.acquire()
+            self._held_locks.append(lock)
+        return next(
+            (
+                item
+                for item in self._store.items.values()
+                if item.product_id == product_id and item.location_code == location_code
+            ),
+            None,
+        )
+
+    async def update_item(self, item: InventoryItem, expected_version: int) -> bool:
+        current = self._store.items.get(item.id)
+        if current is None or current.version != expected_version:
+            return False
+        self._store.items[item.id] = item
+        return True
+
+    async def list_items(
+        self,
+        *,
+        state: AvailabilityState | None,
+        location_code: str,
+        offset: int,
+        limit: int,
+    ) -> tuple[list[InventoryItem], int]:
+        items = [
+            item
+            for item in self._store.items.values()
+            if item.location_code == location_code
+            and (state is None or item.availability_state is state)
+        ]
+        items.sort(key=lambda item: (item.updated_at, str(item.id)), reverse=True)
+        return items[offset : offset + limit], len(items)
+
+    def add_movement(self, movement: InventoryMovement) -> None:
+        self._store.movements[movement.id] = movement
+
+    async def get_movement_by_idempotency_key(
+        self, idempotency_key: str
+    ) -> InventoryMovement | None:
+        return next(
+            (
+                movement
+                for movement in self._store.movements.values()
+                if movement.idempotency_key == idempotency_key
+            ),
+            None,
+        )
+
+    async def list_movements(
+        self, inventory_item_id: UUID, *, offset: int, limit: int
+    ) -> tuple[list[InventoryMovement], int]:
+        movements = [
+            movement
+            for movement in self._store.movements.values()
+            if movement.inventory_item_id == inventory_item_id
+        ]
+        movements.sort(key=lambda movement: (movement.occurred_at, str(movement.id)), reverse=True)
+        return movements[offset : offset + limit], len(movements)
+
+    async def statistics(self, location_code: str) -> dict[str, int]:
+        items = [item for item in self._store.items.values() if item.location_code == location_code]
+        return {
+            "total_products_tracked": len(items),
+            "in_stock_products": sum(
+                item.availability_state is AvailabilityState.IN_STOCK for item in items
+            ),
+            "low_stock_products": sum(
+                item.availability_state is AvailabilityState.LOW_STOCK for item in items
+            ),
+            "out_of_stock_products": sum(
+                item.availability_state is AvailabilityState.OUT_OF_STOCK for item in items
+            ),
+            "total_units_on_hand": sum(item.quantity_on_hand for item in items),
+            "reserved_units": sum(item.quantity_reserved for item in items),
+            "available_units": sum(item.quantity_available for item in items),
+        }
+
+
 class InMemoryUnitOfWork:
-    def __init__(self, repository: InMemoryCatalogueRepository) -> None:
+    def __init__(
+        self,
+        repository: InMemoryCatalogueRepository,
+        inventory_store: InMemoryInventoryStore,
+    ) -> None:
         self.catalogue = repository
+        self.inventory = InMemoryInventoryRepository(inventory_store)
 
     async def __aenter__(self) -> InMemoryUnitOfWork:
         return self
 
     async def __aexit__(self, *args: object) -> None:
-        return None
+        await self.inventory.release_locks()
 
     async def flush(self) -> None:
         return None
@@ -327,6 +445,7 @@ def client(settings: Settings, private_key: rsa.RSAPrivateKey) -> Iterator[ApiCl
     verifier._keys = {"test-key": private_key.public_key()}
     verifier._keys_loaded_at = float("inf")
     repository = InMemoryCatalogueRepository()
+    inventory_store = InMemoryInventoryStore()
 
     async def ready(_: object) -> bool:
         return True
@@ -335,7 +454,7 @@ def client(settings: Settings, private_key: rsa.RSAPrivateKey) -> Iterator[ApiCl
         create_app(
             settings,
             token_verifier=verifier,
-            unit_of_work_factory=lambda: InMemoryUnitOfWork(repository),
+            unit_of_work_factory=lambda: InMemoryUnitOfWork(repository, inventory_store),
             database_readiness_checker=ready,
         )
     )

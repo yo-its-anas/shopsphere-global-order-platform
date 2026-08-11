@@ -8,7 +8,15 @@ from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
-from app.domain.models import Product, ProductCategory, ProductPrice, ProductStatus
+from app.domain.models import (
+    AvailabilityState,
+    InventoryItem,
+    InventoryMovement,
+    Product,
+    ProductCategory,
+    ProductPrice,
+    ProductStatus,
+)
 
 
 class CatalogueRepository(Protocol):
@@ -58,8 +66,40 @@ class CatalogueRepository(Protocol):
     ) -> None: ...
 
 
+class InventoryRepository(Protocol):
+    def add_item(self, item: InventoryItem) -> None: ...
+
+    async def get_item(
+        self, product_id: UUID, location_code: str, *, for_update: bool = False
+    ) -> InventoryItem | None: ...
+
+    async def update_item(self, item: InventoryItem, expected_version: int) -> bool: ...
+
+    async def list_items(
+        self,
+        *,
+        state: AvailabilityState | None,
+        location_code: str,
+        offset: int,
+        limit: int,
+    ) -> tuple[Sequence[InventoryItem], int]: ...
+
+    def add_movement(self, movement: InventoryMovement) -> None: ...
+
+    async def get_movement_by_idempotency_key(
+        self, idempotency_key: str
+    ) -> InventoryMovement | None: ...
+
+    async def list_movements(
+        self, inventory_item_id: UUID, *, offset: int, limit: int
+    ) -> tuple[Sequence[InventoryMovement], int]: ...
+
+    async def statistics(self, location_code: str) -> dict[str, int]: ...
+
+
 class UnitOfWork(Protocol):
     catalogue: CatalogueRepository
+    inventory: InventoryRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
 

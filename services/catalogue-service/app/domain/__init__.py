@@ -1,1 +1,1 @@
-"""Product Catalogue domain model boundary."""
+"""Product Catalogue and Inventory domain model boundary."""

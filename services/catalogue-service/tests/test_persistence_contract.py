@@ -3,6 +3,8 @@
 from sqlalchemy import Numeric
 
 from app.infrastructure.orm_models import (
+    InventoryItemRecord,
+    InventoryMovementRecord,
     ProductCategoryRecord,
     ProductPriceRecord,
     ProductRecord,
@@ -28,3 +30,19 @@ def test_database_contract_contains_governed_uniqueness_and_lifecycle_constraint
     assert "ck_products_status" in product_constraints
     assert "uq_product_categories_slug" in category_constraints
     assert "uq_product_prices_active_currency" in price_indexes
+
+
+def test_inventory_database_contract_enforces_balance_and_history_constraints() -> None:
+    item_constraints = {constraint.name for constraint in InventoryItemRecord.__table__.constraints}
+    movement_constraints = {
+        constraint.name for constraint in InventoryMovementRecord.__table__.constraints
+    }
+
+    assert "uq_inventory_product_location" in item_constraints
+    assert "ck_inventory_on_hand_non_negative" in item_constraints
+    assert "ck_inventory_reserved_non_negative" in item_constraints
+    assert "ck_inventory_reserved_within_on_hand" in item_constraints
+    assert "ck_inventory_version_positive" in item_constraints
+    assert "uq_inventory_movements_idempotency_key" in movement_constraints
+    assert "ck_inventory_movements_type" in movement_constraints
+    assert "ck_movements_result_reserved_within_on_hand" in movement_constraints

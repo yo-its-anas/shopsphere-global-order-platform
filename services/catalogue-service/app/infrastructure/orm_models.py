@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -21,7 +22,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.domain.models import ProductStatus, utc_now
+from app.domain.models import InventoryMovementType, ProductStatus, utc_now
 
 
 class Base(DeclarativeBase):
@@ -122,4 +123,89 @@ class ProductPriceRecord(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class InventoryItemRecord(Base):
+    __tablename__ = "inventory_items"
+    __table_args__ = (
+        UniqueConstraint("product_id", "location_code", name="uq_inventory_product_location"),
+        CheckConstraint("quantity_on_hand >= 0", name="ck_inventory_on_hand_non_negative"),
+        CheckConstraint("quantity_reserved >= 0", name="ck_inventory_reserved_non_negative"),
+        CheckConstraint(
+            "quantity_reserved <= quantity_on_hand", name="ck_inventory_reserved_within_on_hand"
+        ),
+        CheckConstraint("reorder_threshold >= 0", name="ck_inventory_reorder_non_negative"),
+        CheckConstraint("version >= 1", name="ck_inventory_version_positive"),
+        Index("ix_inventory_items_product_id", "product_id"),
+        Index("ix_inventory_items_location", "location_code"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    product_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
+    )
+    location_code: Mapped[str] = mapped_column(String(40), nullable=False, default="PRIMARY")
+    quantity_on_hand: Mapped[int] = mapped_column(Integer, nullable=False)
+    quantity_reserved: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reorder_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
+    )
+
+
+class InventoryMovementRecord(Base):
+    __tablename__ = "inventory_movements"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_inventory_movements_idempotency_key"),
+        CheckConstraint(
+            "movement_type IN ('INITIAL_STOCK', 'STOCK_RECEIPT', 'MANUAL_ADJUSTMENT', "
+            "'DAMAGE', 'CORRECTION', 'RESERVATION', 'RELEASE', 'FULFILMENT')",
+            name="ck_inventory_movements_type",
+        ),
+        CheckConstraint(
+            "quantity_delta <> 0 OR movement_type = 'INITIAL_STOCK'",
+            name="ck_inventory_movements_non_zero",
+        ),
+        CheckConstraint(
+            "resulting_quantity_on_hand >= 0", name="ck_movements_result_on_hand_non_negative"
+        ),
+        CheckConstraint(
+            "resulting_quantity_reserved >= 0", name="ck_movements_result_reserved_non_negative"
+        ),
+        CheckConstraint(
+            "resulting_quantity_reserved <= resulting_quantity_on_hand",
+            name="ck_movements_result_reserved_within_on_hand",
+        ),
+        Index("ix_inventory_movements_item_time", "inventory_item_id", "occurred_at"),
+        Index("ix_inventory_movements_product_time", "product_id", "occurred_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    inventory_item_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("inventory_items.id", ondelete="RESTRICT"), nullable=False
+    )
+    product_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
+    )
+    movement_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, default=InventoryMovementType.MANUAL_ADJUSTMENT.value
+    )
+    quantity_delta: Mapped[int] = mapped_column(Integer, nullable=False)
+    reserved_delta: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    previous_quantity_on_hand: Mapped[int] = mapped_column(Integer, nullable=False)
+    resulting_quantity_on_hand: Mapped[int] = mapped_column(Integer, nullable=False)
+    previous_quantity_reserved: Mapped[int] = mapped_column(Integer, nullable=False)
+    resulting_quantity_reserved: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    reference: Mapped[str | None] = mapped_column(String(120))
+    actor_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
     )

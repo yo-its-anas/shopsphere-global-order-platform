@@ -1,1 +1,1 @@
-"""Product Catalogue application use-case boundary."""
+"""Product Catalogue and Inventory application use-case boundary."""

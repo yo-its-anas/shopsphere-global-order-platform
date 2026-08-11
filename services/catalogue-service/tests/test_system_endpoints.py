@@ -61,3 +61,7 @@ def test_openapi_contains_catalogue_contract(client: Any) -> None:
     assert "/api/v1/categories" in paths
     assert "/api/v1/products" in paths
     assert "/api/v1/products/{product_id}/prices/{currency_code}" in paths
+    assert "/api/v1/inventory/products/{product_id}/availability" in paths
+    assert "/api/v1/inventory/products/{product_id}/adjustments" in paths
+    assert "/api/v1/inventory/products/{product_id}/movements" in paths
+    assert "/api/v1/inventory/statistics" in paths

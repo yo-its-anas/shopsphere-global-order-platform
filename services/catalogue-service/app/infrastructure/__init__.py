@@ -1,1 +1,1 @@
-"""Catalogue persistence adapter boundary."""
+"""Catalogue and Inventory persistence adapter boundary."""

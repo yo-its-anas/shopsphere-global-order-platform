@@ -44,6 +44,18 @@ OPENAPI_TAGS = [
         "name": "Catalogue administration",
         "description": "Operations-administrator product, category, lifecycle, and pricing commands.",
     },
+    {
+        "name": "Inventory availability",
+        "description": "Customer-safe derived product availability.",
+    },
+    {
+        "name": "Inventory operations",
+        "description": "Support and operations inventory balances, movements, and statistics.",
+    },
+    {
+        "name": "Inventory administration",
+        "description": "Auditable operations-administrator stock commands and settings.",
+    },
 ]
 
 
@@ -87,10 +99,11 @@ def create_app(
 
     application = FastAPI(
         title="ShopSphere Catalogue Service",
-        summary="Product categories, catalogue search, lifecycle, and effective pricing.",
+        summary="Product catalogue, effective pricing, and transactional inventory management.",
         description=(
-            "Keycloak-authenticated Product Catalogue APIs backed by PostgreSQL. "
-            "Inventory stock and reservation behavior are outside this implementation."
+            "Keycloak-authenticated Product Catalogue and Inventory APIs backed by PostgreSQL. "
+            "Availability is derived and stock changes retain append-only movement evidence. "
+            "Order reservation behavior remains outside this implementation."
         ),
         version=resolved_settings.service_version,
         openapi_tags=OPENAPI_TAGS,

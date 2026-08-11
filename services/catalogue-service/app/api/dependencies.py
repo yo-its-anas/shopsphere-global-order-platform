@@ -9,6 +9,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.application.catalogue import CatalogueService
+from app.application.inventory import InventoryService
 from app.core.errors import AuthenticationError, AuthorizationError, DependencyUnavailableError
 from app.core.security import Principal, Role
 
@@ -43,3 +44,10 @@ async def get_catalogue_service(request: Request) -> CatalogueService:
     if factory is None:
         raise DependencyUnavailableError
     return CatalogueService(factory, request.app.state.settings.supported_currencies)
+
+
+async def get_inventory_service(request: Request) -> InventoryService:
+    factory = request.app.state.unit_of_work_factory
+    if factory is None:
+        raise DependencyUnavailableError
+    return InventoryService(factory)

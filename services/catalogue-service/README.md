@@ -1,6 +1,6 @@
 # Catalogue Service
 
-FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, and effective pricing. Inventory stock, reservations, movements, Redis, Kafka, API Gateway routing, and Kubernetes application deployment are not implemented here.
+FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, effective pricing, and transactional inventory management. Order reservations, Redis, Kafka, API Gateway routing, and Kubernetes application deployment are not implemented here.
 
 The service follows the [Product Catalogue and Inventory domain design](../../docs/architecture/catalogue-inventory-domain-design.md). Catalogue and Inventory remain separate bounded contexts even though both are allocated to this service for the PoC.
 
@@ -21,12 +21,26 @@ All business routes require a Keycloak-compatible bearer token for the `shopsphe
 | `POST` | `/api/v1/products/{product_id}/deactivate` | `operations_admin` |
 | `GET` | `/api/v1/products/{product_id}/prices` | `customer`, `support`, `operations_admin` |
 | `PUT` | `/api/v1/products/{product_id}/prices/{currency_code}` | `operations_admin` |
+| `GET` | `/api/v1/inventory/products/{product_id}/availability` | `customer`, `support`, `operations_admin` |
+| `GET` | `/api/v1/inventory/products/{product_id}` | `support`, `operations_admin` |
+| `POST` | `/api/v1/inventory/products/{product_id}/initialize` | `operations_admin` |
+| `POST` | `/api/v1/inventory/products/{product_id}/adjustments` | `operations_admin` |
+| `PATCH` | `/api/v1/inventory/products/{product_id}/settings` | `operations_admin` |
+| `GET` | `/api/v1/inventory/products/{product_id}/movements` | `support`, `operations_admin` |
+| `GET` | `/api/v1/inventory` | `support`, `operations_admin` |
+| `GET` | `/api/v1/inventory/statistics` | `support`, `operations_admin` |
 
 Customers see only active, searchable products in active categories and current active prices. Support can read inactive operational records and pricing history but cannot modify catalogue state. `operations_admin` owns all mutations. SKU is immutable after registration and unique after trim/uppercase normalization. Category slug is unique after trim/lowercase normalization.
 
 `GET /api/v1/products` supports `query`, `sku`, `category_id`, `status`, `offset`, `limit`, `sort_by`, and `sort_direction`. PostgreSQL `ILIKE` search covers product name, SKU, and description. Customers cannot use status filters to reveal inactive records.
 
 Prices use Python `Decimal` and PostgreSQL `NUMERIC(19,4)`. A price update is immediately effective: it closes the previous active record for the product/currency and appends a new active record. `include_history=true` is restricted to support and operations roles. The supported ISO currency subset is controlled by `SUPPORTED_CURRENCIES`.
+
+Inventory uses one `PRIMARY` PoC location per product. `quantity_available` is always derived as `quantity_on_hand - quantity_reserved`; it is never accepted as input. PostgreSQL constraints enforce non-negative balances and prevent reserved stock from exceeding on-hand stock. Initialization and adjustments require a safe reason and idempotency key, record the verified actor and request correlation ID, and append a movement in the same transaction as the balance change.
+
+Stock adjustments use `SELECT ... FOR UPDATE` and an atomic version predicate to prevent lost updates. Callers may provide `expected_version`; a stale version returns `409`. `STOCK_RECEIPT` must increase stock, `DAMAGE` must decrease it, and manual adjustment/correction deltas must be non-zero. Movement updates and deletes are rejected by a PostgreSQL trigger. Reservation, release, and fulfilment types are schema-compatible future interfaces only and cannot be submitted through the current API.
+
+Customer availability responses expose only derived available quantity, state, and timestamp for active/searchable products. Support is read-only and may inspect balances, history, filtering, and calculated statistics. Operations administrators own initialization, adjustments, and reorder-threshold settings.
 
 Operational endpoints remain:
 
@@ -63,7 +77,8 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 
 - Catalogue routes are not yet registered in API Gateway.
 - The catalogue-service is not yet deployed to Kubernetes.
-- Inventory stock and availability behavior is deliberately absent.
+- The PoC uses one `PRIMARY` inventory location; multi-warehouse workflows are not exposed yet.
+- Order reservations, releases, fulfilment, and cross-service order integration are not implemented.
 - Price scheduling, markets, tax, promotions, and multiple price books are outside the PoC pricing model.
 - Search uses PostgreSQL rather than Elasticsearch/OpenSearch.
 - Domain-event publication remains Planned; no Kafka claim is made.
