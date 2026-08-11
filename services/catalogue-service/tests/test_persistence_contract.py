@@ -3,6 +3,7 @@
 from sqlalchemy import Numeric
 
 from app.infrastructure.orm_models import (
+    DomainEventOutboxRecord,
     InventoryItemRecord,
     InventoryMovementRecord,
     ProductCategoryRecord,
@@ -46,3 +47,13 @@ def test_inventory_database_contract_enforces_balance_and_history_constraints() 
     assert "uq_inventory_movements_idempotency_key" in movement_constraints
     assert "ck_inventory_movements_type" in movement_constraints
     assert "ck_movements_result_reserved_within_on_hand" in movement_constraints
+
+
+def test_outbox_contract_has_stable_identity_and_dispatch_indexes() -> None:
+    constraints = {constraint.name for constraint in DomainEventOutboxRecord.__table__.constraints}
+    indexes = {index.name for index in DomainEventOutboxRecord.__table__.indexes}
+
+    assert "ck_outbox_event_version_positive" in constraints
+    assert "ck_outbox_status" in constraints
+    assert "ix_outbox_dispatch" in indexes
+    assert "ix_outbox_aggregate" in indexes

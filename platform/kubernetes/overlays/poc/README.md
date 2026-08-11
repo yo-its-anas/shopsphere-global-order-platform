@@ -9,3 +9,5 @@ The [Keycloak overlay](keycloak/README.md) deploys the internal identity provide
 The [customer-service overlay](customer-service/README.md) deploys the internal customer capability after PostgreSQL, Keycloak, and its namespace-scoped runtime Secrets are available. It creates no external service endpoint.
 
 The [Redis overlay](redis/README.md) deploys an authenticated internal cache after matching data/application runtime Secrets are created. The [catalogue-service overlay](catalogue-service/README.md) deploys the internal Catalogue and Inventory capability with PostgreSQL authoritative and Redis optional at runtime.
+
+The [Kafka overlay](kafka/README.md) deploys one internal KRaft broker/controller with retained PoC storage. It is opt-in, has no public listener, and provides no broker or host-level high availability.

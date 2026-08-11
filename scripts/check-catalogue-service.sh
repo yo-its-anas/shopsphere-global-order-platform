@@ -22,7 +22,8 @@ main() {
     kubectl --context "$KUBE_CONTEXT" -n "$NAMESPACE" wait --for=condition=Ready "pod/${pod_name}" --timeout=10s >/dev/null
     kubectl --context "$KUBE_CONTEXT" -n "$NAMESPACE" exec "$pod_name" -- python -c "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3).status == 200; assert urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3).status == 200"
     kubectl --context "$KUBE_CONTEXT" -n "$NAMESPACE" exec "$pod_name" -- python -c "import asyncio, os; from redis.asyncio import Redis; assert asyncio.run(Redis.from_url(os.environ['REDIS_URL'], password=os.environ['REDIS_PASSWORD']).ping())"
-    printf '[OK] catalogue-service is Ready, ClusterIP-only, and can authenticate to Redis. No credential was displayed.\n'
+    kubectl --context "$KUBE_CONTEXT" -n "$NAMESPACE" exec "$pod_name" -- python -c "import os, socket; host, port = os.environ['KAFKA_BOOTSTRAP_SERVERS'].rsplit(':', 1); connection = socket.create_connection((host, int(port)), timeout=3); connection.close()"
+    printf '[OK] catalogue-service is Ready, ClusterIP-only, can authenticate to Redis, and can reach Kafka internally. No credential was displayed.\n'
 }
 
 main "$@"

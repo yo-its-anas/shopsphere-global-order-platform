@@ -1,6 +1,6 @@
 # Catalogue Service
 
-FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, effective pricing, transactional inventory management, and optional Redis read caching. Order reservations, Kafka, and API Gateway routing are not implemented here.
+FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, effective pricing, transactional inventory management, optional Redis read caching, and recoverable Kafka event production. Order reservations, event consumers, and API Gateway routing are not implemented here.
 
 The service follows the [Product Catalogue and Inventory domain design](../../docs/architecture/catalogue-inventory-domain-design.md). Catalogue and Inventory remain separate bounded contexts even though both are allocated to this service for the PoC.
 
@@ -54,6 +54,12 @@ Cache-aside permits a bounded stale-read window during concurrent read/repopulat
 
 Production should use managed Redis with private connectivity, TLS, authentication/ACL integration, cross-zone replication, automatic failover, maintenance controls, monitored memory/eviction pressure, and tested application fallback. Replication improves cache availability but does not make Redis authoritative.
 
+## Transactional outbox and Kafka production
+
+Product creation/update, effective-price changes, stock initialization/adjustment, and low/out-of-stock transitions append a versioned event envelope to `domain_event_outbox` in the same PostgreSQL transaction as the authoritative change. A background relay leases committed rows, publishes to the fixed Kafka bootstrap servers, and marks each row only after acknowledgement. Kafka failure defers publication; it does not roll back or corrupt the already committed catalogue state and does not make readiness fail.
+
+Delivery is at least once. A crash after Kafka acknowledgement but before the outbox acknowledgement can produce the same `event_id` again. Consumers must deduplicate by `event_id`. Events are keyed by aggregate ID; the PoC topics each have one partition, while production ordering is guaranteed only within an aggregate key/partition and never across topics. See the [event publication design](../../docs/architecture/catalogue-event-publication.md).
+
 Operational endpoints remain:
 
 - `GET /health/live`
@@ -64,7 +70,7 @@ Interactive OpenAPI is available at `/docs`; the machine-readable contract is `/
 
 ## Configuration
 
-Copy values from `.env.example` into an environment-specific secret/configuration mechanism. `DATABASE_URL`, `REDIS_PASSWORD`, and bearer tokens must never be committed or logged. Kubernetes uses separate database and cache Secrets in `shopsphere-apps`; Redis receives its matching password through a Secret in `shopsphere-data`.
+Copy values from `.env.example` into an environment-specific secret/configuration mechanism. `DATABASE_URL`, `REDIS_PASSWORD`, and bearer tokens must never be committed or logged. Kafka bootstrap servers and relay tuning contain no credentials. Kubernetes uses separate database and cache Secrets in `shopsphere-apps`; Redis receives its matching password through a Secret in `shopsphere-data`.
 
 JWT validation verifies RS256 signature, issuer, audience, expiry, subject, and allow-listed realm/client roles. The service remains authoritative for authorization even when a future API Gateway route is added.
 
@@ -92,5 +98,6 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 - Order reservations, releases, fulfilment, and cross-service order integration are not implemented.
 - Price scheduling, markets, tax, promotions, and multiple price books are outside the PoC pricing model.
 - Search uses PostgreSQL rather than Elasticsearch/OpenSearch.
-- Domain-event publication remains Planned; no Kafka claim is made.
+- No catalogue/inventory Kafka consumer, schema registry, outbox archival job, or event-driven dashboard is implemented.
 - Redis is one ephemeral pod on the same VM and is neither replicated nor highly available. Cache loss is tolerated by PostgreSQL fallback.
+- Kafka is one combined broker/controller and retained PVC on the same VM. It is not highly available and its private PoC listener has no TLS, authentication, or ACLs.

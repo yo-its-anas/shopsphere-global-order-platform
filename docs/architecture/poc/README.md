@@ -20,4 +20,4 @@ PostgreSQL and Keycloak run as separate pods and logical databases but share the
 
 ## Catalogue and inventory boundary
 
-The [Product Catalogue and Inventory domain design](../catalogue-inventory-domain-design.md) defines the proposed Catalogue and Inventory bounded contexts within one PoC `catalogue-service`. No catalogue database, domain schema, business API, gateway mapping, Redis/Kafka integration, or Kubernetes workload is implemented, so this is design evidence only.
+The [Product Catalogue and Inventory domain design](../catalogue-inventory-domain-design.md) defines the Catalogue and Inventory bounded contexts within one PoC `catalogue-service`. PostgreSQL schema, internal business APIs, Redis cache-aside behavior, a transactional outbox, Kafka production, and internal Kubernetes workloads are implemented. Catalogue API Gateway mapping, frontend integration, Order reservations, and event consumers remain Planned.

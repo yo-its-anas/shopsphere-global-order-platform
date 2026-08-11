@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 from app.core.config import Settings
 from app.core.security import KeycloakTokenVerifier
+from app.domain.events import DomainEvent
 from app.domain.models import (
     AvailabilityState,
     InventoryItem,
@@ -323,6 +324,14 @@ class InMemoryInventoryStore:
         self.locks: dict[tuple[UUID, str], asyncio.Lock] = {}
 
 
+class InMemoryOutboxRepository:
+    def __init__(self, events: list[DomainEvent]) -> None:
+        self.events = events
+
+    def add(self, event: DomainEvent) -> None:
+        self.events.append(event)
+
+
 class InMemoryInventoryRepository:
     def __init__(self, store: InMemoryInventoryStore) -> None:
         self._store = store
@@ -426,9 +435,11 @@ class InMemoryUnitOfWork:
         self,
         repository: InMemoryCatalogueRepository,
         inventory_store: InMemoryInventoryStore,
+        outbox_events: list[DomainEvent],
     ) -> None:
         self.catalogue = repository
         self.inventory = InMemoryInventoryRepository(inventory_store)
+        self.outbox = InMemoryOutboxRepository(outbox_events)
 
     async def __aenter__(self) -> InMemoryUnitOfWork:
         return self
@@ -496,6 +507,7 @@ def client(settings: Settings, private_key: rsa.RSAPrivateKey) -> Iterator[ApiCl
     repository = InMemoryCatalogueRepository()
     inventory_store = InMemoryInventoryStore()
     cache = TestCache()
+    outbox_events: list[DomainEvent] = []
 
     async def ready(_: object) -> bool:
         return True
@@ -504,7 +516,9 @@ def client(settings: Settings, private_key: rsa.RSAPrivateKey) -> Iterator[ApiCl
         create_app(
             settings,
             token_verifier=verifier,
-            unit_of_work_factory=lambda: InMemoryUnitOfWork(repository, inventory_store),
+            unit_of_work_factory=lambda: InMemoryUnitOfWork(
+                repository, inventory_store, outbox_events
+            ),
             database_readiness_checker=ready,
             cache_backend=cache,
         )
@@ -512,6 +526,7 @@ def client(settings: Settings, private_key: rsa.RSAPrivateKey) -> Iterator[ApiCl
     test_client.application.state.test_catalogue_repository = repository
     test_client.application.state.test_inventory_store = inventory_store
     test_client.application.state.test_cache = cache
+    test_client.application.state.test_outbox_events = outbox_events
     yield test_client
     test_client.close()
 

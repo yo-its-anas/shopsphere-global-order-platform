@@ -9,6 +9,7 @@ from uuid import UUID
 
 from app.core.errors import ConflictError, ResourceNotFoundError
 from app.core.security import Principal, Role
+from app.domain.events import inventory_adjusted, inventory_threshold_event
 from app.domain.inventory import apply_stock_delta, validate_balances
 from app.domain.models import (
     AvailabilityState,
@@ -94,6 +95,10 @@ class InventoryService:
             )
             work.inventory.add_item(item)
             work.inventory.add_movement(movement)
+            work.outbox.add(inventory_adjusted(item, movement, correlation_id))
+            threshold_event = inventory_threshold_event(item, correlation_id)
+            if threshold_event is not None:
+                work.outbox.add(threshold_event)
             await work.flush()
             await work.commit()
         self._log_adjustment(item, movement)
@@ -127,6 +132,7 @@ class InventoryService:
             if expected_version is not None and expected_version != current.version:
                 raise ConflictError
             updated = apply_stock_delta(current, movement_type, quantity_delta)
+            previous_state = current.availability_state
             movement = InventoryMovement(
                 inventory_item_id=current.id,
                 product_id=product_id,
@@ -145,6 +151,11 @@ class InventoryService:
             if not await work.inventory.update_item(updated, current.version):
                 raise ConflictError
             work.inventory.add_movement(movement)
+            work.outbox.add(inventory_adjusted(updated, movement, correlation_id))
+            if updated.availability_state is not previous_state:
+                threshold_event = inventory_threshold_event(updated, correlation_id)
+                if threshold_event is not None:
+                    work.outbox.add(threshold_event)
             await work.flush()
             await work.commit()
         self._log_adjustment(updated, movement)

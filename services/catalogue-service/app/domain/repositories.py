@@ -8,6 +8,7 @@ from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
+from app.domain.events import DomainEvent
 from app.domain.models import (
     AvailabilityState,
     InventoryItem,
@@ -97,9 +98,14 @@ class InventoryRepository(Protocol):
     async def statistics(self, location_code: str) -> dict[str, int]: ...
 
 
+class OutboxRepository(Protocol):
+    def add(self, event: DomainEvent) -> None: ...
+
+
 class UnitOfWork(Protocol):
     catalogue: CatalogueRepository
     inventory: InventoryRepository
+    outbox: OutboxRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
 

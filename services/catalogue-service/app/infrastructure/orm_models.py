@@ -7,6 +7,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -209,3 +210,29 @@ class InventoryMovementRecord(Base):
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+
+
+class DomainEventOutboxRecord(Base):
+    __tablename__ = "domain_event_outbox"
+    __table_args__ = (
+        CheckConstraint("event_version > 0", name="ck_outbox_event_version_positive"),
+        CheckConstraint("status IN ('pending', 'published')", name="ck_outbox_status"),
+        Index("ix_outbox_dispatch", "status", "available_at", "occurred_at"),
+        Index("ix_outbox_aggregate", "aggregate_type", "aggregate_id", "occurred_at"),
+    )
+
+    event_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    event_version: Mapped[int] = mapped_column(Integer, nullable=False)
+    aggregate_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    aggregate_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    producer: Mapped[str] = mapped_column(String(100), nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[str | None] = mapped_column(String(80))

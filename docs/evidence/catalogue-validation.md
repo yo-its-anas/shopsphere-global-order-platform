@@ -1,6 +1,14 @@
 # Product Catalogue Validation Record
 
-This record covers the implemented Product Catalogue, Inventory, cache-aside, and internal PoC deployment boundary. Order reservations, API Gateway catalogue/inventory routing, Kafka, frontend integration, and authenticated end-to-end catalogue journeys remain outside this evidence.
+This record covers the implemented Product Catalogue, Inventory, cache-aside, transactional outbox/event producer, and internal PoC deployment boundary. Order reservations, API Gateway catalogue/inventory routing, event consumers, frontend integration, and authenticated end-to-end catalogue journeys remain outside this evidence.
+
+## Kafka and outbox validation
+
+The catalogue suite executes 48 tests and includes versioned-envelope, product-created, product-updated, price-changed, inventory-adjusted, low-stock, out-of-stock, acknowledgement-loss duplicate, and broker-unavailable retry behavior. Alembic reports `003_domain_event_outbox` as the deployed head.
+
+The live PoC validation created six governed one-partition topics on the internal Kafka 4.3.1 KRaft broker. A temporary service-account client received only the `operations_admin` role, submitted simulated category/product/update/price/inventory operations, and was deleted immediately afterward. Eight outbox rows for the correlation prefix reached `published`: three catalogue facts, three inventory-adjusted facts, and the low/out-of-stock transition facts. A consumer read all six event types from Kafka and confirmed the documented envelope and safe payload projection. No credential or token was printed. Kafka remained Ready, its client Service remained ClusterIP-only, and `kafka-data-kafka-0` remained Bound.
+
+This evidence does not prove broker failover or high availability. Kafka and the producer share the same kind node and physical VM; the PoC listener is private plaintext without authentication/ACLs, and NetworkPolicy enforcement depends on the CNI.
 
 ## Automated results
 

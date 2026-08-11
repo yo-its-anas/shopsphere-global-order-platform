@@ -2,7 +2,7 @@
 
 ## Status and evidence boundary
 
-This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, and internal service APIs are implemented. Order reservations, API Gateway catalogue routes, Kafka, and domain-event publication remain **Planned** and must not be presented as implemented evidence.
+This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, internal service APIs, a transactional event outbox, and Kafka production are implemented. Order reservations, API Gateway catalogue routes, and event consumers remain **Planned** and must not be presented as implemented evidence.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md), [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md), [ADR-005](../adr/ADR-005-keycloak-identity-rbac.md), [ADR-006](../adr/ADR-006-postgresql-redis-data-platform.md), [ADR-007](../adr/ADR-007-kafka-domain-events.md), and [ADR-010](../adr/ADR-010-utc-timestamps-json-logs.md).
 
@@ -24,7 +24,7 @@ flowchart LR
     CAT --> CDB[(Catalogue-owned tables)]
     INV --> IDB[(Inventory-owned tables)]
     ORD[Future order-service] -.->|reservation command/API| INV
-    SVC -.->|planned outbox events| K[Kafka - not implemented]
+    SVC -->|versioned outbox events| K[Single Kafka KRaft broker]
 ```
 
 | Context | Owns | Does not own |
@@ -145,22 +145,22 @@ Order Processing is not implemented by this design. A future order workflow shou
 
 Cross-service orchestration must define reservation expiry, retry, compensation, partial availability, and duplicate-message behavior. A production workflow may use a saga and transactional outbox. The synchronous reservation result is authoritative for checkout; later events distribute facts to other consumers.
 
-## Proposed domain events
+## Implemented domain events
 
-The following event names document likely facts, not an implemented Kafka integration:
+The service persists and publishes these versioned facts:
 
-- `product.created`
-- `product.updated`
-- `price.changed`
-- `inventory.adjusted`
-- `inventory.low`
-- `inventory.out_of_stock`
+- `catalogue.product.created.v1`
+- `catalogue.product.updated.v1`
+- `catalogue.price.changed.v1`
+- `inventory.adjusted.v1`
+- `inventory.low.v1`
+- `inventory.out-of-stock.v1`
 
-Events require versioned schemas, aggregate/event IDs, UTC occurrence time, correlation and causation IDs, producer identity, and minimal non-sensitive payloads. A transactional outbox should couple event intent to the aggregate commit; publishers and consumers must be idempotent. Low/out-of-stock notifications need transition-based deduplication to avoid event storms. Kafka, topics, schemas, producers, consumers, and outbox processing remain Planned.
+Each envelope has an immutable event/aggregate ID, UTC occurrence time, correlation ID, producer, version, type, and minimal non-sensitive payload. The aggregate/movement and outbox row commit atomically; Kafka publication follows asynchronously. Low/out-of-stock facts are emitted on state transitions to limit event storms. Delivery is at least once, so future consumers must deduplicate by event ID. Cross-topic order is not guaranteed. The full contract, retry behavior, security boundary, and production evolution are documented in [Catalogue and Inventory Event Publication](catalogue-event-publication.md). No consumer is implemented.
 
 ## PoC implementation boundary
 
-The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, Kubernetes workload, and automated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. A controlled Redis outage confirmed that catalogue readiness remains governed by PostgreSQL and cache access becomes a safe miss. API Gateway catalogue mapping, Order reservations, and Kafka are not implemented.
+The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, transactional outbox, Kafka producer relay, Kubernetes workload, and automated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. Kafka is a single internal combined KRaft broker/controller with a retained PVC. API Gateway catalogue mapping, Order reservations, and event consumers are not implemented.
 
 `catalogue_db`, `customer_db`, and `keycloak_db` share one PostgreSQL server and persistent volume. Logical ownership reduces accidental cross-capability access but does not provide infrastructure-level isolation or independent scaling.
 
@@ -180,4 +180,4 @@ Use multi-zone Kubernetes, workload identity, external secret management, privat
 - UUIDs provide stable internal identity while SKU remains a governed unique business key.
 - Effective-dated decimal prices preserve precision and history.
 - RBAC controls capability access, while domain invariants remain enforced for every actor.
-- Kafka events are an evolution path and are not claimed as current implementation.
+- Kafka production uses a transactional outbox; consumer projections and production broker resilience remain evolution paths.

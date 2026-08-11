@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from types import TracebackType
 from uuid import UUID
 
 from sqlalchemy import Select, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.domain.events import DomainEvent
 from app.domain.models import (
     AvailabilityState,
     InventoryItem,
@@ -20,6 +21,7 @@ from app.domain.models import (
     ProductStatus,
 )
 from app.infrastructure.orm_models import (
+    DomainEventOutboxRecord,
     InventoryItemRecord,
     InventoryMovementRecord,
     ProductCategoryRecord,
@@ -445,6 +447,114 @@ class SqlAlchemyInventoryRepository:
         return {key: int(value) for key, value in row._mapping.items()}
 
 
+class SqlAlchemyOutboxRepository:
+    """Adds event intent to the same transaction as the aggregate mutation."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    def add(self, event: DomainEvent) -> None:
+        self._session.add(
+            DomainEventOutboxRecord(
+                event_id=event.event_id,
+                event_type=event.event_type,
+                event_version=event.event_version,
+                aggregate_type=event.aggregate_type,
+                aggregate_id=event.aggregate_id,
+                occurred_at=event.occurred_at,
+                correlation_id=event.correlation_id,
+                producer=event.producer,
+                payload=event.payload,
+                status="pending",
+                attempts=0,
+                available_at=event.occurred_at,
+            )
+        )
+
+
+class SqlAlchemyOutboxStore:
+    """Lease and acknowledge pending outbox rows without holding locks during I/O."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def claim(self, batch_size: int, lease_seconds: int) -> list[DomainEvent]:
+        now = datetime.now(timezone.utc)
+        expired_before = now - timedelta(seconds=lease_seconds)
+        async with self._session_factory() as session, session.begin():
+            records = list(
+                await session.scalars(
+                    select(DomainEventOutboxRecord)
+                    .where(
+                        DomainEventOutboxRecord.status == "pending",
+                        DomainEventOutboxRecord.available_at <= now,
+                        or_(
+                            DomainEventOutboxRecord.locked_at.is_(None),
+                            DomainEventOutboxRecord.locked_at < expired_before,
+                        ),
+                    )
+                    .order_by(
+                        DomainEventOutboxRecord.occurred_at,
+                        DomainEventOutboxRecord.event_id,
+                    )
+                    .with_for_update(skip_locked=True)
+                    .limit(batch_size)
+                )
+            )
+            for record in records:
+                record.locked_at = now
+                record.attempts += 1
+            return [
+                DomainEvent(
+                    event_id=record.event_id,
+                    event_type=record.event_type,
+                    event_version=record.event_version,
+                    aggregate_type=record.aggregate_type,
+                    aggregate_id=record.aggregate_id,
+                    occurred_at=record.occurred_at,
+                    correlation_id=record.correlation_id,
+                    producer=record.producer,
+                    payload=record.payload,
+                )
+                for record in records
+            ]
+
+    async def mark_published(self, event_id: UUID) -> None:
+        now = datetime.now(timezone.utc)
+        async with self._session_factory() as session, session.begin():
+            await session.execute(
+                update(DomainEventOutboxRecord)
+                .where(
+                    DomainEventOutboxRecord.event_id == event_id,
+                    DomainEventOutboxRecord.status == "pending",
+                )
+                .values(
+                    status="published",
+                    published_at=now,
+                    locked_at=None,
+                    last_error_code=None,
+                )
+            )
+
+    async def release_for_retry(
+        self, event_id: UUID, delay_seconds: float, error_code: str
+    ) -> None:
+        now = datetime.now(timezone.utc)
+        async with self._session_factory() as session, session.begin():
+            await session.execute(
+                update(DomainEventOutboxRecord)
+                .where(
+                    DomainEventOutboxRecord.event_id == event_id,
+                    DomainEventOutboxRecord.status == "pending",
+                )
+                .values(
+                    available_at=now + timedelta(seconds=delay_seconds),
+                    locked_at=None,
+                    last_error_code=error_code,
+                )
+            )
+
+
 class SqlAlchemyUnitOfWork:
     """One database transaction for one catalogue operation."""
 
@@ -456,6 +566,7 @@ class SqlAlchemyUnitOfWork:
         self._session = self._session_factory()
         self.catalogue = SqlAlchemyCatalogueRepository(self._session)
         self.inventory = SqlAlchemyInventoryRepository(self._session)
+        self.outbox = SqlAlchemyOutboxRepository(self._session)
         return self
 
     async def __aexit__(

@@ -29,11 +29,13 @@ main() {
     require_text "$rendered" "name: shopsphere-catalogue-service-database"
     require_text "$rendered" "name: shopsphere-catalogue-cache"
     require_text "$rendered" "REDIS_URL: redis://redis.shopsphere-data.svc.cluster.local:6379/0"
+    require_text "$rendered" "KAFKA_BOOTSTRAP_SERVERS: kafka.shopsphere-platform.svc.cluster.local:9092"
     require_text "$rendered" "path: /health/ready"
     require_text "$rendered" "path: /health/live"
     require_text "$rendered" "readOnlyRootFilesystem: true"
     require_text "$rendered" "runAsNonRoot: true"
     require_text "$rendered" "kind: NetworkPolicy"
+    require_text "$rendered" "port: 9092"
     require_text "$rendered" "type: RollingUpdate"
     printf '%s\n' "$rendered" | kubectl create --dry-run=client --validate=false -f - >/dev/null
     printf '[OK] Catalogue-service manifests passed non-destructive validation.\n'

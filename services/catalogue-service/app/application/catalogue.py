@@ -15,6 +15,7 @@ from app.core.errors import (
     ResourceNotFoundError,
 )
 from app.core.security import Principal, Role
+from app.domain.events import price_changed, product_created, product_updated
 from app.domain.models import Product, ProductCategory, ProductPrice, ProductStatus, utc_now
 from app.domain.repositories import UnitOfWork
 
@@ -201,6 +202,7 @@ class CatalogueService:
                 is_searchable=searchable,
             )
             work.catalogue.add_product(product)
+            work.outbox.add(product_created(product, correlation_id))
             await work.flush()
             await work.commit()
         logger.info(
@@ -285,8 +287,10 @@ class CatalogueService:
             new_status = changes.get("status", product.status)
             if new_status is not ProductStatus.ACTIVE:
                 changes["is_searchable"] = False
+            changed_fields = set(changes)
             product = replace(product, **changes, updated_at=utc_now())
             await work.catalogue.update_product(product)
+            work.outbox.add(product_updated(product, changed_fields, correlation_id))
             await work.flush()
             await work.commit()
         logger.info(
@@ -342,6 +346,7 @@ class CatalogueService:
                 effective_from=changed_at,
             )
             work.catalogue.add_price(price)
+            work.outbox.add(price_changed(price, correlation_id))
             await work.flush()
             await work.commit()
         logger.info(

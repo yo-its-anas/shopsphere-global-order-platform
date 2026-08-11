@@ -62,3 +62,14 @@ spec:
       ports:
         - protocol: TCP
           port: 8080
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              shopsphere.io/tier: platform
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kafka
+              app.kubernetes.io/component: event-broker
+      ports:
+        - protocol: TCP
+          port: 9092
