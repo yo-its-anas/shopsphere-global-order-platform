@@ -1,4 +1,71 @@
-# Customer Capability Integration Tests
+# Capability Integration Tests
+
+This directory contains independently opt-in integration suites. Customer Identity is
+documented below; Product Catalogue and Inventory uses the same credential-safe HTTP
+and temporary-identity conventions.
+
+## Product Catalogue and Inventory suite
+
+`catalogue_inventory` exercises product categories, products, pricing, inventory,
+RBAC, caching behavior, and the transactional outbox using randomized simulated data.
+It prefers API Gateway via `SHOPSPHERE_CATALOGUE_GATEWAY_URL`. When only
+`SHOPSPHERE_CATALOGUE_SERVICE_URL` is provided, service-integration coverage runs but
+the explicit gateway test is reported as skipped/pending.
+
+Normal live execution creates three temporary Keycloak users (`customer`, `support`,
+and `operations_admin`), performs API operations, deactivates generated products and
+categories, and removes the identities. Pricing, inventory movements, outbox records,
+and their parent products remain as inactive synthetic evidence because the APIs do
+not expose destructive deletion and movement/outbox records are intentionally
+append-only. Every synthetic SKU and slug is randomized.
+
+Enable the suite only in a controlled test, integration, or PoC realm:
+
+```bash
+SHOPSPHERE_RUN_CATALOGUE_INTEGRATION=true
+SHOPSPHERE_TEST_ALLOW_IDENTITY_MUTATION=true
+make catalogue-integration PYTHON=.venv-integration/bin/python
+```
+
+Use [catalogue-inventory.env.example](catalogue-inventory.env.example) as the complete
+variable-name reference. Secrets must be injected by the shell/Jenkins credential
+binding and must never be stored in that file. The dedicated OIDC test client needs
+Direct Access Grants, the `shopsphere-api` audience, and a short token lifetime if the
+bounded expired-token test is expected to execute. The test-manager client needs only
+temporary-user creation/deletion and realm-role mapping permissions.
+
+Set `SHOPSPHERE_TEST_ENABLE_PLATFORM_CHECKS=true` only when the test runner has
+read-only `kubectl` access to the PoC cluster. This enables cache hit/miss observation
+and safe outbox metadata checks. Database credentials remain inside the catalogue pod;
+the inspector emits only event contract and delivery-state fields.
+
+Redis and Kafka recovery tests change replica counts temporarily and are disabled by
+default. Run them only in an isolated maintenance window with the corresponding
+`SHOPSPHERE_TEST_ALLOW_REDIS_OUTAGE=true` or
+`SHOPSPHERE_TEST_ALLOW_KAFKA_OUTAGE=true` opt-in. Each test restores one replica in a
+`finally` block. A process/node failure can still interrupt restoration, so operators
+must verify `make redis-status` and `make kafka-status` afterward.
+
+Machine-readable output is written to
+`test-results/integration/catalogue-inventory.xml`. Safe collection without contacting
+services is available with:
+
+```bash
+make catalogue-integration-collect
+```
+
+When using the internal PoC services, establish protected port-forwards in separate
+terminals; do not expose these ports publicly:
+
+```bash
+kubectl --context kind-shopsphere-poc -n shopsphere-platform \
+  port-forward service/keycloak 8081:8080
+
+kubectl --context kind-shopsphere-poc -n shopsphere-apps \
+  port-forward service/api-gateway 8000:8000
+```
+
+## Customer Identity and Account Management suite
 
 This suite validates the implemented Customer Identity and Account Management path across Keycloak, API Gateway, customer-service, and PostgreSQL-backed readiness behavior. It does not test catalogue, order, analytics, Redis, or Kafka capabilities.
 
