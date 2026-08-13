@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 DEFAULT_SERVICE_NAME = "api-gateway"
 DEFAULT_SERVICE_VERSION = "0.1.0"
 _VALID_LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"})
+_DEFAULT_CORS_ORIGINS = ("http://localhost:5173",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,6 +24,7 @@ class Settings:
     customer_service_timeout_seconds: float = 5.0
     catalogue_service_url: str = "http://catalogue-service:8000"
     catalogue_service_timeout_seconds: float = 5.0
+    cors_allowed_origins: tuple[str, ...] = _DEFAULT_CORS_ORIGINS
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -37,6 +39,13 @@ class Settings:
         )
         catalogue_service_url = (
             os.getenv("CATALOGUE_SERVICE_URL", "http://catalogue-service:8000").strip().rstrip("/")
+        )
+        cors_allowed_origins = tuple(
+            origin.strip().rstrip("/")
+            for origin in os.getenv("CORS_ALLOWED_ORIGINS", ",".join(_DEFAULT_CORS_ORIGINS)).split(
+                ","
+            )
+            if origin.strip()
         )
         try:
             customer_service_timeout_seconds = float(
@@ -90,6 +99,24 @@ class Settings:
             raise ValueError("CATALOGUE_SERVICE_URL contains an invalid port") from exc
         if catalogue_service_timeout_seconds <= 0 or catalogue_service_timeout_seconds > 30:
             raise ValueError("CATALOGUE_SERVICE_TIMEOUT_SECONDS must be between 0 and 30")
+        if not cors_allowed_origins:
+            raise ValueError("CORS_ALLOWED_ORIGINS must contain at least one explicit origin")
+        for origin in cors_allowed_origins:
+            parsed_origin = urlsplit(origin)
+            if (
+                origin == "*"
+                or parsed_origin.scheme not in {"http", "https"}
+                or not parsed_origin.hostname
+                or parsed_origin.username
+                or parsed_origin.password
+                or parsed_origin.query
+                or parsed_origin.fragment
+                or parsed_origin.path not in {"", "/"}
+            ):
+                raise ValueError(
+                    "CORS_ALLOWED_ORIGINS must contain explicit HTTP(S) origins without "
+                    "credentials, paths, queries, or fragments"
+                )
 
         return cls(
             service_name=service_name,
@@ -100,4 +127,5 @@ class Settings:
             customer_service_timeout_seconds=customer_service_timeout_seconds,
             catalogue_service_url=catalogue_service_url,
             catalogue_service_timeout_seconds=catalogue_service_timeout_seconds,
+            cors_allowed_origins=cors_allowed_origins,
         )

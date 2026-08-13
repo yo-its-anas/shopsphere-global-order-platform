@@ -54,6 +54,7 @@ Timeouts return a standardized `504`; connection failures return `503`; other tr
 - `CUSTOMER_SERVICE_TIMEOUT_SECONDS` — bounded request timeout from greater than zero through 30 seconds;
 - `CATALOGUE_SERVICE_URL` — fixed internal catalogue-service origin;
 - `CATALOGUE_SERVICE_TIMEOUT_SECONDS` — bounded catalogue request timeout from greater than zero through 30 seconds;
+- `CORS_ALLOWED_ORIGINS` — comma-separated explicit browser origins; wildcards and origins containing credentials, paths, queries, or fragments are rejected;
 - `APP_ENV`, `LOG_LEVEL`, `SERVICE_NAME`, and `SERVICE_VERSION` — non-secret runtime metadata.
 
 ## Local development

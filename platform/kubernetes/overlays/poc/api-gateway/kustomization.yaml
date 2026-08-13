@@ -16,6 +16,7 @@ configMapGenerator:
       - CUSTOMER_SERVICE_TIMEOUT_SECONDS=5
       - CATALOGUE_SERVICE_URL=http://catalogue-service.shopsphere-apps.svc.cluster.local:8000
       - CATALOGUE_SERVICE_TIMEOUT_SECONDS=5
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173
 
 generatorOptions:
   disableNameSuffixHash: true

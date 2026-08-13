@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.v1.router import api_v1_router
@@ -95,6 +96,14 @@ def create_app(
     application.state.customer_service_proxy = customer_service_proxy
     application.state.catalogue_service_proxy = catalogue_service_proxy
     application.add_middleware(CorrelationIdMiddleware)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(resolved_settings.cors_allowed_origins),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Accept", "Authorization", "Content-Type", "X-Request-ID"],
+        expose_headers=["X-Request-ID"],
+    )
     register_exception_handlers(application)
     application.include_router(health_router)
     application.include_router(api_v1_router)
