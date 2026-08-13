@@ -39,6 +39,15 @@ Every message contains `event_id`, `event_type`, `event_version`, `aggregate_typ
 | `inventory.adjusted.v1` | Initial stock or a stock adjustment and movement commit |
 | `inventory.low.v1` | Availability transitions into low stock |
 | `inventory.out-of-stock.v1` | Availability transitions to zero |
+| `inventory.reserved.v1` | An active reservation and reserved balance commit |
+| `inventory.reservation_released.v1` | An active reservation is released idempotently |
+| `inventory.reservation_consumed.v1` | Reserved allocation is finalized into on-hand consumption |
+
+Reservation payloads contain the reservation/product/inventory identifiers, quantity,
+state, resulting balances, movement identifier, location and version. They intentionally
+exclude the external order-workflow reference to minimize cross-boundary data exposure.
+The three reservation topics are represented in source and topic-reconciliation scripts;
+their live creation/publication remains Pending / Not Verified.
 
 Contract changes that are not backward compatible require a new topic/version. Consumers must reject unknown required versions safely and must not infer authorization from an event.
 

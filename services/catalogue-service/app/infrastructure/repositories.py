@@ -15,6 +15,8 @@ from app.domain.models import (
     InventoryItem,
     InventoryMovement,
     InventoryMovementType,
+    InventoryReservation,
+    InventoryReservationStatus,
     Product,
     ProductCategory,
     ProductPrice,
@@ -24,6 +26,7 @@ from app.infrastructure.orm_models import (
     DomainEventOutboxRecord,
     InventoryItemRecord,
     InventoryMovementRecord,
+    InventoryReservationRecord,
     ProductCategoryRecord,
     ProductPriceRecord,
     ProductRecord,
@@ -103,6 +106,20 @@ def _movement_from_record(record: InventoryMovementRecord) -> InventoryMovement:
         correlation_id=record.correlation_id,
         idempotency_key=record.idempotency_key,
         occurred_at=record.occurred_at,
+    )
+
+
+def _reservation_from_record(record: InventoryReservationRecord) -> InventoryReservation:
+    return InventoryReservation(
+        id=record.id,
+        inventory_item_id=record.inventory_item_id,
+        product_id=record.product_id,
+        quantity=record.quantity,
+        external_reference=record.external_reference,
+        status=InventoryReservationStatus(record.status),
+        expires_at=record.expires_at,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
     )
 
 
@@ -445,6 +462,54 @@ class SqlAlchemyInventoryRepository:
         ).where(InventoryItemRecord.location_code == location_code)
         row = (await self._session.execute(statement)).one()
         return {key: int(value) for key, value in row._mapping.items()}
+
+    def add_reservation(self, reservation: InventoryReservation) -> None:
+        self._session.add(
+            InventoryReservationRecord(
+                id=reservation.id,
+                inventory_item_id=reservation.inventory_item_id,
+                product_id=reservation.product_id,
+                quantity=reservation.quantity,
+                external_reference=reservation.external_reference,
+                status=reservation.status.value,
+                expires_at=reservation.expires_at,
+                created_at=reservation.created_at,
+                updated_at=reservation.updated_at,
+            )
+        )
+
+    async def get_reservation(
+        self, reservation_id: UUID, *, for_update: bool = False
+    ) -> InventoryReservation | None:
+        statement = select(InventoryReservationRecord).where(
+            InventoryReservationRecord.id == reservation_id
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        record = await self._session.scalar(statement)
+        return _reservation_from_record(record) if record else None
+
+    async def get_reservation_by_external_reference(
+        self, external_reference: str, *, for_update: bool = False
+    ) -> InventoryReservation | None:
+        statement = select(InventoryReservationRecord).where(
+            InventoryReservationRecord.external_reference == external_reference
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        record = await self._session.scalar(statement)
+        return _reservation_from_record(record) if record else None
+
+    async def update_reservation(self, reservation: InventoryReservation) -> None:
+        await self._session.execute(
+            update(InventoryReservationRecord)
+            .where(InventoryReservationRecord.id == reservation.id)
+            .values(
+                status=reservation.status.value,
+                expires_at=reservation.expires_at,
+                updated_at=reservation.updated_at,
+            )
+        )
 
 
 class SqlAlchemyOutboxRepository:

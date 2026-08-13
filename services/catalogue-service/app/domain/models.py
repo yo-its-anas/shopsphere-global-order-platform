@@ -26,10 +26,15 @@ class InventoryMovementType(str, Enum):
     MANUAL_ADJUSTMENT = "MANUAL_ADJUSTMENT"
     DAMAGE = "DAMAGE"
     CORRECTION = "CORRECTION"
-    # Reserved for the future Order Processing integration. No current API can issue these.
     RESERVATION = "RESERVATION"
     RELEASE = "RELEASE"
     FULFILMENT = "FULFILMENT"
+
+
+class InventoryReservationStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    CONSUMED = "CONSUMED"
+    RELEASED = "RELEASED"
 
 
 class AvailabilityState(str, Enum):
@@ -119,3 +124,16 @@ class InventoryMovement:
     reserved_delta: int = 0
     id: UUID = field(default_factory=uuid4)
     occurred_at: datetime = field(default_factory=utc_now)
+
+
+@dataclass(slots=True)
+class InventoryReservation:
+    inventory_item_id: UUID
+    product_id: UUID
+    quantity: int
+    external_reference: str
+    status: InventoryReservationStatus = InventoryReservationStatus.ACTIVE
+    expires_at: datetime | None = None
+    id: UUID = field(default_factory=uuid4)
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)

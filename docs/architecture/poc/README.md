@@ -20,7 +20,7 @@ PostgreSQL and Keycloak run as separate pods and logical databases but share the
 
 ## Catalogue and inventory boundary
 
-The [Product Catalogue and Inventory domain design](../catalogue-inventory-domain-design.md) defines the Catalogue and Inventory bounded contexts within one PoC `catalogue-service`. PostgreSQL schema, internal business APIs, Redis cache-aside behavior, a transactional outbox, Kafka production, React screens, internal Kubernetes workloads, and fixed API Gateway transport mappings are implemented. Forty-eight backend tests, six focused frontend tests, and all 11 explicitly enabled authenticated live integration tests passed. Catalogue and gateway pods are Ready, live catalogue events reached `published` outbox state, and the principal administrator/customer browser journey passed. Order reservations and event consumers remain Planned.
+The [Product Catalogue and Inventory domain design](../catalogue-inventory-domain-design.md) defines the Catalogue and Inventory bounded contexts within one PoC `catalogue-service`. PostgreSQL schema, internal business APIs, Redis cache-aside behavior, a transactional outbox, Kafka production, React screens, internal Kubernetes workloads, and fixed public API Gateway transport mappings are implemented. Sixty backend tests pass, including isolated reservation concurrency/idempotency/cache/outbox coverage. Six focused frontend tests and all 11 explicitly enabled authenticated live integration tests passed for the previously deployed catalogue scope. Catalogue and gateway pods were Ready, live catalogue events reached `published` outbox state, and the principal administrator/customer browser journey passed. Reservation migration/topics/service identity and cross-service behavior remain Pending / Not Verified; event consumers remain Planned.
 
 PostgreSQL is the sole transactional source of truth. Redis is an ephemeral performance
 optimization, and Kafka transports asynchronous facts after the authoritative commit.
@@ -35,10 +35,9 @@ and reservation-based Saga. [ADR-011](../../adr/ADR-011-reservation-based-order-
 records the decision to obtain an authoritative synchronous quote/reservation from
 Catalogue while publishing post-commit facts through transactional outboxes.
 
-This remains a design boundary for application behavior. The empty logical `order_db`
-and dedicated `order_app` identity are provisioned on the shared PostgreSQL instance,
-while `order-service` currently has only health and information endpoints. Cart/order
-schemas, migrations, reservation commands, order gateway routes, React order screens,
-order events, Kubernetes deployment, and domain validation remain Planned. The existing
-Inventory schema has reserved balances and future movement names, but no callable
-reservation/release/fulfilment interface.
+This remains a design boundary for checkout/order behavior. The logical `order_db` and
+dedicated `order_app` identity are provisioned on the shared PostgreSQL instance, while
+`order-service` implements its customer-owned cart source and tests. Catalogue implements
+the single-product reservation participant in source. Applying the new cart/reservation
+migrations, provisioning service identity, multi-line orchestration, order Gateway/UI,
+order events, Kubernetes deployment, and live domain validation remain Planned.

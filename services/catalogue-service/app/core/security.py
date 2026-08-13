@@ -21,6 +21,7 @@ class Role(str, Enum):
     CUSTOMER = "customer"
     SUPPORT = "support"
     OPERATIONS_ADMIN = "operations_admin"
+    ORDER_SERVICE = "order_service"
 
 
 @dataclass(frozen=True, slots=True)

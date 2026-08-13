@@ -13,6 +13,7 @@ from app.domain.models import (
     AvailabilityState,
     InventoryItem,
     InventoryMovement,
+    InventoryReservation,
     Product,
     ProductCategory,
     ProductPrice,
@@ -96,6 +97,18 @@ class InventoryRepository(Protocol):
     ) -> tuple[Sequence[InventoryMovement], int]: ...
 
     async def statistics(self, location_code: str) -> dict[str, int]: ...
+
+    def add_reservation(self, reservation: InventoryReservation) -> None: ...
+
+    async def get_reservation(
+        self, reservation_id: UUID, *, for_update: bool = False
+    ) -> InventoryReservation | None: ...
+
+    async def get_reservation_by_external_reference(
+        self, external_reference: str, *, for_update: bool = False
+    ) -> InventoryReservation | None: ...
+
+    async def update_reservation(self, reservation: InventoryReservation) -> None: ...
 
 
 class OutboxRepository(Protocol):

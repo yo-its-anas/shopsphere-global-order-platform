@@ -11,6 +11,9 @@ readonly -a TOPICS=(
     "inventory.adjusted.v1"
     "inventory.low.v1"
     "inventory.out-of-stock.v1"
+    "inventory.reserved.v1"
+    "inventory.reservation_released.v1"
+    "inventory.reservation_consumed.v1"
 )
 
 fail() {

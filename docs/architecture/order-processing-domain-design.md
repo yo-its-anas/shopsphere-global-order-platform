@@ -259,9 +259,11 @@ and return an immutable quote/reservation result. An idempotent allocation comma
 binds the hold to the durable order. Partial reservation is rejected unless a later
 explicit business rule introduces split fulfilment.
 
-The current Catalogue implementation has reserved-balance fields and future movement
-enum values, but it has no reservation record, command, or endpoint. The atomic
-multi-product quote/hold/allocation contracts and service identity are therefore Planned.
+Catalogue now implements a single-product reservation record plus idempotent
+reserve/retrieve/release/consume commands. Each mutation locks its InventoryItem and
+commits the balance, reservation, movement, and outbox intent atomically. The complete
+multi-product quote/hold contract, authoritative commercial quote, durable-order binding,
+automatic expiry/reconciliation, and deployed service identity remain Planned.
 
 ## Idempotency and replay handling
 

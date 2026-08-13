@@ -78,12 +78,24 @@ Catalogue-service implements `/api/v1` category, product, search, lifecycle, eff
 | `GET` | `/api/v1/inventory[?state=...]` | `support`, `operations_admin` | List tracked balances and filter by derived availability state. |
 | `GET` | `/api/v1/inventory/statistics` | `support`, `operations_admin` | Calculate stock counts and unit totals from persisted balances. |
 
-Catalogue-service independently validates the same Keycloak issuer/audience/role assumptions as customer-service. Customers see active/searchable products, current prices, and safe derived availability only; support is read-only; operations administrators own mutations. API responses contain domain schemas rather than SQLAlchemy records. Inventory reservation/release/fulfilment commands remain unavailable until Order Processing integration is implemented.
+Catalogue-service independently validates Keycloak issuer/audience and allow-listed roles. Customers see active/searchable products, current prices, and safe derived availability only; support is read-only; operations administrators own catalogue/stock mutations. API responses contain domain schemas rather than SQLAlchemy records.
+
+Internal reservation routes are implemented but are not registered in API Gateway and have not been deployed or live-validated:
+
+| Method | Internal path | Roles | Behavior |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/inventory/reservations` | `order_service`, `operations_admin` | Atomically reserve current PostgreSQL availability using a unique external workflow reference. |
+| `GET` | `/api/v1/inventory/reservations/{reservation_id}` | `order_service`, `operations_admin` | Retrieve reservation state for retry/reconciliation. |
+| `POST` | `/api/v1/inventory/reservations/{reservation_id}/release` | `order_service`, `operations_admin` | Idempotently release an active reservation. |
+| `POST` | `/api/v1/inventory/reservations/{reservation_id}/consume` | `order_service`, `operations_admin` | Finalize allocation accounting without asserting shipment. |
+
+Customers and support cannot mutate reservations. PostgreSQL row locking and balance constraints prevent final-unit overselling. Redis is invalidated only after commit, and reservation events enter the transactional outbox so Kafka failure does not reverse the authoritative database change.
 
 ## Evidence boundary
 
 Catalogue route implementations, OpenAPI metadata, fixed Gateway mappings, schemas and
-automated tests exist. The catalogue-service suite passed 48 tests; the focused React
+automated tests exist. The catalogue-service suite passed 60 tests, including isolated
+reservation behavior; the focused React
 catalogue/inventory suite passed 6 tests; Gateway proxy tests cover the allow-listed
 transport. Current platform checks observed Ready internal Gateway and catalogue-service
 workloads, and an unauthenticated live route reached backend JWT enforcement.

@@ -2,7 +2,7 @@
 
 ## Status and evidence boundary
 
-This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, internal service APIs, a transactional event outbox, Kafka production, explicit API Gateway transport routes, React catalogue/inventory screens, and internal Kubernetes workloads are implemented. Backend and frontend unit/component suites and stated platform checks passed. The explicitly enabled live integration suite passed all 11 tests with zero skips, and the principal authenticated browser journey passed. Order reservations and event consumers remain **Planned**.
+This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, controlled inventory reservations, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, internal service APIs, a transactional event outbox, Kafka production, explicit public API Gateway transport routes, React catalogue/inventory screens, and internal Kubernetes workloads are implemented. The isolated backend suite now includes reservation concurrency, idempotency, authorization, cache and outbox tests. Existing live integration and browser evidence predates the reservation implementation; reservation migration/deployment and cross-service use remain **Pending / Not Verified**.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md), [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md), [ADR-005](../adr/ADR-005-keycloak-identity-rbac.md), [ADR-006](../adr/ADR-006-postgresql-redis-data-platform.md), [ADR-007](../adr/ADR-007-kafka-domain-events.md), and [ADR-010](../adr/ADR-010-utc-timestamps-json-logs.md).
 
@@ -92,7 +92,21 @@ It is never accepted as an independently editable input. The database and domain
 
 InventoryMovement is an append-only fact created for every accepted stock or reservation change. It contains an immutable UUID, `inventory_item_id`, movement type, signed `on_hand_delta`, signed `reserved_delta`, resulting balances, reason code, safe reference, actor subject/service identity, correlation ID, idempotency key, and UTC `occurred_at`.
 
-Current command types are `INITIAL_STOCK`, `STOCK_RECEIPT`, `MANUAL_ADJUSTMENT`, `DAMAGE`, and `CORRECTION`. `RESERVATION`, `RELEASE`, and `FULFILMENT` are schema-compatible future types and are rejected by the current API. Free-text reasons are constrained and must not contain credentials, tokens, or unnecessary personal data. Update and delete operations on movement rows are prohibited at the repository and database layers. Corrections create compensating movements.
+Administrative adjustment commands use `INITIAL_STOCK`, `STOCK_RECEIPT`, `MANUAL_ADJUSTMENT`, `DAMAGE`, and `CORRECTION`. They cannot submit reservation lifecycle types through the generic adjustment API. The internal reservation application exclusively creates `RESERVATION`, `RELEASE`, and `FULFILMENT` movements. Free-text reasons are constrained and must not contain credentials, tokens, or unnecessary personal data. Update and delete operations on movement rows are prohibited at the repository and database layers. Corrections create compensating movements.
+
+### InventoryReservation
+
+InventoryReservation represents an inventory-owned allocation, not an Order aggregate. It
+stores a UUID, InventoryItem/product references, positive quantity, globally unique opaque
+external workflow reference, `ACTIVE`/`RELEASED`/`CONSUMED` status, optional future expiry,
+and UTC timestamps. A matching external reference is an idempotent replay; reuse with a
+different product, quantity, or expiry conflicts. Expiry is stored for evolution but no
+automatic expiry worker is implemented.
+
+Reserve increases only `quantity_reserved`; release decreases it; consume decreases both
+on-hand and reserved quantities. Every transition creates an immutable movement and
+transactional outbox facts. Consumption finalizes inventory allocation accounting and is
+not evidence of packing, shipment, delivery, or payment.
 
 ## Aggregate invariants and transaction rules
 
@@ -104,6 +118,8 @@ Current command types are `INITIAL_STOCK`, `STOCK_RECEIPT`, `MANUAL_ADJUSTMENT`,
 6. Commands carry an idempotency key unique within the inventory boundary so retries do not double-apply stock.
 7. Movement history is immutable; catalogue and inventory records use UTC timestamps and UUID identifiers.
 8. Products cannot be made customer-visible without an active lifecycle state. Availability does not imply sellability when the product is inactive or lacks a current price.
+9. A new reservation requires an active/searchable product and sufficient locked PostgreSQL availability; Redis never participates in the decision.
+10. Reservation external references are unique, lifecycle transitions are conservative, and released/consumed quantities cannot be applied twice.
 
 ## Concurrency and consistency
 
@@ -121,7 +137,12 @@ Redis now accelerates bounded category, product-detail/search, price, availabili
 
 ## API and authorization model
 
-Routes follow `/api/v1` and are explicitly registered in the API Gateway with fixed-upstream, correlation-ID, timeout, safe-logging, query/body, and bearer-propagation controls. The gateway contains no Catalogue or Inventory business rules; catalogue-service remains authoritative for JWT/RBAC and domain invariants. Registered resource families include `/products`, `/categories`, product pricing, `/inventory`, per-product availability/movements, and `/inventory/statistics`.
+Routes follow `/api/v1`. Public catalogue/inventory routes are explicitly registered in the API Gateway with fixed-upstream, correlation-ID, timeout, safe-logging, query/body, and bearer-propagation controls. The gateway contains no Catalogue or Inventory business rules; catalogue-service remains authoritative for JWT/RBAC and domain invariants. Registered resource families include `/products`, `/categories`, product pricing, `/inventory`, per-product availability/movements, and `/inventory/statistics`.
+
+Reservation routes remain internal to catalogue-service and are deliberately absent from
+the browser-facing Gateway allow-list. They accept only the `order_service` or
+`operations_admin` role. The role contract is implemented; provisioning and validating a
+least-privilege confidential order-service client remains platform work.
 
 | Role | Catalogue access | Inventory access |
 | --- | --- | --- |
@@ -141,7 +162,8 @@ Inventory statistics are read models derived from authoritative inventory items 
 
 ## Future Order Processing integration
 
-Order Processing is not implemented by this service. The accepted
+Order Processing is not implemented by this service. Catalogue-service now supplies the
+inventory reservation participant required by the accepted
 [Enterprise Order Processing domain design](order-processing-domain-design.md) and
 [ADR-011](../adr/ADR-011-reservation-based-order-saga.md) require order-service to call
 an atomic Catalogue quote-and-reserve contract using an order-owned reference and
@@ -151,10 +173,12 @@ releases the reservation; fulfilment atomically decrements both on-hand and rese
 quantities. Order-service must not write inventory tables directly.
 
 The accepted order-service-orchestrated Saga defines reservation expiry, retry,
-compensation, all-or-nothing PoC reservation, and duplicate-command behavior. Its
+compensation, multi-line all-or-nothing coordination, and duplicate-command behavior. Its
 synchronous reservation result is authoritative for checkout; transactional outbox
 events distribute committed facts afterward. The required reservation record and
-commands are still Planned.
+single-product reserve/retrieve/release/consume commands are implemented and unit
+validated. Automatic expiry/reconciliation, multi-product atomic commands, service-account
+provisioning, order-service integration, and live platform validation remain Planned.
 
 ## Implemented domain events
 
@@ -166,12 +190,15 @@ The service persists and publishes these versioned facts:
 - `inventory.adjusted.v1`
 - `inventory.low.v1`
 - `inventory.out-of-stock.v1`
+- `inventory.reserved.v1`
+- `inventory.reservation_released.v1`
+- `inventory.reservation_consumed.v1`
 
 Each envelope has an immutable event/aggregate ID, UTC occurrence time, correlation ID, producer, version, type, and minimal non-sensitive payload. The aggregate/movement and outbox row commit atomically; Kafka publication follows asynchronously. Low/out-of-stock facts are emitted on state transitions to limit event storms. Delivery is at least once, so future consumers must deduplicate by event ID. Cross-topic order is not guaranteed. The full contract, retry behavior, security boundary, and production evolution are documented in [Catalogue and Inventory Event Publication](catalogue-event-publication.md). No consumer is implemented.
 
 ## PoC implementation boundary
 
-The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, transactional outbox, Kafka producer relay, Kubernetes workload, gateway mappings, an internal gateway workload, React screens, and automated isolated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. Kafka is a single internal combined KRaft broker/controller with a retained PVC. Six focused frontend tests, all 11 authenticated live Gateway/platform integration scenarios, and the principal manual administrator/customer browser journey passed. The statistics browser page and category parent editing were not manually exercised. Order reservations and event consumers are not implemented.
+The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, transactional outbox, Kafka producer relay, Kubernetes workload, gateway mappings, an internal gateway workload, React screens, and automated isolated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. Kafka is a single internal combined KRaft broker/controller with a retained PVC. Reservation source and isolated tests exist, but migration `004_inventory_reservations`, the three new Kafka topics, service identity, and live cross-service flow have not been applied or platform-validated. Existing live Gateway/platform and browser evidence applies to catalogue/stock management, not reservations. No event consumer is implemented.
 
 `catalogue_db`, `customer_db`, and `keycloak_db` share one PostgreSQL server and persistent volume. Logical ownership reduces accidental cross-capability access but does not provide infrastructure-level isolation or independent scaling.
 

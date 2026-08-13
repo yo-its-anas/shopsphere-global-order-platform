@@ -60,6 +60,13 @@ OPENAPI_TAGS = [
         "name": "Inventory administration",
         "description": "Auditable operations-administrator stock commands and settings.",
     },
+    {
+        "name": "Internal inventory reservations",
+        "description": (
+            "Service/admin-authorized reservation lifecycle commands kept outside "
+            "the public API Gateway allow-list."
+        ),
+    },
 ]
 
 

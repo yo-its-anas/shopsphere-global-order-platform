@@ -1,6 +1,6 @@
 # Catalogue Service
 
-FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, effective pricing, transactional inventory management, optional Redis read caching, and recoverable Kafka event production. Order reservations and event consumers are not implemented. The separate API Gateway exposes an explicit transport mapping to these service routes without taking ownership of catalogue business logic.
+FastAPI service for Product Catalogue categories, product lifecycle, PostgreSQL search, effective pricing, transactional inventory management and reservations, optional Redis read caching, and recoverable Kafka event production. Order checkout/orchestration and event consumers are not implemented. The separate API Gateway exposes an explicit transport mapping to the public catalogue routes without taking ownership of business logic; reservation routes are internal and are not registered in the Gateway.
 
 The service follows the [Product Catalogue and Inventory domain design](../../docs/architecture/catalogue-inventory-domain-design.md). Catalogue and Inventory remain separate bounded contexts even though both are allocated to this service for the PoC.
 
@@ -29,6 +29,10 @@ All business routes require a Keycloak-compatible bearer token for the `shopsphe
 | `GET` | `/api/v1/inventory/products/{product_id}/movements` | `support`, `operations_admin` |
 | `GET` | `/api/v1/inventory` | `support`, `operations_admin` |
 | `GET` | `/api/v1/inventory/statistics` | `support`, `operations_admin` |
+| `POST` | `/api/v1/inventory/reservations` | `order_service`, `operations_admin` |
+| `GET` | `/api/v1/inventory/reservations/{reservation_id}` | `order_service`, `operations_admin` |
+| `POST` | `/api/v1/inventory/reservations/{reservation_id}/release` | `order_service`, `operations_admin` |
+| `POST` | `/api/v1/inventory/reservations/{reservation_id}/consume` | `order_service`, `operations_admin` |
 
 Customers see only active, searchable products in active categories and current active prices. Support can read inactive operational records and pricing history but cannot modify catalogue state. `operations_admin` owns all mutations. SKU is immutable after registration and unique after trim/uppercase normalization. Category slug is unique after trim/lowercase normalization.
 
@@ -38,7 +42,11 @@ Prices use Python `Decimal` and PostgreSQL `NUMERIC(19,4)`. A price update is im
 
 Inventory uses one `PRIMARY` PoC location per product. `quantity_available` is always derived as `quantity_on_hand - quantity_reserved`; it is never accepted as input. PostgreSQL constraints enforce non-negative balances and prevent reserved stock from exceeding on-hand stock. Initialization and adjustments require a safe reason and idempotency key, record the verified actor and request correlation ID, and append a movement in the same transaction as the balance change.
 
-Stock adjustments use `SELECT ... FOR UPDATE` and an atomic version predicate to prevent lost updates. Callers may provide `expected_version`; a stale version returns `409`. `STOCK_RECEIPT` must increase stock, `DAMAGE` must decrease it, and manual adjustment/correction deltas must be non-zero. Movement updates and deletes are rejected by a PostgreSQL trigger. Reservation, release, and fulfilment types are schema-compatible future interfaces only and cannot be submitted through the current API.
+Stock adjustments and reservations use `SELECT ... FOR UPDATE` and an atomic version predicate to prevent lost updates and final-unit overselling. Callers may provide `expected_version` for stock adjustments; a stale version returns `409`. `STOCK_RECEIPT` must increase stock, `DAMAGE` must decrease it, and manual adjustment/correction deltas must be non-zero. Movement updates and deletes are rejected by a PostgreSQL trigger.
+
+An `InventoryReservation` has a globally unique opaque external workflow reference and `ACTIVE`, `RELEASED`, or `CONSUMED` state. Reserving locks the authoritative inventory row, rechecks the idempotency reference after lock acquisition, verifies current derived availability, increases `quantity_reserved`, and appends a `RESERVATION` movement in the same transaction. A repeated matching reference returns the existing reservation and movement; reuse with different product/quantity returns `409`. Release and consume are idempotent. Release decreases only reserved quantity. Consumption decreases both on-hand and reserved quantities and finalizes allocation accounting; it does not claim warehouse shipment or implement order lifecycle. Optional expiry is retained for future reconciliation, but no automatic expiry scheduler exists.
+
+Only the dedicated `order_service` role or `operations_admin` can call reservation routes. Customer and support tokens are denied. The role is an API authorization contract; provisioning a least-privilege Keycloak service account and deploying order-service remain separate platform work.
 
 Customer availability responses expose only derived available quantity, state, and timestamp for active/searchable products. Support is read-only and may inspect balances, history, filtering, and calculated statistics. Operations administrators own initialization, adjustments, and reorder-threshold settings.
 
@@ -50,13 +58,13 @@ Keys use the `shopsphere:catalogue:v1:<environment>` namespace and role-safe/que
 
 Reads use cache-aside behavior. Misses, expired entries, malformed JSON/schema data, timeouts, and connection failures fall back to PostgreSQL. Successful catalogue, pricing, and inventory mutations invalidate affected key families after the database transaction commits. Cache hit/miss/outage/invalidation events are structured and contain only the cache family, never tokens, credentials, query text, or cached payloads. Redis does not participate in readiness because cache loss must not take the catalogue capability offline.
 
-Cache-aside permits a bounded stale-read window during concurrent read/repopulate and mutation races. TTLs bound that window, and broad post-commit invalidation reduces it. Inventory mutation and future reservation decisions must always use PostgreSQL rather than cached availability. Production can add versioned keys, event-driven invalidation, and observed staleness metrics where measurements justify the complexity.
+Cache-aside permits a bounded stale-read window during concurrent read/repopulate and mutation races. TTLs bound that window, and broad post-commit invalidation reduces it. Inventory mutations and reservation decisions always use PostgreSQL rather than cached availability. Reserve, release, and consume invalidate availability, inventory detail/list, and statistics caches after commit. Production can add versioned keys, event-driven invalidation, and observed staleness metrics where measurements justify the complexity.
 
 Production should use managed Redis with private connectivity, TLS, authentication/ACL integration, cross-zone replication, automatic failover, maintenance controls, monitored memory/eviction pressure, and tested application fallback. Replication improves cache availability but does not make Redis authoritative.
 
 ## Transactional outbox and Kafka production
 
-Product creation/update, effective-price changes, stock initialization/adjustment, and low/out-of-stock transitions append a versioned event envelope to `domain_event_outbox` in the same PostgreSQL transaction as the authoritative change. A background relay leases committed rows, publishes to the fixed Kafka bootstrap servers, and marks each row only after acknowledgement. Kafka failure defers publication; it does not roll back or corrupt the already committed catalogue state and does not make readiness fail.
+Product creation/update, effective-price changes, stock initialization/adjustment, reservation lifecycle changes, and low/out-of-stock transitions append versioned event envelopes to `domain_event_outbox` in the same PostgreSQL transaction as the authoritative change. Reservation events are `inventory.reserved.v1`, `inventory.reservation_released.v1`, and `inventory.reservation_consumed.v1`; the safe payload excludes the external workflow reference. A background relay leases committed rows, publishes to the fixed Kafka bootstrap servers, and marks each row only after acknowledgement. Kafka failure defers publication; it does not roll back or corrupt the already committed catalogue state and does not make readiness fail.
 
 Delivery is at least once. A crash after Kafka acknowledgement but before the outbox acknowledgement can produce the same `event_id` again. Consumers must deduplicate by `event_id`. Events are keyed by aggregate ID; the PoC topics each have one partition, while production ordering is guaranteed only within an aggregate key/partition and never across topics. See the [event publication design](../../docs/architecture/catalogue-event-publication.md).
 
@@ -96,7 +104,7 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 - Fixed Catalogue and Inventory routes are registered in API Gateway source, covered by isolated gateway tests, and the internal Gateway workload is Ready. A live unauthenticated route reached catalogue-service and returned its authoritative `401`; an authenticated catalogue journey has not passed.
 - The React catalogue/inventory feature and API Gateway-only client are implemented; six focused frontend tests and the production build passed. The frontend is not deployed in Kubernetes and this is not end-to-end evidence.
 - The PoC uses one `PRIMARY` inventory location; multi-warehouse workflows are not exposed yet.
-- Order reservations, releases, fulfilment, and cross-service order integration are not implemented.
+- Reservation persistence and internal commands are implemented and unit validated. Automatic expiry, multi-product all-or-nothing reservation, Keycloak service-account provisioning, live database migration, order-service integration, Gateway exposure, and checkout remain Pending / Not Verified.
 - Price scheduling, markets, tax, promotions, and multiple price books are outside the PoC pricing model.
 - Search uses PostgreSQL rather than Elasticsearch/OpenSearch.
 - No catalogue/inventory Kafka consumer, schema registry, outbox archival job, or event-driven dashboard is implemented.
@@ -105,9 +113,9 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 
 ## Current validation evidence
 
-- 48 catalogue-service tests passed with 80% aggregate statement coverage.
+- 60 catalogue-service tests passed with 80% aggregate statement coverage, including 11 focused reservation tests and a reservation persistence-contract test.
 - Ruff and Bandit completed with zero findings; 46 catalogue Python files passed Black checks.
-- The three-revision Alembic chain has one base and one head (`003_domain_event_outbox`), and the PostgreSQL offline upgrade SQL compiled.
+- The four-revision Alembic chain has one base and one head (`004_inventory_reservations`), and the PostgreSQL offline upgrade SQL compiled. Migration application to the live PoC database is Pending / Not Verified.
 - Catalogue-service, Redis, Kafka and API Gateway manifests passed non-destructive validation; current read-only checks observed one Ready instance of each.
 - Earlier controlled platform evidence records simulated category/product/price/inventory changes and successful outbox/Kafka publication.
 - The explicitly enabled live catalogue integration report contains 11 passed tests in 79.09 seconds with zero failures, errors or skips; it includes authenticated Gateway, RBAC, statistics, cache, event publication, Redis fallback and Kafka recovery scenarios.

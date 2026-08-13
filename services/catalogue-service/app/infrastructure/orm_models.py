@@ -23,7 +23,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.domain.models import InventoryMovementType, ProductStatus, utc_now
+from app.domain.models import (
+    InventoryMovementType,
+    InventoryReservationStatus,
+    ProductStatus,
+    utc_now,
+)
 
 
 class Base(DeclarativeBase):
@@ -169,7 +174,7 @@ class InventoryMovementRecord(Base):
             name="ck_inventory_movements_type",
         ),
         CheckConstraint(
-            "quantity_delta <> 0 OR movement_type = 'INITIAL_STOCK'",
+            "quantity_delta <> 0 OR reserved_delta <> 0 OR movement_type = 'INITIAL_STOCK'",
             name="ck_inventory_movements_non_zero",
         ),
         CheckConstraint(
@@ -209,6 +214,39 @@ class InventoryMovementRecord(Base):
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class InventoryReservationRecord(Base):
+    __tablename__ = "inventory_reservations"
+    __table_args__ = (
+        UniqueConstraint("external_reference", name="uq_inventory_reservations_external_ref"),
+        CheckConstraint("quantity > 0", name="ck_inventory_reservations_quantity_positive"),
+        CheckConstraint(
+            "status IN ('ACTIVE', 'CONSUMED', 'RELEASED')",
+            name="ck_inventory_reservations_status",
+        ),
+        Index("ix_inventory_reservations_product_status", "product_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    inventory_item_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("inventory_items.id", ondelete="RESTRICT"), nullable=False
+    )
+    product_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    external_reference: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=InventoryReservationStatus.ACTIVE.value
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now
     )
 
 

@@ -12,9 +12,10 @@ after timeouts, and either service or Kafka may be temporarily unavailable. A di
 cross-service database transaction would violate ownership and cannot be made reliable
 as an ordinary PostgreSQL transaction across independently evolving services.
 
-The current Inventory model stores on-hand and reserved balances and reserves future
-movement names, but it does not implement reservation/release/fulfilment commands.
-Order-service currently exposes only foundation system endpoints.
+Inventory now implements a unit-validated single-product reservation participant with
+reserve/retrieve/release/consume commands, PostgreSQL locking, idempotent external
+references, movements, cache invalidation, and outbox facts. Order-service implements
+customer-owned carts but not checkout or Saga orchestration.
 
 ## Decision
 
@@ -66,9 +67,11 @@ event payloads exclude tokens, credentials, payment data, and unnecessary PII.
 
 ## PoC limitations
 
-The empty logical `order_db` and dedicated `order_app` identity are provisioned on the
-shared PoC PostgreSQL instance. No order schema, Saga, reservation API, order event
-producer, gateway order route, order UI, or deployed order workload exists yet. The PoC
+The logical `order_db` and dedicated `order_app` identity are provisioned on the shared
+PoC PostgreSQL instance, and cart source/migration exist. Catalogue reservation source is
+unit validated, but its migration, topics, and service identity are not deployed or
+platform validated. No checkout/order schema, Saga, order event producer, gateway order
+route, order UI, or deployed order workload exists yet. The PoC
 still runs on one PostgreSQL instance, one Kafka broker, one kind node, and one physical
 VM, with no host-level high availability. A local background reconciler is
 demonstrative, not a substitute for a durable production workflow platform.
