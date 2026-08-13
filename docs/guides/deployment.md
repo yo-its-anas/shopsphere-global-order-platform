@@ -143,6 +143,12 @@ catalogue integration suite passed all 11 authenticated Gateway/platform scenari
 Redis and Kafka recovery and post-test readiness were verified. Platform health alone
 must still be distinguished from those functional results.
 
+The explicitly enabled Order E2E runner also passed prerequisites and scenarios A–I
+through API Gateway using simulated data. It validated successful checkout, insufficient
+stock, authoritative repricing, idempotent retry, IDOR protection, concurrent final-unit
+integrity, cancellation release, Kafka outbox recovery and Redis fallback. This was an
+API-driven run, not a retained browser automation run.
+
 The React frontend is run/built outside Kubernetes in this PoC. Use protected SSH
 tunnels and `kubectl port-forward`; do not create NodePort/LoadBalancer resources or
 public firewall rules for PostgreSQL, Redis, Kafka, Keycloak administration, Jenkins or
@@ -154,8 +160,18 @@ One PostgreSQL instance/PVC, one ephemeral Redis pod, one Kafka broker/controlle
 one kind node and one physical GCP VM form a single failure domain. This does not provide
 host-level high availability.
 
-Production requires managed regional/HA PostgreSQL with encrypted backups, PITR and
-tested failover; replicated Redis; managed or multi-broker Kafka across zones; multiple
-Kubernetes nodes/zones; measured autoscaling; external secret management; workload
-identity; private connectivity; enforced network policy; controlled ingress/egress;
-monitoring and tested disaster recovery.
+`customer_db`, `catalogue_db`, `order_db` and `keycloak_db` are logical databases on that
+one PostgreSQL server, not independently resilient database services. Customer,
+catalogue and order workloads also share the VM. Checkout reserves inventory in
+catalogue-service before order-service commits the order; these are separate service
+transactions coordinated by idempotency, Saga compensation and retained reconciliation
+evidence rather than a distributed database transaction.
+
+Production requires multi-zone GKE with managed load balancing and horizontally scalable
+stateless services; managed regional/HA PostgreSQL with encrypted backups, PITR and tested
+failover; replicated/managed Redis; managed or multi-broker Kafka across zones; measured
+autoscaling; durable reconciliation workers; resilient idempotent event consumers;
+external secret management; stronger workload identity and mTLS where appropriate;
+private connectivity; enforced network policy; controlled ingress/egress; monitoring;
+a deliberate multi-region strategy where business recovery/latency requires it; and
+tested disaster recovery.

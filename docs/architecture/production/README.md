@@ -28,8 +28,13 @@ The target order boundary is defined in the
 [Enterprise Order Processing domain design](../order-processing-domain-design.md). A
 production implementation retains Order-owned persistence and Catalogue-owned inventory
 while evolving the PoC Saga into a durable, observable workflow with reservation leases,
-reconciliation, independently managed regional/HA databases, multi-zone workloads,
-authenticated and encrypted service traffic, and managed multi-broker Kafka. Payment,
-tax, fraud, fulfilment, and notification remain separately governed capabilities rather
-than fields casually added to the Order aggregate. These are recommendations, not
-implemented capabilities.
+durable reconciliation workers, independently managed regional/HA PostgreSQL, and a
+horizontally scalable stateless order-service on multi-zone GKE behind managed load
+balancing. Use autoscaling, replicated/managed Redis for disposable projections,
+managed multi-broker Kafka, resilient idempotent event consumers, stronger service
+identity and mTLS/private service traffic where appropriate, and tested disaster
+recovery. A multi-region strategy should be introduced only where measured latency,
+availability, recovery and data-residency requirements justify its consistency and
+operational complexity. Payment, tax, fraud, fulfilment, and notification remain
+separately governed capabilities rather than fields casually added to the Order
+aggregate. These are recommendations, not implemented capabilities.

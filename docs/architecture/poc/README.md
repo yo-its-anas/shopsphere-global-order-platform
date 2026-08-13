@@ -47,4 +47,13 @@ PostgreSQL-only readiness gate. The live simulated-customer platform smoke passe
 API Gateway, created and cancelled an order, released its reservation, and observed
 broker-acknowledged `order.created.v1`, `order.confirmed.v1`,
 `order.status_changed.v1`, and `order.cancelled.v1` outbox events. This is gateway/platform
-integration evidence, not a browser UI validation; the Order frontend remains Planned.
+integration evidence. React cart, checkout, confirmation, own-history/detail/timeline and
+role-aware order-management screens are implemented and component-tested. The separate
+API-driven E2E suite passed prerequisites and scenarios A–I through the deployed Gateway;
+a retained browser-driven order journey is Pending / Not Verified.
+
+Customer, catalogue and order workloads share one physical GCP VM and one Kubernetes
+node. Their logical databases share one PostgreSQL server; Kafka is a single broker and
+Redis a single instance. Inventory reservation and order creation are separate service
+transactions coordinated by Saga compensation rather than a distributed transaction.
+This topology has no infrastructure-level high availability.

@@ -2,8 +2,10 @@
 
 FastAPI service for the ShopSphere Enterprise Order Processing boundary. The implemented
 scope includes authenticated customer-owned carts and idempotent checkout orchestration.
-It also includes actor-scoped order history and controlled lifecycle transitions.
-Payment, shipment tracking, and frontend screens remain outside this implementation.
+It also includes actor-scoped order history and controlled lifecycle transitions. React
+cart, checkout, confirmation, history, detail/status and governed operational screens are
+implemented separately under `frontend/src/features/orders`. Payment and shipment
+tracking remain outside this implementation.
 
 ## Implemented behavior
 
@@ -94,7 +96,8 @@ Migration `001_shopping_cart` creates `shopping_carts` and `cart_items`. Migrati
 `002_order_checkout` adds orders, immutable commercial items, status history, transaction
 audit, durable checkout attempts/reconciliation evidence, and the event outbox. Migration
 `003_order_lifecycle` expands the database status constraint to the documented finite
-state set. Together they enforce UUID
+state set. Migration `004_order_outbox_conventions` adds the aggregate-ordering index used
+by the established event architecture. Together they enforce UUID
 keys, one active cart per subject/currency, one line per product/cart, positive bounded
 quantities, positive Decimal snapshot prices, foreign-key cleanup, UTC-capable timestamps,
 and an optimistic cart version. It does not query or reference catalogue database tables.
@@ -125,6 +128,15 @@ multi-line behavior, inventory failures and compensation, idempotent retry/confl
 ownership, audit/history, and outbox intent. PostgreSQL schema structure is validated
 independently through Alembic. No real credentials, customer records, or tokens are used.
 
+Current retained evidence records 46 passing order-service tests, 33 passing focused API
+Gateway order-proxy tests, 11 passing React order tests, successful offline validation of
+the four-revision Alembic graph, and a
+passing Kubernetes manifest validator. The explicitly enabled API-driven E2E run passed
+prerequisites and scenarios A–I through API Gateway, including authoritative repricing,
+idempotent retry, cross-customer denial, final-unit concurrency, cancellation release,
+Kafka outage recovery and Redis fallback. This validates the deployed service flow but
+is not evidence of a browser-driven run.
+
 ## Kubernetes PoC deployment
 
 The workload runs as a non-root, read-only-root-filesystem container with all Linux
@@ -154,6 +166,21 @@ PostgreSQL, Catalogue, Keycloak and Kafka. The current kind `kindnet` environmen
 guarantee NetworkPolicy enforcement. This remains a single replica on one node and one VM,
 not host-level HA.
 
-The target order model and reservation Saga are documented in
+The customer, catalogue and order workloads share the same physical GCP VM and kind node.
+The logical `customer_db`, `catalogue_db`, `order_db` and `keycloak_db` databases share one
+PostgreSQL server; Kafka has one broker and Redis one instance. Inventory reservation and
+order creation commit in separate services, not one distributed transaction. Therefore
+the PoC has no infrastructure-level high availability and relies on Saga compensation and
+retained reconciliation evidence for cross-service failure handling.
+
+Production evolution requires multi-zone GKE, horizontally scalable stateless
+order-service replicas behind managed load balancing, managed HA PostgreSQL, replicated
+managed Redis, managed/multi-broker Kafka, autoscaling and—where justified by recovery,
+latency or residency requirements—a deliberate multi-region design. Durable reconciliation
+workers, resilient idempotent event consumers, stronger service identity with mTLS/private
+connectivity, external secret management, monitoring, tested backup/restore and disaster
+recovery are required before production use.
+
+The order model and reservation Saga are documented in
 [`docs/architecture/order-processing-domain-design.md`](../../docs/architecture/order-processing-domain-design.md)
 and [`ADR-011`](../../docs/adr/ADR-011-reservation-based-order-saga.md).

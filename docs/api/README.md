@@ -80,7 +80,9 @@ Catalogue-service implements `/api/v1` category, product, search, lifecycle, eff
 
 Catalogue-service independently validates Keycloak issuer/audience and allow-listed roles. Customers see active/searchable products, current prices, and safe derived availability only; support is read-only; operations administrators own catalogue/stock mutations. API responses contain domain schemas rather than SQLAlchemy records.
 
-Internal reservation routes are implemented but are not registered in API Gateway and have not been deployed or live-validated:
+Internal reservation routes are intentionally absent from the public API Gateway
+allow-list. They are deployed for order-service-to-Catalogue use and were live-validated
+through checkout, cancellation and concurrent-final-unit E2E scenarios:
 
 | Method | Internal path | Roles | Behavior |
 | --- | --- | --- | --- |
@@ -114,8 +116,9 @@ it is not part of the synchronous commit decision.
 ## Order-service API through API Gateway
 
 Order-service implements the following `/api/v1` routes and the API Gateway now registers
-the same external paths against its fixed `ORDER_SERVICE_URL`. Order-service is not yet
-deployed to Kubernetes, so live external or browser availability is not claimed.
+the same external paths against its fixed `ORDER_SERVICE_URL`. Order-service is deployed
+as a ClusterIP workload; the retained E2E suite exercised these external paths through
+the deployed Gateway. The suite was API-driven rather than browser-driven.
 
 | Method | Internal path | Role | Behavior |
 | --- | --- | --- | --- |
@@ -151,11 +154,15 @@ Catalogue data, reserves Inventory through a confidential service identity, calc
 Decimal totals, and returns the committed immutable confirmation. Partial failures are
 compensated and unresolved releases retain reconciliation evidence.
 
-Forty-six isolated order-service tests pass, including cart behavior/security,
+Forty-six order-service tests pass, including cart behavior/security,
 fixed-origin Catalogue client, checkout success/failure/idempotency/Saga evidence,
 order retrieval/IDOR, role policy, lifecycle, cancellation, audit and events.
 Gateway route behavior is unit validated with fixed-path, propagation, failure, status
 preservation, and log-safety tests. The live PostgreSQL migrations, dedicated service
 identity, Catalogue reservation/release, Kubernetes workload, Gateway checkout and Kafka
-outbox publication were platform-validated with simulated data. The browser frontend and
-browser end-to-end order journey remain Pending / Not Verified.
+outbox publication were platform-validated with simulated data. The explicitly enabled
+E2E runner passed prerequisites and scenarios A–I: successful order, insufficient stock,
+authoritative repricing, idempotent retry, IDOR, final-unit concurrency, cancellation,
+Kafka recovery and Redis fallback. React cart, checkout, confirmation, history/detail,
+status timeline and role-aware management screens are implemented and component-tested;
+a retained browser-driven execution is Pending / Not Verified.

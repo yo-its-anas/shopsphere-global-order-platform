@@ -5,6 +5,11 @@ Synthetic data prefix: `order-e2e-0a16386d1d`
 
 No password, token, client secret, or Kubernetes Secret value is retained.
 
+The accompanying non-live validation review records 46 passing order-service tests,
+33 passing focused API Gateway order-proxy tests, and 11 passing frontend order tests.
+The live JUnit/JSON evidence contains 10 passed checks (prerequisites plus scenarios A–I),
+zero failures and zero skips.
+
 | Scenario | Result | Classification | Evidence |
 | --- | --- | --- | --- |
 | Prerequisites | **PASSED** | Platform Validated | Keycloak, PostgreSQL, customer, catalogue, order, Gateway, Redis and Kafka checks passed; three temporary identities authenticated. |
@@ -20,8 +25,26 @@ No password, token, client secret, or Kubernetes Secret value is retained.
 
 ## Classification
 
-Passed live scenarios are **End-to-End Validated** through API Gateway. Failed or skipped scenarios are **Not Verified**; unit results are not substituted.
+Passed live scenarios are **End-to-End Validated** through API Gateway. Failed or skipped
+scenarios are **Pending / Not Verified**; unit results are not substituted. This run was
+API-driven and did not automate Firefox or another browser.
+
+## Examination requirement coverage
+
+| Requirement | Direct evidence | Evidence status |
+| --- | --- | --- |
+| Create customer shopping carts | Scenario A added and retrieved a persisted cart; E denied an arbitrary cross-customer cart path | **End-to-End Validated** |
+| Validate product availability | B rejected insufficient stock without a reservation; F allowed one final-unit winner; G released cancellation stock | **End-to-End Validated** |
+| Process customer orders | A completed authenticated checkout; D proved one order/reservation across retry; H/I proved designed dependency behavior | **End-to-End Validated** |
+| Generate order confirmations | A returned a unique order number/UUID and retrieved the committed detail | **End-to-End Validated** |
+| Calculate order totals | A verified USD 39.9800; C used authoritative 12.5000 instead of stale 10.0000 | **End-to-End Validated** |
+| Track order status | A read CONFIRMED history; G created exactly one CANCELLED history transition | **End-to-End Validated** |
+| Maintain complete order history | A verified list, detail and non-empty status history; E verified order IDOR denial | **End-to-End Validated** |
+| Produce transaction audit logs | A and G required non-empty safe audit responses; H proved recoverable outbox state | **End-to-End Validated** |
 
 ## PoC limitation
 
-This tests one VM, one kind node, one PostgreSQL instance, one Redis pod, and one Kafka broker. Outage recovery is not high availability.
+This tests one physical GCP VM, one kind node, logical databases on one PostgreSQL
+server, one Redis pod and one Kafka broker. Customer, catalogue and order workloads share
+that host. Inventory reservation and order creation remain separate transactions joined
+by a Saga; outage recovery is not infrastructure-level high availability.

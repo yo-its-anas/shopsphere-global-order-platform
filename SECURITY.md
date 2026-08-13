@@ -39,3 +39,26 @@ replicated TLS-protected Redis, multi-broker or managed Kafka with TLS and least
 ACLs, multiple Kubernetes nodes/zones, workload identity, external secret rotation,
 enforced default-deny network policy, controlled ingress/egress, rate limiting,
 autoscaling, audit retention and monitored recovery objectives.
+
+## Order Processing security boundary
+
+Order-service derives cart and order ownership only from the validated Keycloak subject.
+It does not accept a customer identity, authoritative price, total or availability from
+the browser. Customer cross-resource probes return restricted/not-found behavior;
+support is read-only, and only `operations_admin` may invoke explicit state-machine
+commands. Order item snapshots, status history and transaction audit are historical
+records and must not be rewritten through ordinary application or database operations.
+
+Checkout uses customer-scoped idempotency and Catalogue reservation idempotency to limit
+replay and duplicate-order risk. Catalogue row locks and constraints prevent overselling.
+Order and Inventory commit in separate databases/services; Saga compensation releases
+earlier reservations after partial failure, while unresolved releases remain durable
+reconciliation evidence. This is not a distributed ACID transaction, and the PoC has no
+automatic durable reconciliation or reservation-expiry worker.
+
+Order outbox messages are delivered at least once. Consumers must deduplicate stable
+`event_id` values and must not treat Kafka as authorization or checkout authority. Event,
+audit and log payloads exclude JWTs, credentials, payment data and unnecessary PII.
+Production requires durable reconciliation workers, resilient idempotent consumers,
+stronger service identity and mTLS/private connectivity, managed HA PostgreSQL,
+multi-broker Kafka, multi-zone GKE, monitored recovery and tested disaster recovery.

@@ -1,7 +1,7 @@
 # ShopSphere PoC Installation Guide
 
-This guide prepares the existing Ubuntu 22.04 PoC host for implemented Customer Identity
-and Product Catalogue/Inventory capabilities. It does not install host packages
+This guide prepares the existing Ubuntu 22.04 PoC host for implemented Customer Identity,
+Product Catalogue/Inventory and Enterprise Order Processing capabilities. It does not install host packages
 automatically, apply Terraform, or deploy production infrastructure.
 
 ## Prerequisites and validation
@@ -23,6 +23,7 @@ make validate-redis
 make validate-kafka
 make validate-customer-service
 make validate-catalogue-service
+make validate-order-service
 make validate-api-gateway
 ```
 
@@ -39,6 +40,9 @@ services/customer-service/.venv/bin/python -m pip install -e 'services/customer-
 python3 -m venv services/catalogue-service/.venv
 services/catalogue-service/.venv/bin/python -m pip install -e 'services/catalogue-service[dev]'
 
+python3 -m venv services/order-service/.venv
+services/order-service/.venv/bin/python -m pip install -e 'services/order-service[dev]'
+
 cd frontend
 npm ci --no-audit --no-fund
 ```
@@ -53,16 +57,16 @@ public `VITE_*` OIDC/API configuration and no client secret. PostgreSQL, Redis, 
 and test-client credentials must be injected through provided helpers, protected shell
 variables or Jenkins credential bindings.
 
-PostgreSQL is the source of truth for catalogue, pricing, inventory, movements and
-outbox state. Redis is an optional performance cache. Kafka carries asynchronous events
-after PostgreSQL commit. No password, token or service credential belongs in catalogue
-domain data.
+PostgreSQL is the source of truth for customer, catalogue, inventory and order state.
+Redis is an optional performance cache. Kafka carries asynchronous events after
+PostgreSQL commit. No password, token or service credential belongs in domain data.
 
 ## Evidence boundary
 
-Current repository validation records 48 passing catalogue backend tests, 6 passing
-focused frontend tests, a successful frontend production build, one valid three-revision
-Alembic chain, a successful catalogue Docker build, and passing non-destructive platform
-manifests. Ready internal PoC workloads have also been observed. The 11 live catalogue
-integration tests were skipped, so a complete authenticated user journey remains
-**Pending / Not Verified**.
+Current evidence records 60 passing catalogue tests, 46 passing order-service tests,
+focused catalogue and order frontend tests, successful frontend production builds,
+validated Catalogue and Order Alembic chains, and passing platform manifests. The
+catalogue integration suite passed all 11 scenarios. The explicitly enabled Order E2E
+suite passed prerequisites and scenarios A–I through API Gateway. These are retained
+test results; they do not replace a clean-host installation rehearsal or a browser-driven
+order demonstration, which remain **Pending / Not Verified**.

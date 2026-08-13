@@ -2,13 +2,13 @@
 
 ## Status and evidence boundary
 
-This document defines the target bounded context for Enterprise Order Processing. It is
-an accepted design baseline, not implementation evidence. The repository currently
-contains the independently buildable `order-service` FastAPI foundation with health and
-information endpoints plus an empty, platform-validated logical `order_db` owned by
-`order_app`. Order schemas/migrations, repository persistence, cart and order APIs,
-inventory reservation commands, gateway routes, React order screens, order events,
-deployment, and domain tests are **Planned**.
+This document describes the implemented Enterprise Order Processing bounded context and
+its validated PoC boundaries. Repository evidence includes four Alembic revisions,
+customer-owned cart and order APIs, Catalogue inventory reservations, fixed API Gateway
+routes, React order screens, Kubernetes deployment, transactional outbox publication,
+46 passing order-service tests and the passing API-driven E2E scenarios recorded in
+`docs/evidence/order-processing-e2e-evidence.md`. The E2E runner used simulated data and
+did not automate a browser.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md),
 [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md),
@@ -54,7 +54,7 @@ flowchart LR
 The browser may request cart changes and checkout but is never authoritative for price,
 totals, product validity, availability, ownership, or status transitions.
 
-## Proposed entity model
+## Implemented entity model
 
 All domain identifiers are UUIDs. Stored instants are timezone-aware UTC. Human-readable
 numbers and external references are alternate keys, not database primary keys.
@@ -65,17 +65,14 @@ The ShoppingCart aggregate represents a customer's mutable purchase intent:
 
 - `id`: immutable UUID;
 - `customer_identity_subject`: immutable Keycloak `sub` used for ownership checks;
-- optional `customer_profile_id`: reference to the customer-domain UUID, never an email;
-- `status`: `ACTIVE`, `CHECKOUT_PENDING`, `CHECKED_OUT`, or `ABANDONED`;
+- `status`: `ACTIVE` or `CHECKED_OUT`;
 - `currency_code`: one ISO 4217 currency for the cart;
 - `version`: optimistic concurrency token; and
-- `created_at`, `updated_at`, and optional `checked_out_at` UTC timestamps.
+- `created_at` and `updated_at` UTC timestamps.
 
-The PoC should allow one active or checkout-pending cart per customer and currency,
-enforced by a database constraint or equivalent transaction rule. Checkout atomically
-freezes a specific cart version as `CHECKOUT_PENDING`; known pre-reservation failure may
-return it to `ACTIVE`, while an unknown remote outcome remains frozen for reconciliation.
-A checked-out cart is immutable and points to the resulting order. Cart display prices
+The PoC allows one active cart per customer and currency through a partial unique index.
+Checkout records the claimed cart version in `CheckoutAttempt`; successful checkout marks
+the cart `CHECKED_OUT`, while a known failed checkout leaves it active. Cart display prices
 may be refreshed from Catalogue, but they are estimates and are never checkout authority.
 
 ### CartItem
@@ -84,7 +81,7 @@ A CartItem belongs to exactly one cart and contains:
 
 - `id`, `cart_id`, and authoritative Catalogue `product_id` UUIDs;
 - a positive integer `quantity` with a governed upper bound;
-- optional last-seen product/price display data clearly treated as non-binding; and
+- last-seen SKU, name, price, currency and availability display data treated as non-binding; and
 - UTC creation/update timestamps.
 
 The `(cart_id, product_id)` pair is unique so adding the same product changes quantity
@@ -98,24 +95,20 @@ Order is the lifecycle and consistency aggregate:
 
 - `id`: immutable UUID;
 - `order_number`: unique opaque customer-facing reference;
-- `customer_identity_subject` and optional `customer_profile_id` ownership references;
+- `customer_identity_subject` ownership reference;
 - source `cart_id`;
-- lifecycle `status` and internal checkout/Saga state;
+- lifecycle `status`; separate `CheckoutAttempt` records hold Saga state;
 - `currency_code`;
-- exact `subtotal`, `discount_amount`, `tax_amount`, and `total` values;
-- the inventory `reservation_id` and reservation expiry when present;
-- the checkout idempotency key reference/request fingerprint;
-- `created_at`, `confirmed_at`, `updated_at`, and optional terminal timestamp; and
-- a concurrency `version`.
+- exact `subtotal` and `total` values; and
+- `created_at` and `updated_at` UTC timestamps.
 
-`discount_amount` and `tax_amount` are zero-valued extensibility fields until governed
-discount and tax capabilities exist. The PoC must not invent promotion, taxation, or
-payment calculations. Payment processing and card data are outside this bounded context.
+Discount, taxation, payment processing and card data are outside this implemented
+bounded context; the confirmation explicitly reports payment as not in scope.
 
 ### OrderItem
 
-OrderItem is an immutable commercial snapshot created only from the authoritative
-Catalogue quote-and-reserve response. It stores:
+OrderItem is an immutable commercial snapshot created only after authoritative Catalogue
+product/price reads and a successful inventory reservation. It stores:
 
 - `id`, `order_id`, and source `product_id`;
 - SKU and product name at checkout;
@@ -133,11 +126,10 @@ deactivation, or deletion policy cannot rewrite an existing OrderItem.
 OrderStatusHistory is an append-only record for every accepted lifecycle transition:
 
 - immutable UUID and `order_id`;
-- previous and resulting status;
+- resulting status;
 - verified actor subject or service identity;
-- safe reason/code and correlation ID;
-- UTC occurrence time; and
-- optional version/sequence for deterministic order.
+- correlation ID; and
+- UTC occurrence time.
 
 Update and delete must be rejected at repository and database layers. Corrections are
 new compensating records, never edits to history.
@@ -145,11 +137,10 @@ new compensating records, never edits to history.
 ### OrderAuditEvent
 
 OrderAuditEvent is an append-only security/business accountability record. It covers
-relevant cart mutations, checkout attempts and outcomes, reservation acceptance or
-compensation, order confirmation, cancellation, administrative transitions, and access
-to privileged order views where policy requires it. It contains immutable event and
-order/customer references, verified actor, action, entity, outcome, source, correlation
-ID, UTC timestamp, and allow-listed safe metadata.
+checkout initiation and outcomes, reservation acceptance or compensation, order
+confirmation, cancellation and administrative transitions. It contains an immutable ID,
+order ID, verified actor, action, correlation ID, UTC timestamp and allow-listed safe
+metadata.
 
 It never stores passwords, bearer or refresh tokens, Keycloak secrets, unrestricted
 request bodies, or unnecessary customer personal data. Operational JSON logs remain
@@ -170,8 +161,8 @@ relay state, not proof that every consumer processed the event.
 
 1. A cart and its items belong to one verified Keycloak subject; ownership never comes
    from a path parameter or browser-supplied customer identifier.
-2. Only an `ACTIVE` cart can change or enter checkout. `CHECKOUT_PENDING` freezes the
-   claimed version; a `CHECKED_OUT` cart is immutable and maps to one successful order.
+2. Only an `ACTIVE` cart can change or enter checkout. The durable CheckoutAttempt stores
+   the claimed cart version; a `CHECKED_OUT` cart is immutable.
 3. Item quantity is a positive bounded integer and `(cart_id, product_id)` is unique.
 4. An OrderItem snapshot is immutable after confirmation and originates only from an
    authoritative Catalogue response.
@@ -179,9 +170,8 @@ relay state, not proof that every consumer processed the event.
    converted.
 6. Money uses Python `Decimal` and PostgreSQL `NUMERIC(19,4)`, never binary floating
    point. Currency-specific display rounding is presentation policy.
-7. `line_total = unit_price * quantity`; `subtotal = sum(line_total)`; and
-   `total = subtotal - discount_amount + tax_amount`. All amounts are non-negative and
-   are recalculated server-side.
+7. `line_total = unit_price * quantity`; `subtotal = sum(line_total)`; and in the current
+   scope `total = subtotal`. All amounts are non-negative and recalculated server-side.
 8. Every accepted status change appends OrderStatusHistory and OrderAuditEvent records
    in the same order database transaction.
 9. Order snapshots, history, audit, and outbox rows are never physically deleted through
@@ -220,8 +210,10 @@ cancelled order, or editing a fulfilled snapshot are rejected.
 Cancellation is allowed only while Inventory can authoritatively release an unconsumed
 reservation. Fulfilment is recorded only after Inventory atomically consumes each
 reservation by reducing both on-hand and reserved quantities. These fixed-origin commands
-and their idempotent order-service orchestration are implemented and unit validated;
-live service-account and platform execution remain unverified.
+and their idempotent order-service orchestration are implemented and unit validated.
+The E2E cancellation scenario exercised release through the deployed service identity;
+the PROCESSING-to-FULFILLED consumption path is unit validated but not separately E2E
+validated.
 
 ## Reservation-based checkout Saga
 
@@ -241,37 +233,30 @@ sequenceDiagram
     participant K as Kafka
 
     Customer->>UI: Checkout active cart
-    UI->>GW: POST /api/v1/carts/{id}/checkout<br/>Bearer + Idempotency-Key
+    UI->>GW: POST /api/v1/orders/checkout<br/>Bearer + Idempotency-Key
     GW->>ORD: Fixed-route forwarding + correlation ID
     ORD->>ORD: Validate JWT, role, cart ownership and request
-    ORD->>ODB: Claim idempotency key, freeze cart version,<br/>and persist PENDING Saga
-    ORD->>CAT: Quote and hold all lines<br/>service identity + order/reference + idempotency
-    CAT->>CDB: Lock inventory rows in deterministic order
-    CAT->>CDB: Validate product, current price/currency and availability
-    CAT->>CDB: Persist reservation, movements and inventory outbox atomically
-    CAT-->>ORD: HELD reservation plus authoritative commercial snapshot
-    ORD->>ORD: Recalculate every line and total
-    ORD->>ODB: Persist immutable items and totals while PENDING
-    ORD->>CAT: Idempotently allocate reservation to durable order
-    CAT->>CDB: HELD to ALLOCATED
-    ORD->>ODB: Persist CONFIRMED transition, checked-out cart,<br/>audit, idempotent result and outbox atomically
+    ORD->>ODB: Claim customer-scoped key and persist PROCESSING attempt
+    loop Each cart line
+        ORD->>CAT: Read authoritative product and current price
+        ORD->>CAT: Reserve quantity using service identity<br/>and stable external reference
+        CAT->>CDB: Lock inventory row, validate availability,<br/>persist ACTIVE reservation/movement/outbox
+        CAT-->>ORD: Reservation receipt
+    end
+    ORD->>ORD: Calculate Decimal lines and total
+    ORD->>ODB: Atomically persist CONFIRMED order, immutable items,<br/>history, audit, checked-out cart, idempotent result and outbox
     ORD-->>UI: Order confirmation and stable order reference
     ODB-->>K: Asynchronous order outbox relay
     CDB-->>K: Asynchronous inventory outbox relay
 ```
 
-The Catalogue command must hold the complete cart atomically for the PoC: lock rows
-in sorted product-ID order, validate active products and one current price/currency,
-check `quantity_available`, increment `quantity_reserved`, append reservation movements,
-and return an immutable quote/reservation result. An idempotent allocation command then
-binds the hold to the durable order. Partial reservation is rejected unless a later
-explicit business rule introduces split fulfilment.
-
 Catalogue now implements a single-product reservation record plus idempotent
 reserve/retrieve/release/consume commands. Each mutation locks its InventoryItem and
-commits the balance, reservation, movement, and outbox intent atomically. The complete
-multi-product quote/hold contract, authoritative commercial quote, durable-order binding,
-automatic expiry/reconciliation, and deployed service identity remain Planned.
+commits the balance, reservation, movement, and outbox intent atomically. Order-service
+reserves multi-line carts sequentially. If a later line fails, it releases earlier ACTIVE
+reservations; an unresolved release is retained in `checkout_attempts` as reconciliation
+evidence. Automatic reservation expiry and a durable reconciliation worker are not
+implemented.
 
 ## Idempotency and replay handling
 
@@ -298,23 +283,21 @@ different cart state under the same key.
 | --- | --- |
 | Two customers request the final unit | Catalogue locks InventoryItem rows and evaluates current available stock inside one transaction. Only one reservation commits; the other receives a stable availability conflict. |
 | Duplicate checkout requests | Order idempotency returns the same result. Catalogue command idempotency prevents duplicate reservation. |
-| Network timeout after reservation | Retry/query by the same reservation idempotency key. Keep the Saga `PENDING` until the authoritative result is known. |
+| Network timeout after reservation | Retry/query by the same reservation idempotency key. Keep the CheckoutAttempt `PROCESSING` until the authoritative result is known. |
 | Network timeout after order commit | A retry with the same checkout key returns the committed confirmation. |
 | Catalogue unavailable before reservation | Return a bounded retryable response, preserve the active cart, and do not confirm an order. |
-| Catalogue fails during reservation | Its single PostgreSQL transaction rolls back all line reservations and movements. |
+| Catalogue fails during one reservation | That line's PostgreSQL transaction rolls back; order-service releases any earlier line reservations and records unresolved compensation if release fails. |
 | Order database fails before reservation | No remote inventory change is attempted. |
-| Order database fails after a hold | Invoke idempotent release. A hold lease and reconciler recover a process crash. |
-| Reservation allocation succeeds but final order transition fails | Reconcile by stable order/reservation IDs; either complete the existing PENDING order or release the allocation under explicit policy. Never create a second order. |
+| Order database fails after reservation | Invoke idempotent release; if release fails, retain the reservation ID in `checkout_attempts.unresolved_reservations`. The PoC has no automatic reconciler. |
+| Reservations succeed but final order commit fails | Attempt release for every reservation and retain unresolved evidence. Never create a second order for the same customer/idempotency key. |
 | Cancellation release is unavailable | Do not report cancellation complete while stock remains reserved; retain retryable workflow state. |
 | Kafka unavailable | Database commits retain pending outbox rows. Relays retry; checkout correctness never depends on Kafka availability. |
 | Unknown remote outcome | Reconcile by stable command/reservation ID; never infer success or failure from timeout alone. |
 
-Reservations need an expiry timestamp and state (`HELD`, `ALLOCATED`, `RELEASED`,
-`CONSUMED`, `EXPIRED`). Unallocated holds expire safely; an allocated reservation is
-released by cancellation or consumed by fulfilment under order policy rather than
-silently expiring beneath a confirmed order. Expiry processing is idempotent and
-auditable. Production should use a durable workflow/reconciliation mechanism; the PoC
-may use a bounded background worker provided restart recovery and tests are demonstrated.
+The implemented reservation states are `ACTIVE`, `RELEASED`, and `CONSUMED`; an optional
+expiry timestamp is stored for future use, but no expiry worker or `EXPIRED` transition is
+implemented. Production requires an idempotent, auditable expiry and reconciliation
+mechanism that cannot silently expire inventory beneath a confirmed order.
 
 ## Authorization model
 
@@ -327,7 +310,7 @@ audience, expiry, and roles and performs resource-level ownership checks.
 | `customer` | Create/read/change only the active cart mapped to verified `sub`; check out only that cart | List/read only orders mapped to verified `sub` | May request an explicitly permitted cancellation of an eligible own order; cannot set status directly |
 | `support` | No customer cart mutation | Read customer orders/history for justified support purposes | No unrestricted transition or commercial-data modification rights |
 | `operations_admin` | No ordinary impersonated cart mutation | Governed operational search/read | Only explicit commands allowed by the state machine, with reason and audit; cannot rewrite snapshots or history |
-| order-service identity | No user-facing cart authority | Own persistence only | Invoke only Catalogue quote/hold/allocate/release/consume contracts through a planned least-privilege confidential client role such as `inventory_reservation_writer` |
+| order-service identity | No user-facing cart authority | Own persistence only | Invoke Catalogue reservation/retrieve/release/consume contracts through the deployed least-privilege `order_service` role |
 
 Administrative routes must express commands such as `start-processing`, `fulfil`, or
 `cancel`, not expose a generic writable `status` field. Support and administrator reads
@@ -357,15 +340,16 @@ later notification concern and must consume order facts rather than own order st
 - `order.cancelled.v1` — cancellation and required inventory compensation completed.
 
 Payloads contain opaque references, status, currency, exact amount strings, correlation
-and causation identifiers, and only governed consumer data. They exclude JWTs,
+identifiers, and only governed consumer data. They exclude JWTs,
 credentials, payment data, and unnecessary PII. Per-order events use the order UUID as
 the Kafka key to preserve partition order where possible. Global ordering is not
 promised. All four contracts, their transactional outbox records, PostgreSQL lease/retry
 store and the same configurable at-least-once relay used by Catalogue are implemented.
 An acknowledgement failure after Kafka accepts a message can publish the same `event_id`
 again; consumers must deduplicate that stable identifier. Structured publish/defer/poll
-logs provide operational visibility without payloads or credentials. Live Kafka
-publication by order-service remains unverified.
+logs provide operational visibility without payloads or credentials. The E2E Kafka
+failure scenario proved that a CONFIRMED order retained pending outbox rows and that the
+expected events published after Kafka was restored.
 
 ## API shape
 
@@ -378,8 +362,7 @@ The following cart routes are implemented internally in order-service:
 - `DELETE /api/v1/carts/me/items` — clear the owned cart.
 
 Their Catalogue price/availability fields and subtotal are display snapshots, not checkout
-authority. The following internal checkout route is implemented but not yet exposed by
-the Gateway:
+authority. The Gateway exposes the implemented checkout route:
 
 - `POST /api/v1/orders/checkout` — customer-owned checkout requiring `Idempotency-Key`.
 
@@ -387,7 +370,8 @@ Actor-scoped routes are implemented under `/api/v1/orders/me` for customer list,
 detail, history, audit and cancellation. Operational routes are implemented under
 `/api/v1/orders/admin` for support/admin list, detail, history and audit. Only
 `operations_admin` can invoke the explicit status and administrative cancellation
-commands. These internal routes are not yet exposed through API Gateway.
+commands. API Gateway exposes an explicit allow-list for these paths and rejects arbitrary
+order subpaths.
 
 Order-service-to-Catalogue reservation endpoints are internal fixed destinations, not
 arbitrary proxy URLs and not ordinary browser routes. They require a least-privilege
@@ -395,14 +379,13 @@ service identity and correlation/causation propagation.
 
 ## PoC trade-offs and implementation boundary
 
-The PoC may package Saga orchestration and outbox relay with one order-service process.
+The PoC packages Saga orchestration and outbox relay with one order-service process.
 A separate logical `order_db`, owned by least-privilege `order_app`, is provisioned
 on the existing PostgreSQL server. It improves ownership hygiene but provides no
-infrastructure isolation, independent scaling, or high availability. Cart and checkout
-migrations exist in source but have not been applied or platform-validated. Checkout,
-history, RBAC, lifecycle, cancellation, release/consume orchestration, audit and event
-intent are unit validated with simulated Catalogue/reservation collaborators; no live
-order business data or end-to-end evidence is claimed.
+infrastructure isolation, independent scaling, or high availability. Four cart/order/
+outbox migrations are applied and platform validated. Checkout, history, RBAC, lifecycle,
+cancellation, reservation/release orchestration, audit and event publication are unit
+validated; the retained API-driven E2E report validates scenarios A–I with simulated data.
 
 The current single PostgreSQL instance, single Redis instance, single Kafka broker,
 single kind node, and single physical GCP VM form one failure domain. Redis is not
@@ -410,23 +393,29 @@ required for initial order correctness and should not cache authoritative order 
 idempotency results. Kafka is asynchronous transport, not the checkout transaction
 coordinator. Multiple pods on the single node would not provide host-level HA.
 
-The PoC favours synchronous quote-and-reserve for a deterministic demonstration, a
-database-backed Saga/outbox for recovery, one currency per order, one inventory location,
-and no payment/tax/promotion implementation. Reservation expiry and reconciliation are
-required before calling checkout production-ready.
+The PoC favours synchronous authoritative reads followed by sequential reservations for
+a deterministic demonstration, a database-backed Saga/outbox for recovery, one currency
+per order, one inventory location, and no payment/tax/promotion implementation.
+Reservation expiry and durable reconciliation are required before calling checkout
+production-ready.
 
 ## Production evolution
 
 - Use an independently managed, regional/HA order database with encrypted automated
   backups, PITR, tested failover, connection pooling, partitioned/archived audit and
   history, and explicit recovery objectives.
-- Run workloads across multiple Kubernetes nodes and zones with workload identity,
-  mTLS/private connectivity, external secret management, enforced network policy,
-  disruption budgets, autoscaling, rate limits, and SLO-driven telemetry.
+- Run a horizontally scalable stateless order-service on multi-zone GKE behind managed
+  load balancing, with workload identity, mTLS/private connectivity, external secret
+  management, enforced network policy, disruption budgets, autoscaling, rate limits,
+  and SLO-driven telemetry.
 - Adopt a durable workflow engine or rigorously operated Saga/reconciliation workers for
   long-running reservation, cancellation, fulfilment, and later payment processes.
 - Use managed or multi-broker Kafka with replication, TLS, ACLs, schema governance,
   monitored outbox/consumer lag, dead-letter strategy, and idempotent consumers.
+- Use replicated/managed Redis only for disposable projections and introduce a deliberate
+  multi-region strategy where latency, recovery objectives and data residency require it.
+- Operate resilient event consumers, durable reconciliation workers and tested database,
+  event and configuration disaster-recovery procedures.
 - Scale Inventory independently when contention warrants it; retain deterministic locks,
   reservation leases, command idempotency, reconciliation, and oversell monitoring.
 - Add governed tax, discount, payment, fraud, fulfilment, notification, privacy, and

@@ -162,8 +162,7 @@ Inventory statistics are read models derived from authoritative inventory items 
 
 ## Future Order Processing integration
 
-Order Processing is not implemented by this service. Catalogue-service now supplies the
-inventory reservation participant required by the accepted
+Catalogue-service supplies the inventory reservation participant used by the implemented
 [Enterprise Order Processing domain design](order-processing-domain-design.md) and
 [ADR-011](../adr/ADR-011-reservation-based-order-saga.md) require order-service to call
 an atomic Catalogue quote-and-reserve contract using an order-owned reference and
@@ -177,8 +176,10 @@ compensation, multi-line all-or-nothing coordination, and duplicate-command beha
 synchronous reservation result is authoritative for checkout; transactional outbox
 events distribute committed facts afterward. The required reservation record and
 single-product reserve/retrieve/release/consume commands are implemented and unit
-validated. Automatic expiry/reconciliation, multi-product atomic commands, service-account
-provisioning, order-service integration, and live platform validation remain Planned.
+validated. Automatic expiry/reconciliation and a multi-product atomic reservation command
+are not implemented. The deployed `order_service` identity and order-service integration
+are platform and API-driven E2E validated; multi-line checkout uses sequential
+reservations with compensation.
 
 ## Implemented domain events
 
@@ -198,7 +199,7 @@ Each envelope has an immutable event/aggregate ID, UTC occurrence time, correlat
 
 ## PoC implementation boundary
 
-The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, transactional outbox, Kafka producer relay, Kubernetes workload, gateway mappings, an internal gateway workload, React screens, and automated isolated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. Kafka is a single internal combined KRaft broker/controller with a retained PVC. Reservation source and isolated tests exist, but migration `004_inventory_reservations`, the three new Kafka topics, service identity, and live cross-service flow have not been applied or platform-validated. Existing live Gateway/platform and browser evidence applies to catalogue/stock management, not reservations. No event consumer is implemented.
+The PoC keeps both contexts allocated to `catalogue-service`. The PostgreSQL platform provides the separate logical `catalogue_db`, owned by the least-privilege `catalogue_app` login, and a safe namespace-local database Secret. Catalogue and inventory schema, migrations, repositories, internal APIs, cache integration, transactional outbox, Kafka producer relay, Kubernetes workload, gateway mappings, an internal gateway workload, React screens, and automated isolated tests exist. Inventory uses the single `PRIMARY` location and synchronous PostgreSQL calculations. Redis and catalogue-service are deployed as single internal pods; Redis is authenticated, ephemeral, and memory-bounded. Kafka is a single internal combined KRaft broker/controller with a retained PVC. Reservation migration `004_inventory_reservations`, governed topics and the dedicated `order_service` identity are deployed and platform validated. The Order E2E suite exercised reservation, insufficient stock, final-unit concurrency and cancellation release through the live service boundary. No event consumer or automatic reservation-expiry worker is implemented.
 
 `catalogue_db`, `customer_db`, and `keycloak_db` share one PostgreSQL server and persistent volume. Logical ownership reduces accidental cross-capability access but does not provide infrastructure-level isolation or independent scaling.
 

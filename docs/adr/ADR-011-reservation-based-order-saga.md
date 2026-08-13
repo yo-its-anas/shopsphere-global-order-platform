@@ -70,7 +70,9 @@ The logical `order_db` and dedicated `order_app` identity share the PoC PostgreS
 instance. The Catalogue reservation migration and dedicated `order_service` identity,
 Order schema/Saga/outbox, fixed Gateway routes and internal Kubernetes workload are
 deployed and platform-validated. A live simulated checkout/cancellation proved release
-compensation and broker acknowledgement; the browser Order UI remains unimplemented.
+compensation and broker acknowledgement. React Order screens are implemented and
+component-tested, and the API-driven E2E suite passed scenarios A–I; a retained
+browser-driven execution is Pending / Not Verified.
 Reservations have no automatic expiry worker, and multi-line checkout uses sequential
 per-line reservations with compensation rather than an atomic multi-product hold. The
 PoC still runs on one PostgreSQL instance, one Kafka broker, one kind node, and one
@@ -79,11 +81,14 @@ demonstrative, not a substitute for a separately operated production worker.
 
 ## Production evolution
 
-Use independently managed HA data stores, a durable workflow engine or rigorously
-operated Saga workers, reservation-expiry monitoring, multi-zone services, authenticated
-and encrypted service traffic, managed multi-broker Kafka, governed schemas, mature
-observability, automated reconciliation, and tested disaster recovery. Add payment,
-taxation, fraud, fulfilment, and notification workflows as separately owned capabilities.
+Use multi-zone GKE and load balancing for horizontally scalable stateless services,
+independently managed HA PostgreSQL, replicated/managed Redis, a durable workflow engine
+or rigorously operated Saga/reconciliation workers, reservation-expiry monitoring,
+autoscaling, stronger service identity and mTLS/private traffic where appropriate,
+managed multi-broker Kafka, resilient idempotent consumers, governed schemas, mature
+observability, a deliberate multi-region strategy where justified, and tested disaster
+recovery. Add payment, taxation, fraud, fulfilment, and notification workflows as
+separately owned capabilities.
 
 ## Viva defence notes
 

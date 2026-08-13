@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted — independently buildable service boundaries exist. Customer, Product Catalogue, and Inventory behavior are implemented; Enterprise Order Processing has an accepted domain design but its business behavior remains Planned.
+Accepted — independently buildable service boundaries exist. Customer, Product
+Catalogue/Inventory, and Enterprise Order Processing behavior are implemented; Analytics
+remains a foundation rather than a completed business capability.
 
 ## Context
 
@@ -16,7 +18,13 @@ For the Customer Identity and Account Management capability, Keycloak owns authe
 
 Within Product Catalogue and Inventory Management, `catalogue-service` is the PoC deployment boundary but contains two logical bounded contexts. Catalogue owns product metadata and lifecycle, category relationships, and effective-dated pricing. Inventory owns stock balances, reservations, derived availability, adjustments, immutable movement history, and inventory statistics. These contexts communicate through explicit application interfaces and must not share mutable domain objects merely because they share a process. The detailed model is defined in the [Product Catalogue and Inventory domain design](../architecture/catalogue-inventory-domain-design.md).
 
-`order-service` owns the target cart, order, immutable commercial snapshot, lifecycle, status history, transaction audit, checkout idempotency, Saga state, and order-event boundary. Catalogue and Inventory remain authoritative for sellable products, prices, availability, reservations, releases, and fulfilment consumption. Order-service must never update catalogue or inventory tables directly. Checkout uses the governed reservation Saga in [ADR-011](ADR-011-reservation-based-order-saga.md), detailed by the [Enterprise Order Processing domain design](../architecture/order-processing-domain-design.md). This is accepted design; order behavior is not yet implemented.
+`order-service` owns carts, orders, immutable commercial snapshots, lifecycle, status
+history, transaction audit, checkout idempotency, Saga state, and the order-event
+boundary. Catalogue and Inventory remain authoritative for sellable products, prices,
+availability, reservations, releases, and fulfilment consumption. Order-service never
+updates catalogue or inventory tables directly. Checkout implements the governed
+reservation Saga in [ADR-011](ADR-011-reservation-based-order-saga.md), detailed by the
+[Enterprise Order Processing domain design](../architecture/order-processing-domain-design.md).
 
 ## Alternatives considered
 
@@ -43,7 +51,13 @@ Each service requires least-privilege identity, network access, secrets, authori
 
 ## PoC limitations
 
-Catalogue categories, products, effective pricing, search, inventory balances/movements/statistics, single-product reservation source, persistence adapters, migrations, internal APIs, RBAC enforcement, Redis cache-aside reads, a transactional Kafka outbox/producer, Kubernetes workloads, fixed public API Gateway routes, isolated service/gateway tests, and an internal API Gateway workload are implemented. The logical `order_db` and dedicated `order_app` identity are provisioned; order-service implements its customer-owned cart aggregate, persistence migration, Catalogue validation client, JWT ownership controls, and isolated API tests. Reservation deployment/service identity and live validation, checkout, orders, Saga/outbox behavior, Gateway/UI order integration, and order-service Kubernetes deployment are not implemented. Services share a VM and supporting platforms, so the PoC does not prove independent infrastructure failure isolation or high availability.
+Catalogue/Inventory and Order schemas, APIs, RBAC, reservations, Saga/outboxes, Kafka
+producers, fixed Gateway routes, React screens and Kubernetes workloads are implemented.
+The API-driven Order E2E suite passed scenarios A–I with simulated data, including
+final-unit concurrency, compensation and Kafka recovery. Services and their logical
+databases share one VM, node and PostgreSQL server, so the PoC does not prove independent
+infrastructure failure isolation or high availability. Durable automatic reconciliation,
+reservation expiry and resilient event consumers are not implemented.
 
 ## Production evolution
 
