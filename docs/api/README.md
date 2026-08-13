@@ -124,15 +124,18 @@ external or browser availability is claimed.
 | `PATCH` | `/api/v1/carts/me/items/{item_id}` | `customer` | Replace an owned item quantity. |
 | `DELETE` | `/api/v1/carts/me/items/{item_id}` | `customer` | Remove an owned item. |
 | `DELETE` | `/api/v1/carts/me/items` | `customer` | Clear the caller's active cart. |
+| `POST` | `/api/v1/orders/checkout` | `customer` | Revalidate and reserve the caller's cart; requires `Idempotency-Key`. |
 
 The validated token subject is the ownership key; clients do not submit a customer ID.
 Non-owned item identifiers receive `404`. Add-item calls a fixed internal Catalogue
 origin and propagates the bearer token solely for downstream validation without logging
 it. Cart price, availability and subtotal fields are display snapshots and explicitly
-non-authoritative. Checkout, inventory reservations, authoritative totals and orders are
-not implemented.
+non-authoritative. Checkout accepts no price/total/availability fields, obtains current
+Catalogue data, reserves Inventory through a confidential service identity, calculates
+Decimal totals, and returns the committed immutable confirmation. Partial failures are
+compensated and unresolved releases retain reconciliation evidence.
 
-Eighteen isolated order-service tests pass, including twelve cart behavior/security API
-tests and two fixed-origin Catalogue client tests. Live PostgreSQL migration, Catalogue,
-Gateway, Kubernetes, frontend and end-to-end
-validation remain Pending / Not Verified.
+Thirty-one isolated order-service tests pass, including cart behavior/security,
+fixed-origin Catalogue client, and checkout success/failure/idempotency/Saga evidence.
+Live PostgreSQL checkout migration, service identity, Catalogue reservation, Kafka,
+Gateway, Kubernetes, frontend and end-to-end validation remain Pending / Not Verified.

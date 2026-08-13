@@ -8,6 +8,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.application.cart import CartService
+from app.application.checkout import CheckoutService
 from app.core.errors import AuthenticationError, AuthorizationError, DependencyUnavailableError
 from app.core.security import AuthenticatedActor, Role
 
@@ -38,4 +39,15 @@ async def get_cart_service(request: Request) -> CartService:
         request.app.state.catalogue_client,
         settings.cart_currency_code,
         settings.cart_max_item_quantity,
+    )
+
+
+async def get_checkout_service(request: Request) -> CheckoutService:
+    if request.app.state.unit_of_work_factory is None or request.app.state.catalogue_client is None:
+        raise DependencyUnavailableError
+    settings = request.app.state.settings
+    return CheckoutService(
+        request.app.state.unit_of_work_factory,
+        request.app.state.catalogue_client,
+        settings.cart_currency_code,
     )

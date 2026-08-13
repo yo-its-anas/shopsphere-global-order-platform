@@ -7,7 +7,18 @@ from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
-from app.domain.models import CartItem, CatalogueProductSnapshot, ShoppingCart
+from app.domain.models import (
+    CartItem,
+    CatalogueProductSnapshot,
+    CheckoutAttempt,
+    InventoryReservationReceipt,
+    Order,
+    OrderAuditEvent,
+    OrderDomainEvent,
+    OrderItem,
+    OrderStatusHistory,
+    ShoppingCart,
+)
 
 
 class CartRepository(Protocol):
@@ -44,6 +55,8 @@ class CartRepository(Protocol):
 
 class UnitOfWork(Protocol):
     carts: CartRepository
+    orders: OrderRepository
+    outbox: OrderOutboxRepository
 
     async def __aenter__(self) -> UnitOfWork: ...
 
@@ -67,3 +80,41 @@ class CatalogueProductProvider(Protocol):
         access_token: str,
         correlation_id: str,
     ) -> Awaitable[CatalogueProductSnapshot]: ...
+
+    def reserve_inventory(
+        self,
+        product_id: UUID,
+        quantity: int,
+        external_reference: str,
+        correlation_id: str,
+    ) -> Awaitable[InventoryReservationReceipt]: ...
+
+    def release_inventory(
+        self, reservation_id: UUID, correlation_id: str
+    ) -> Awaitable[InventoryReservationReceipt]: ...
+
+
+class OrderRepository(Protocol):
+    def add_checkout_attempt(self, attempt: CheckoutAttempt) -> None: ...
+
+    async def get_checkout_attempt(
+        self, customer_subject: str, idempotency_key: str, *, for_update: bool = False
+    ) -> CheckoutAttempt | None: ...
+
+    async def update_checkout_attempt(self, attempt: CheckoutAttempt) -> None: ...
+
+    def add_order(self, order: Order) -> None: ...
+
+    async def get_order(self, order_id: UUID) -> Order | None: ...
+
+    def add_order_item(self, item: OrderItem) -> None: ...
+
+    async def list_order_items(self, order_id: UUID) -> Sequence[OrderItem]: ...
+
+    def add_status_history(self, history: OrderStatusHistory) -> None: ...
+
+    def add_audit_event(self, event: OrderAuditEvent) -> None: ...
+
+
+class OrderOutboxRepository(Protocol):
+    def add(self, event: OrderDomainEvent) -> None: ...

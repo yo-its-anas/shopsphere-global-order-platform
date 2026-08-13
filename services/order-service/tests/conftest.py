@@ -2,21 +2,35 @@
 
 import asyncio
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from types import TracebackType
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx2
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import Settings
 from app.core.errors import DependencyUnavailableError, ProductUnavailableError
 from app.core.security import KeycloakTokenVerifier
-from app.domain.models import CartItem, CatalogueProductSnapshot, ShoppingCart
+from app.domain.models import (
+    CartItem,
+    CartStatus,
+    CatalogueProductSnapshot,
+    CheckoutAttempt,
+    InventoryReservationReceipt,
+    Order,
+    OrderAuditEvent,
+    OrderDomainEvent,
+    OrderItem,
+    OrderStatusHistory,
+    ShoppingCart,
+)
 from app.main import create_app
 
 TEST_ISSUER = "https://identity.test/realms/shopsphere"
@@ -57,6 +71,11 @@ class StubCatalogueClient:
         self.unavailable = False
         self.tokens: list[str] = []
         self.correlation_ids: list[str] = []
+        self.reservations: dict[UUID, InventoryReservationReceipt] = {}
+        self.reserve_calls: list[UUID] = []
+        self.release_calls: list[UUID] = []
+        self.fail_reservation_for: UUID | None = None
+        self.fail_release = False
 
     def add_product(
         self,
@@ -95,6 +114,65 @@ class StubCatalogueClient:
             raise ProductUnavailableError
         return product
 
+    async def reserve_inventory(
+        self,
+        product_id: UUID,
+        quantity: int,
+        external_reference: str,
+        correlation_id: str,
+    ) -> InventoryReservationReceipt:
+        self.correlation_ids.append(correlation_id)
+        self.reserve_calls.append(product_id)
+        if self.unavailable:
+            raise DependencyUnavailableError
+        if product_id == self.fail_reservation_for:
+            raise ProductUnavailableError
+        existing = next(
+            (
+                receipt
+                for receipt in self.reservations.values()
+                if receipt.external_reference == external_reference
+            ),
+            None,
+        )
+        if existing is not None:
+            return existing
+        product = self.products.get(product_id)
+        if (
+            product is None
+            or product.quantity_available is None
+            or product.quantity_available < quantity
+        ):
+            raise ProductUnavailableError
+        receipt = InventoryReservationReceipt(
+            reservation_id=uuid4(),
+            product_id=product_id,
+            quantity=quantity,
+            external_reference=external_reference,
+            status="ACTIVE",
+        )
+        self.reservations[receipt.reservation_id] = receipt
+        self.products[product_id] = replace(
+            product, quantity_available=product.quantity_available - quantity
+        )
+        return receipt
+
+    async def release_inventory(
+        self, reservation_id: UUID, correlation_id: str
+    ) -> InventoryReservationReceipt:
+        self.correlation_ids.append(correlation_id)
+        self.release_calls.append(reservation_id)
+        if self.fail_release:
+            raise DependencyUnavailableError
+        receipt = self.reservations[reservation_id]
+        return InventoryReservationReceipt(
+            reservation_id=receipt.reservation_id,
+            product_id=receipt.product_id,
+            quantity=receipt.quantity,
+            external_reference=receipt.external_reference,
+            status="RELEASED",
+        )
+
 
 @pytest.fixture
 def settings() -> Settings:
@@ -127,6 +205,7 @@ class MemoryCartRepository:
                 if isinstance(cart, ShoppingCart)
                 and cart.customer_identity_subject == customer_subject
                 and cart.currency_code == currency_code
+                and cart.status is CartStatus.ACTIVE
             ),
             None,
         )
@@ -197,8 +276,11 @@ class MemoryCartRepository:
 
 
 class MemoryUnitOfWork:
-    def __init__(self, store: dict[str, dict[UUID, object]]) -> None:
+    def __init__(self, store: dict[str, Any]) -> None:
+        self._store = store
         self.carts = MemoryCartRepository(store)
+        self.orders = MemoryOrderRepository(store)
+        self.outbox = MemoryOutboxRepository(store)
 
     async def __aenter__(self) -> "MemoryUnitOfWork":
         return self
@@ -215,7 +297,77 @@ class MemoryUnitOfWork:
         return None
 
     async def commit(self) -> None:
+        if self._store.get("fail_order_commit") and self._store["orders"]:
+            self._store["fail_order_commit"] = False
+            raise RuntimeError("simulated order database failure")
         return None
+
+
+class MemoryOrderRepository:
+    def __init__(self, store: dict[str, Any]) -> None:
+        self._store = store
+
+    def add_checkout_attempt(self, attempt: CheckoutAttempt) -> None:
+        key = (attempt.customer_identity_subject, attempt.idempotency_key)
+        if key in self._store["attempts"]:
+            raise IntegrityError("duplicate", {}, Exception())
+        self._store["attempts"][key] = attempt
+
+    async def get_checkout_attempt(
+        self, customer_subject: str, idempotency_key: str, *, for_update: bool = False
+    ) -> CheckoutAttempt | None:
+        del for_update
+        return self._store["attempts"].get((customer_subject, idempotency_key))
+
+    async def update_checkout_attempt(self, attempt: CheckoutAttempt) -> None:
+        self._store["attempts"][
+            (attempt.customer_identity_subject, attempt.idempotency_key)
+        ] = attempt
+
+    def add_order(self, order: Order) -> None:
+        if self._store.get("fail_order_write"):
+            self._store["fail_order_write"] = False
+            raise RuntimeError("simulated order database write failure")
+        self._store["orders"][order.id] = order
+
+    async def get_order(self, order_id: UUID) -> Order | None:
+        return self._store["orders"].get(order_id)
+
+    def add_order_item(self, item: OrderItem) -> None:
+        self._store["order_items"][item.id] = item
+
+    async def list_order_items(self, order_id: UUID) -> list[OrderItem]:
+        return [item for item in self._store["order_items"].values() if item.order_id == order_id]
+
+    def add_status_history(self, history: OrderStatusHistory) -> None:
+        self._store["history"][history.id] = history
+
+    def add_audit_event(self, event: OrderAuditEvent) -> None:
+        self._store["audits"][event.id] = event
+
+
+class MemoryOutboxRepository:
+    def __init__(self, store: dict[str, Any]) -> None:
+        self._store = store
+
+    def add(self, event: OrderDomainEvent) -> None:
+        self._store["outbox"][event.event_id] = event
+
+
+@pytest.fixture
+def store() -> dict[str, Any]:
+    return {
+        "carts": {},
+        "items": {},
+        "attempts": {},
+        "orders": {},
+        "order_items": {},
+        "history": {},
+        "audits": {},
+        "outbox": {},
+        "fail_order_commit": False,
+        "fail_order_write": False,
+    }
 
 
 @pytest.fixture
@@ -260,11 +412,11 @@ def client(
     settings: Settings,
     private_key: rsa.RSAPrivateKey,
     catalogue_client: StubCatalogueClient,
+    store: dict[str, Any],
 ) -> Iterator[ApiClient]:
     verifier = KeycloakTokenVerifier(settings)
     verifier._keys = {"test-key": private_key.public_key()}
     verifier._keys_loaded_at = float("inf")
-    store: dict[str, dict[UUID, object]] = {"carts": {}, "items": {}}
 
     async def ready(_: object) -> bool:
         return True

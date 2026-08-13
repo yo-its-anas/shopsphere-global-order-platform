@@ -352,7 +352,8 @@ Payloads contain opaque references, status, currency, exact amount strings, corr
 and causation identifiers, and only governed consumer data. They exclude JWTs,
 credentials, payment data, and unnecessary PII. Per-order events use the order UUID as
 the Kafka key to preserve partition order where possible. Global ordering is not
-promised. These events and the OrderOutboxEvent model are not yet implemented.
+promised. `order.created.v1` and `order.confirmed.v1`, their transactional outbox records,
+and an at-least-once relay are implemented; live Kafka publication remains unverified.
 
 ## API shape
 
@@ -365,9 +366,13 @@ The following cart routes are implemented internally in order-service:
 - `DELETE /api/v1/carts/me/items` — clear the owned cart.
 
 Their Catalogue price/availability fields and subtotal are display snapshots, not checkout
-authority. Gateway exposure and the following checkout/order routes remain proposed:
+authority. The following internal checkout route is implemented but not yet exposed by
+the Gateway:
 
-- `POST /carts/{cart_id}/checkout` — idempotent checkout using `Idempotency-Key`;
+- `POST /api/v1/orders/checkout` — customer-owned checkout requiring `Idempotency-Key`.
+
+The following order routes remain proposed:
+
 - `GET /orders` and `GET /orders/{order_id}` — actor-scoped order list/detail;
 - `GET /orders/{order_id}/history` — actor-scoped lifecycle history;
 - `POST /orders/{order_id}/cancellation` — request an allowed cancellation; and
@@ -382,9 +387,10 @@ service identity and correlation/causation propagation.
 The PoC may package Saga orchestration and outbox relay with one order-service process.
 A separate logical `order_db`, owned by least-privilege `order_app`, is provisioned
 on the existing PostgreSQL server. It improves ownership hygiene but provides no
-infrastructure isolation, independent scaling, or high availability. The cart migration
-exists in source but has not been applied or platform-validated in this implementation;
-no order/checkout schema or business data exists yet.
+infrastructure isolation, independent scaling, or high availability. Cart and checkout
+migrations exist in source but have not been applied or platform-validated. Checkout is
+unit validated with simulated Catalogue/reservation collaborators; no live order business
+data or end-to-end evidence is claimed.
 
 The current single PostgreSQL instance, single Redis instance, single Kafka broker,
 single kind node, and single physical GCP VM form one failure domain. Redis is not

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -17,13 +19,13 @@ from app.core.logging import configure_logging
 from app.core.middleware import CorrelationIdMiddleware
 from app.core.security import KeycloakTokenVerifier, TokenVerifier
 from app.domain.repositories import CatalogueProductProvider, UnitOfWork
-from app.infrastructure.catalogue_client import CatalogueHttpClient
+from app.infrastructure.catalogue_client import CatalogueHttpClient, KeycloakServiceTokenProvider
 from app.infrastructure.database import (
     create_database_engine,
     create_session_factory,
     database_is_ready,
 )
-from app.infrastructure.repositories import SqlAlchemyUnitOfWork
+from app.infrastructure.repositories import SqlAlchemyOrderOutboxStore, SqlAlchemyUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,10 @@ OPENAPI_TAGS = [
             "Authenticated, subject-owned cart operations with non-authoritative "
             "catalogue display snapshots."
         ),
+    },
+    {
+        "name": "Order checkout",
+        "description": "Idempotent customer checkout with Saga-based inventory reservations.",
     },
 ]
 
@@ -70,16 +76,50 @@ def create_app(
         resolved_verifier = KeycloakTokenVerifier(resolved_settings)
     resolved_catalogue_client = catalogue_client
     if resolved_catalogue_client is None and resolved_settings.catalogue_service_url:
+        service_token_provider = None
+        if (
+            resolved_settings.service_token_url
+            and resolved_settings.service_client_id
+            and resolved_settings.service_client_secret
+        ):
+            service_token_provider = KeycloakServiceTokenProvider(
+                resolved_settings.service_token_url,
+                resolved_settings.service_client_id,
+                resolved_settings.service_client_secret,
+                resolved_settings.catalogue_timeout_seconds,
+            )
         resolved_catalogue_client = CatalogueHttpClient(
             resolved_settings.catalogue_service_url,
             resolved_settings.catalogue_timeout_seconds,
+            service_token_provider=service_token_provider,
         )
     session_factory = create_session_factory(resolved_engine) if resolved_engine else None
+    outbox_relay: Any | None = None
+    if session_factory is not None and resolved_settings.kafka_bootstrap_servers:
+        from app.application.outbox import KafkaEventPublisher, OutboxRelay
+
+        outbox_relay = OutboxRelay(
+            SqlAlchemyOrderOutboxStore(session_factory),
+            KafkaEventPublisher(
+                resolved_settings.kafka_bootstrap_servers,
+                resolved_settings.kafka_client_id,
+                resolved_settings.kafka_request_timeout_ms,
+            ),
+        )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.info("service_started", extra={"event": "service_started"})
+        relay_task = asyncio.create_task(outbox_relay.run()) if outbox_relay else None
         yield
+        if relay_task is not None:
+            relay_task.cancel()
+            try:
+                await relay_task
+            except asyncio.CancelledError:
+                pass
+        if outbox_relay is not None:
+            await outbox_relay.close()
         if resolved_engine is not None:
             await resolved_engine.dispose()
         logger.info("service_stopped", extra={"event": "service_stopped"})
@@ -89,8 +129,8 @@ def create_app(
         summary="Customer shopping carts and the Enterprise Order Processing boundary.",
         description=(
             "Keycloak-authenticated, customer-owned carts with catalogue-validated display "
-            "snapshots. Checkout, reservations, orders, and authoritative totals are not "
-            "implemented."
+            "snapshots and idempotent checkout using authoritative catalogue data and "
+            "inventory reservations. Payment processing remains out of scope."
         ),
         version=resolved_settings.service_version,
         openapi_tags=OPENAPI_TAGS,

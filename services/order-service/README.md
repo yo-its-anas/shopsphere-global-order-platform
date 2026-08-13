@@ -1,9 +1,9 @@
 # Order Service
 
-FastAPI service for the ShopSphere Enterprise Order Processing boundary. The current
-implemented scope is an authenticated, customer-owned shopping cart. Checkout, inventory
-reservation, orders, payment, order lifecycle, order events, Gateway routes, frontend
-screens, and Kubernetes deployment remain planned.
+FastAPI service for the ShopSphere Enterprise Order Processing boundary. The implemented
+scope includes authenticated customer-owned carts and idempotent checkout orchestration.
+Payment, later lifecycle transitions, Gateway routes, frontend screens, and Kubernetes
+deployment remain outside this implementation.
 
 ## Implemented behavior
 
@@ -22,8 +22,22 @@ screens, and Kubernetes deployment remain planned.
 - Database-aware readiness; catalogue failure returns a safe dependency response when a
   product is added, but does not affect database readiness.
 
-Final checkout must fetch authoritative price and availability again. Browser values and
-cart snapshots must never determine an order total or inventory decision.
+- Checkout re-fetches authoritative active product, price, currency, and availability
+  through catalogue-service; the request accepts no commercial values.
+- Decimal `NUMERIC(19,4)` immutable line snapshots preserve SKU, name, quantity, unit
+  price, line total, and reservation reference.
+- Customer-scoped `Idempotency-Key` records prevent duplicate orders and recover a
+  committed confirmation after retries.
+- A sequential reservation Saga compensates earlier lines when a later reservation or
+  local order write fails. Failed release evidence remains in `checkout_attempts` for
+  reconciliation.
+- A successful checkout atomically records the order, status history, safe audit events,
+  cart completion, and `order.created.v1`/`order.confirmed.v1` outbox intents.
+- The outbox relay is at-least-once: Kafka failure does not roll back a committed order;
+  consumers must be idempotent by `event_id`.
+
+Browser values and cart display snapshots never determine an order total or inventory
+decision.
 
 ## API
 
@@ -37,6 +51,7 @@ cart snapshots must never determine an order total or inventory decision.
 | `PATCH` | `/api/v1/carts/me/items/{item_id}` | `customer` | Replace an owned line quantity. |
 | `DELETE` | `/api/v1/carts/me/items/{item_id}` | `customer` | Remove an owned line. |
 | `DELETE` | `/api/v1/carts/me/items` | `customer` | Clear the caller's cart. |
+| `POST` | `/api/v1/orders/checkout` | `customer` | Checkout the caller's active cart; requires `Idempotency-Key`. |
 
 Non-owned item identifiers return `404`, limiting both IDOR access and resource
 enumeration. Only the `customer` role has cart mutation rights; support and
@@ -45,14 +60,18 @@ enumeration. Only the `customer` role has cart mutation rights; support and
 ## Configuration
 
 Copy `.env.example` and supply values through the runtime environment. Required runtime
-dependencies are configured by `DATABASE_URL`, `KEYCLOAK_ISSUER`, and
-`CATALOGUE_SERVICE_URL`. Credentials belong in a secret manager or Kubernetes Secret and
-must not be committed. The Catalogue URL is a trusted fixed origin; clients cannot supply
-an upstream URL.
+dependencies are configured by `DATABASE_URL`, `KEYCLOAK_ISSUER`,
+`CATALOGUE_SERVICE_URL`, and a confidential `SERVICE_TOKEN_*` identity authorized only
+for internal inventory reservation commands. Optional `KAFKA_BOOTSTRAP_SERVERS` enables
+the recoverable outbox relay. Credentials belong in a secret manager or Kubernetes
+Secret and must not be committed. The Catalogue and token URLs are trusted fixed origins;
+clients cannot supply an upstream URL.
 
 ## Database migration
 
-Migration `001_shopping_cart` creates `shopping_carts` and `cart_items`. It enforces UUID
+Migration `001_shopping_cart` creates `shopping_carts` and `cart_items`. Migration
+`002_order_checkout` adds orders, immutable commercial items, status history, transaction
+audit, durable checkout attempts/reconciliation evidence, and the event outbox. They enforce UUID
 keys, one active cart per subject/currency, one line per product/cart, positive bounded
 quantities, positive Decimal snapshot prices, foreign-key cleanup, UTC-capable timestamps,
 and an optimistic cart version. It does not query or reference catalogue database tables.
@@ -77,12 +96,14 @@ python3 -m venv .venv
 docker build -t shopsphere/order-service:local .
 ```
 
-The API tests use signed synthetic JWTs, simulated products, and an in-memory repository
-adapter. PostgreSQL schema structure is validated independently through Alembic. No real
-credentials, customer records, or tokens are used.
+The API tests use signed synthetic JWTs, simulated products/reservations, and an in-memory
+repository adapter. They validate success, authoritative recalculation, precision,
+multi-line behavior, inventory failures and compensation, idempotent retry/conflict,
+ownership, audit/history, and outbox intent. PostgreSQL schema structure is validated
+independently through Alembic. No real credentials, customer records, or tokens are used.
 
 The target order model and reservation Saga are documented in
 [`docs/architecture/order-processing-domain-design.md`](../../docs/architecture/order-processing-domain-design.md)
-and
-[`ADR-011`](../../docs/adr/ADR-011-reservation-based-order-saga.md). Those future designs
-must not be interpreted as implemented checkout behavior.
+and [`ADR-011`](../../docs/adr/ADR-011-reservation-based-order-saga.md). Live PoC service
+identity, migration, reservation, Kafka publication, Gateway, and UI validation remain
+pending until the order-service is deployed.
