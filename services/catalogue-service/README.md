@@ -104,7 +104,11 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 - Fixed Catalogue and Inventory routes are registered in API Gateway source, covered by isolated gateway tests, and the internal Gateway workload is Ready. A live unauthenticated route reached catalogue-service and returned its authoritative `401`; an authenticated catalogue journey has not passed.
 - The React catalogue/inventory feature and API Gateway-only client are implemented; six focused frontend tests and the production build passed. The frontend is not deployed in Kubernetes and this is not end-to-end evidence.
 - The PoC uses one `PRIMARY` inventory location; multi-warehouse workflows are not exposed yet.
-- Reservation persistence and internal commands are implemented and unit validated. Automatic expiry, multi-product all-or-nothing reservation, Keycloak service-account provisioning, live database migration, order-service integration, Gateway exposure, and checkout remain Pending / Not Verified.
+- Reservation persistence and internal commands are implemented and unit validated. The
+  migration, dedicated Keycloak service identity, order-service reserve/release flow and
+  Gateway checkout were platform-validated with simulated data. Automatic expiry and an
+  atomic multi-product reservation command remain Pending / Not Verified; reservation
+  endpoints intentionally remain internal rather than Gateway-exposed.
 - Price scheduling, markets, tax, promotions, and multiple price books are outside the PoC pricing model.
 - Search uses PostgreSQL rather than Elasticsearch/OpenSearch.
 - No catalogue/inventory Kafka consumer, schema registry, outbox archival job, or event-driven dashboard is implemented.
@@ -115,7 +119,9 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 
 - 60 catalogue-service tests passed with 80% aggregate statement coverage, including 11 focused reservation tests and a reservation persistence-contract test.
 - Ruff and Bandit completed with zero findings; 46 catalogue Python files passed Black checks.
-- The four-revision Alembic chain has one base and one head (`004_inventory_reservations`), and the PostgreSQL offline upgrade SQL compiled. Migration application to the live PoC database is Pending / Not Verified.
+- The four-revision Alembic chain has one base and one head
+  (`004_inventory_reservations`); the live Catalogue init container applied the head
+  without recreating existing data.
 - Catalogue-service, Redis, Kafka and API Gateway manifests passed non-destructive validation; current read-only checks observed one Ready instance of each.
 - Earlier controlled platform evidence records simulated category/product/price/inventory changes and successful outbox/Kafka publication.
 - The explicitly enabled live catalogue integration report contains 11 passed tests in 79.09 seconds with zero failures, errors or skips; it includes authenticated Gateway, RBAC, statistics, cache, event publication, Redis fallback and Kafka recovery scenarios.

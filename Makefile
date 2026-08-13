@@ -6,10 +6,12 @@ CUSTOMER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/customer-service
 REDIS_OVERLAY := platform/kubernetes/overlays/poc/redis
 CATALOGUE_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/catalogue-service
 API_GATEWAY_OVERLAY := platform/kubernetes/overlays/poc/api-gateway
+ORDER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/order-service
 KAFKA_OVERLAY := platform/kubernetes/overlays/poc/kafka
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
 API_GATEWAY_IMAGE ?= shopsphere/api-gateway:poc
+ORDER_SERVICE_IMAGE ?= shopsphere/order-service:poc
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -28,6 +30,8 @@ SERVICE_DIRS := \
 	catalogue-service-apply catalogue-service-status \
 	validate-api-gateway api-gateway-build api-gateway-load \
 	api-gateway-apply api-gateway-status \
+	validate-order-service order-service-identity order-service-build \
+	order-service-load order-service-apply order-service-status order-service-smoke \
 	validate-kafka kafka-apply kafka-topics kafka-status \
 	catalogue-event-smoke \
 	customer-integration customer-integration-collect \
@@ -61,7 +65,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-api-gateway ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-api-gateway ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -186,6 +190,36 @@ catalogue-service-apply: validate-catalogue-service ## Apply the internal catalo
 catalogue-service-status: ## Verify catalogue-service health, Redis connectivity, and internal exposure
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-catalogue-service.sh
 
+validate-order-service: ## Validate order-service manifests without changing the cluster
+	@./scripts/validate-order-service-manifests.sh
+
+order-service-identity: ## Reconcile the least-privilege Keycloak client and runtime Secret
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/reconcile-order-service-identity.sh
+
+order-service-build: ## Build the internal order-service PoC image
+	@docker build --tag "$(ORDER_SERVICE_IMAGE)" services/order-service
+
+order-service-load: ## Load the existing order-service image into the kind node
+	@./platform/kind/load-images.sh "$(ORDER_SERVICE_IMAGE)"
+
+order-service-apply: validate-order-service ## Apply order-service after its runtime dependencies
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-order-service-database >/dev/null 2>&1 || { \
+		echo "Create the order database Secret first with 'make order-service-secret'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-order-service-identity >/dev/null 2>&1 || { \
+		echo "Reconcile the order-service identity first with 'make order-service-identity'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service catalogue-service >/dev/null 2>&1 || { \
+		echo "Deploy catalogue-service before order-service." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-platform get service kafka >/dev/null 2>&1 || { \
+		echo "Deploy Kafka before order-service." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(ORDER_SERVICE_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/order-service --timeout=300s
+
+order-service-status: ## Verify order-service health, exposure, and internal dependencies
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-order-service.sh
+
+order-service-smoke: ## Verify Gateway checkout, cancellation, reservation release, and outbox publication
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/smoke-test-order-platform.sh
+
 validate-api-gateway: ## Validate API Gateway manifests without changing the cluster
 	@./scripts/validate-api-gateway-manifests.sh
 
@@ -200,6 +234,8 @@ api-gateway-apply: validate-api-gateway ## Apply the internal API Gateway after 
 		echo "Deploy customer-service before the API Gateway." >&2; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service catalogue-service >/dev/null 2>&1 || { \
 		echo "Deploy catalogue-service before the API Gateway." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service order-service >/dev/null 2>&1 || { \
+		echo "Deploy order-service before the API Gateway." >&2; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(API_GATEWAY_OVERLAY)"
 	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/api-gateway --timeout=180s
 
