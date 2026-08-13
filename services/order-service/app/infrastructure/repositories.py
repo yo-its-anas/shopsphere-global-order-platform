@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from types import TracebackType
 from uuid import UUID
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.domain.models import (
@@ -111,6 +111,29 @@ def _attempt_from_record(record: CheckoutAttemptRecord) -> CheckoutAttempt:
         failure_code=record.failure_code,
         created_at=record.created_at,
         updated_at=record.updated_at,
+    )
+
+
+def _history_from_record(record: OrderStatusHistoryRecord) -> OrderStatusHistory:
+    return OrderStatusHistory(
+        id=record.id,
+        order_id=record.order_id,
+        status=OrderStatus(record.status),
+        actor_subject=record.actor_subject,
+        correlation_id=record.correlation_id,
+        occurred_at=record.occurred_at,
+    )
+
+
+def _audit_from_record(record: OrderAuditEventRecord) -> OrderAuditEvent:
+    return OrderAuditEvent(
+        id=record.id,
+        order_id=record.order_id,
+        action=record.action,
+        actor_subject=record.actor_subject,
+        correlation_id=record.correlation_id,
+        metadata=record.safe_metadata,
+        occurred_at=record.occurred_at,
     )
 
 
@@ -307,9 +330,40 @@ class SqlAlchemyOrderRepository:
             )
         )
 
-    async def get_order(self, order_id: UUID) -> Order | None:
-        record = await self._session.get(OrderRecord, order_id)
+    async def get_order(self, order_id: UUID, *, for_update: bool = False) -> Order | None:
+        statement = select(OrderRecord).where(OrderRecord.id == order_id)
+        if for_update:
+            statement = statement.with_for_update()
+        record = await self._session.scalar(statement)
         return _order_from_record(record) if record else None
+
+    async def list_orders(
+        self,
+        *,
+        customer_subject: str | None,
+        status: str | None,
+        offset: int,
+        limit: int,
+        ascending: bool,
+    ) -> tuple[list[Order], int]:
+        statement = select(OrderRecord)
+        if customer_subject is not None:
+            statement = statement.where(OrderRecord.customer_identity_subject == customer_subject)
+        if status is not None:
+            statement = statement.where(OrderRecord.status == status)
+        total = await self._session.scalar(select(func.count()).select_from(statement.subquery()))
+        ordering = OrderRecord.created_at.asc() if ascending else OrderRecord.created_at.desc()
+        records = await self._session.scalars(
+            statement.order_by(ordering, OrderRecord.id).offset(offset).limit(limit)
+        )
+        return [_order_from_record(record) for record in records], int(total or 0)
+
+    async def update_order(self, order: Order) -> None:
+        await self._session.execute(
+            update(OrderRecord)
+            .where(OrderRecord.id == order.id)
+            .values(status=order.status.value, updated_at=order.updated_at)
+        )
 
     def add_order_item(self, item: OrderItem) -> None:
         self._session.add(
@@ -348,6 +402,14 @@ class SqlAlchemyOrderRepository:
             )
         )
 
+    async def list_status_history(self, order_id: UUID) -> list[OrderStatusHistory]:
+        records = await self._session.scalars(
+            select(OrderStatusHistoryRecord)
+            .where(OrderStatusHistoryRecord.order_id == order_id)
+            .order_by(OrderStatusHistoryRecord.occurred_at, OrderStatusHistoryRecord.id)
+        )
+        return [_history_from_record(record) for record in records]
+
     def add_audit_event(self, event: OrderAuditEvent) -> None:
         self._session.add(
             OrderAuditEventRecord(
@@ -360,6 +422,18 @@ class SqlAlchemyOrderRepository:
                 occurred_at=event.occurred_at,
             )
         )
+
+    async def list_audit_events(
+        self, order_id: UUID, *, offset: int, limit: int
+    ) -> tuple[list[OrderAuditEvent], int]:
+        statement = select(OrderAuditEventRecord).where(OrderAuditEventRecord.order_id == order_id)
+        total = await self._session.scalar(select(func.count()).select_from(statement.subquery()))
+        records = await self._session.scalars(
+            statement.order_by(OrderAuditEventRecord.occurred_at, OrderAuditEventRecord.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return [_audit_from_record(record) for record in records], int(total or 0)
 
 
 class SqlAlchemyOrderOutboxRepository:

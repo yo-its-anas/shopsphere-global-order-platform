@@ -93,6 +93,10 @@ class CatalogueProductProvider(Protocol):
         self, reservation_id: UUID, correlation_id: str
     ) -> Awaitable[InventoryReservationReceipt]: ...
 
+    def consume_inventory(
+        self, reservation_id: UUID, correlation_id: str
+    ) -> Awaitable[InventoryReservationReceipt]: ...
+
 
 class OrderRepository(Protocol):
     def add_checkout_attempt(self, attempt: CheckoutAttempt) -> None: ...
@@ -105,7 +109,19 @@ class OrderRepository(Protocol):
 
     def add_order(self, order: Order) -> None: ...
 
-    async def get_order(self, order_id: UUID) -> Order | None: ...
+    async def get_order(self, order_id: UUID, *, for_update: bool = False) -> Order | None: ...
+
+    async def list_orders(
+        self,
+        *,
+        customer_subject: str | None,
+        status: str | None,
+        offset: int,
+        limit: int,
+        ascending: bool,
+    ) -> tuple[Sequence[Order], int]: ...
+
+    async def update_order(self, order: Order) -> None: ...
 
     def add_order_item(self, item: OrderItem) -> None: ...
 
@@ -113,7 +129,13 @@ class OrderRepository(Protocol):
 
     def add_status_history(self, history: OrderStatusHistory) -> None: ...
 
+    async def list_status_history(self, order_id: UUID) -> Sequence[OrderStatusHistory]: ...
+
     def add_audit_event(self, event: OrderAuditEvent) -> None: ...
+
+    async def list_audit_events(
+        self, order_id: UUID, *, offset: int, limit: int
+    ) -> tuple[Sequence[OrderAuditEvent], int]: ...
 
 
 class OrderOutboxRepository(Protocol):

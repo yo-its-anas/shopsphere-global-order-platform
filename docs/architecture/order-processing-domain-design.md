@@ -204,6 +204,13 @@ stateDiagram-v2
     FAILED --> [*]
 ```
 
+The implemented PoC represents the pre-order `PENDING` portion as a durable
+`CheckoutAttempt(PROCESSING)` Saga record. It materializes the `Order` aggregate only
+after authoritative quote and reservation acceptance, directly in `CONFIRMED`. `PENDING`
+and `FAILED` remain recognized internal lifecycle concepts, but no public command can set
+them. This avoids presenting an unconfirmed record as a customer order while preserving
+retry and reconciliation evidence.
+
 `FAILED` is retained as an internal terminal state for a checkout/order record whose
 failure is known and compensated. An uncertain remote outcome remains `PENDING` for
 reconciliation; it must not be guessed as failed. `FULFILLED`, `CANCELLED`, and `FAILED`
@@ -211,9 +218,10 @@ are terminal in the PoC. Direct transitions such as `PENDING` to `FULFILLED`, re
 cancelled order, or editing a fulfilled snapshot are rejected.
 
 Cancellation is allowed only while Inventory can authoritatively release an unconsumed
-reservation. Fulfilment is recorded only after Inventory atomically consumes the
-reservation by reducing both on-hand and reserved quantities. These reservation,
-release, and consumption commands are Planned.
+reservation. Fulfilment is recorded only after Inventory atomically consumes each
+reservation by reducing both on-hand and reserved quantities. These fixed-origin commands
+and their idempotent order-service orchestration are implemented and unit validated;
+live service-account and platform execution remain unverified.
 
 ## Reservation-based checkout Saga
 
@@ -371,12 +379,11 @@ the Gateway:
 
 - `POST /api/v1/orders/checkout` — customer-owned checkout requiring `Idempotency-Key`.
 
-The following order routes remain proposed:
-
-- `GET /orders` and `GET /orders/{order_id}` — actor-scoped order list/detail;
-- `GET /orders/{order_id}/history` — actor-scoped lifecycle history;
-- `POST /orders/{order_id}/cancellation` — request an allowed cancellation; and
-- `/admin/orders` command/query routes for support/operations use with explicit policy.
+Actor-scoped routes are implemented under `/api/v1/orders/me` for customer list,
+detail, history, audit and cancellation. Operational routes are implemented under
+`/api/v1/orders/admin` for support/admin list, detail, history and audit. Only
+`operations_admin` can invoke the explicit status and administrative cancellation
+commands. These internal routes are not yet exposed through API Gateway.
 
 Order-service-to-Catalogue reservation endpoints are internal fixed destinations, not
 arbitrary proxy URLs and not ordinary browser routes. They require a least-privilege
@@ -388,9 +395,10 @@ The PoC may package Saga orchestration and outbox relay with one order-service p
 A separate logical `order_db`, owned by least-privilege `order_app`, is provisioned
 on the existing PostgreSQL server. It improves ownership hygiene but provides no
 infrastructure isolation, independent scaling, or high availability. Cart and checkout
-migrations exist in source but have not been applied or platform-validated. Checkout is
-unit validated with simulated Catalogue/reservation collaborators; no live order business
-data or end-to-end evidence is claimed.
+migrations exist in source but have not been applied or platform-validated. Checkout,
+history, RBAC, lifecycle, cancellation, release/consume orchestration, audit and event
+intent are unit validated with simulated Catalogue/reservation collaborators; no live
+order business data or end-to-end evidence is claimed.
 
 The current single PostgreSQL instance, single Redis instance, single Kafka broker,
 single kind node, and single physical GCP VM form one failure domain. Redis is not

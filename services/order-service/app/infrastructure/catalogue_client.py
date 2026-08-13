@@ -178,6 +178,20 @@ class CatalogueHttpClient:
             raise DependencyUnavailableError
         return self._reservation_receipt(response)
 
+    async def consume_inventory(
+        self, reservation_id: UUID, correlation_id: str
+    ) -> InventoryReservationReceipt:
+        token = await self._service_token()
+        response = await self._request_service(
+            "POST",
+            f"inventory/reservations/{reservation_id}/consume",
+            token,
+            correlation_id,
+        )
+        if response.status_code not in {200, 201}:
+            raise DependencyUnavailableError
+        return self._reservation_receipt(response)
+
     async def _service_token(self) -> str:
         if self._service_token_provider is None:
             raise DependencyUnavailableError

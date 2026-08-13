@@ -125,6 +125,15 @@ external or browser availability is claimed.
 | `DELETE` | `/api/v1/carts/me/items/{item_id}` | `customer` | Remove an owned item. |
 | `DELETE` | `/api/v1/carts/me/items` | `customer` | Clear the caller's active cart. |
 | `POST` | `/api/v1/orders/checkout` | `customer` | Revalidate and reserve the caller's cart; requires `Idempotency-Key`. |
+| `GET` | `/api/v1/orders/me` | `customer` | Paginated own-order list with status filter and created-date sort. |
+| `GET` | `/api/v1/orders/me/{order_id}` | `customer` | Own historical order-item snapshots and current status. |
+| `GET` | `/api/v1/orders/me/{order_id}/history` | `customer` | Own append-only status history. |
+| `GET` | `/api/v1/orders/me/{order_id}/audit` | `customer` | Own paginated safe audit activity. |
+| `POST` | `/api/v1/orders/me/{order_id}/cancellation` | `customer` | Cancel an eligible own order and release reservations. |
+| `GET` | `/api/v1/orders/admin[/{order_id}]` | `support`, `operations_admin` | Governed operational list/detail access. |
+| `GET` | `/api/v1/orders/admin/{order_id}/{history\|audit}` | `support`, `operations_admin` | Operational history/audit access. |
+| `POST` | `/api/v1/orders/admin/{order_id}/status` | `operations_admin` | Explicit PROCESSING or FULFILLED command. |
+| `POST` | `/api/v1/orders/admin/{order_id}/cancellation` | `operations_admin` | Cancel an eligible order; no refund semantics. |
 
 The validated token subject is the ownership key; clients do not submit a customer ID.
 Non-owned item identifiers receive `404`. Add-item calls a fixed internal Catalogue
@@ -135,7 +144,8 @@ Catalogue data, reserves Inventory through a confidential service identity, calc
 Decimal totals, and returns the committed immutable confirmation. Partial failures are
 compensated and unresolved releases retain reconciliation evidence.
 
-Thirty-one isolated order-service tests pass, including cart behavior/security,
-fixed-origin Catalogue client, and checkout success/failure/idempotency/Saga evidence.
+Forty isolated order-service tests pass, including cart behavior/security,
+fixed-origin Catalogue client, checkout success/failure/idempotency/Saga evidence,
+order retrieval/IDOR, role policy, lifecycle, cancellation, audit and events.
 Live PostgreSQL checkout migration, service identity, Catalogue reservation, Kafka,
 Gateway, Kubernetes, frontend and end-to-end validation remain Pending / Not Verified.

@@ -2,8 +2,9 @@
 
 FastAPI service for the ShopSphere Enterprise Order Processing boundary. The implemented
 scope includes authenticated customer-owned carts and idempotent checkout orchestration.
-Payment, later lifecycle transitions, Gateway routes, frontend screens, and Kubernetes
-deployment remain outside this implementation.
+It also includes actor-scoped order history and controlled lifecycle transitions.
+Payment, shipment tracking, Gateway routes, frontend screens, and Kubernetes deployment
+remain outside this implementation.
 
 ## Implemented behavior
 
@@ -35,6 +36,13 @@ deployment remain outside this implementation.
   cart completion, and `order.created.v1`/`order.confirmed.v1` outbox intents.
 - The outbox relay is at-least-once: Kafka failure does not roll back a committed order;
   consumers must be idempotent by `event_id`.
+- Customers can list and retrieve only their own immutable order snapshots, history and
+  safe audit activity; cross-customer identifiers return `404`.
+- Support has operational read access only. `operations_admin` alone can perform the
+  explicit `CONFIRMED → PROCESSING → FULFILLED` progression.
+- Customer/admin cancellation is limited to `CONFIRMED` or `PROCESSING`, releases active
+  reservations, is idempotent, and creates history, audit and versioned events. It does
+  not represent a refund.
 
 Browser values and cart display snapshots never determine an order total or inventory
 decision.
@@ -52,6 +60,14 @@ decision.
 | `DELETE` | `/api/v1/carts/me/items/{item_id}` | `customer` | Remove an owned line. |
 | `DELETE` | `/api/v1/carts/me/items` | `customer` | Clear the caller's cart. |
 | `POST` | `/api/v1/orders/checkout` | `customer` | Checkout the caller's active cart; requires `Idempotency-Key`. |
+| `GET` | `/api/v1/orders/me` | `customer` | Paginated own-order list with status/sort controls. |
+| `GET` | `/api/v1/orders/me/{order_id}` | `customer` | Own immutable order detail. |
+| `GET` | `/api/v1/orders/me/{order_id}/history` | `customer` | Own status history. |
+| `GET` | `/api/v1/orders/me/{order_id}/audit` | `customer` | Own safe paginated transaction audit. |
+| `POST` | `/api/v1/orders/me/{order_id}/cancellation` | `customer` | Idempotently cancel an eligible own order. |
+| `GET` | `/api/v1/orders/admin...` | `support`, `operations_admin` | Governed operational order/history/audit reads. |
+| `POST` | `/api/v1/orders/admin/{order_id}/status` | `operations_admin` | Explicit processing/fulfilment transition. |
+| `POST` | `/api/v1/orders/admin/{order_id}/cancellation` | `operations_admin` | Cancel an eligible order. |
 
 Non-owned item identifiers return `404`, limiting both IDOR access and resource
 enumeration. Only the `customer` role has cart mutation rights; support and
@@ -71,7 +87,9 @@ clients cannot supply an upstream URL.
 
 Migration `001_shopping_cart` creates `shopping_carts` and `cart_items`. Migration
 `002_order_checkout` adds orders, immutable commercial items, status history, transaction
-audit, durable checkout attempts/reconciliation evidence, and the event outbox. They enforce UUID
+audit, durable checkout attempts/reconciliation evidence, and the event outbox. Migration
+`003_order_lifecycle` expands the database status constraint to the documented finite
+state set. Together they enforce UUID
 keys, one active cart per subject/currency, one line per product/cart, positive bounded
 quantities, positive Decimal snapshot prices, foreign-key cleanup, UTC-capable timestamps,
 and an optimistic cart version. It does not query or reference catalogue database tables.

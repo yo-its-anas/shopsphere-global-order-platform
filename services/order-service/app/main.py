@@ -47,7 +47,10 @@ OPENAPI_TAGS = [
     },
     {
         "name": "Order checkout",
-        "description": "Idempotent customer checkout with Saga-based inventory reservations.",
+        "description": (
+            "Idempotent checkout, actor-scoped history, safe audit visibility, and "
+            "controlled lifecycle commands."
+        ),
     },
 ]
 

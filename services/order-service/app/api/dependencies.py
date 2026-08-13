@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.application.cart import CartService
 from app.application.checkout import CheckoutService
+from app.application.orders import OrderService
 from app.core.errors import AuthenticationError, AuthorizationError, DependencyUnavailableError
 from app.core.security import AuthenticatedActor, Role
 
@@ -27,6 +28,18 @@ async def get_customer_actor(
     principal = await verifier.verify(credentials.credentials)
     if not principal.has_role(Role.CUSTOMER):
         raise AuthorizationError
+    return AuthenticatedActor(principal=principal, access_token=credentials.credentials)
+
+
+async def get_authenticated_actor(
+    request: Request, credentials: BearerCredentials = None
+) -> AuthenticatedActor:
+    if credentials is None or credentials.scheme.casefold() != "bearer":
+        raise AuthenticationError
+    verifier = request.app.state.token_verifier
+    if verifier is None:
+        raise DependencyUnavailableError
+    principal = await verifier.verify(credentials.credentials)
     return AuthenticatedActor(principal=principal, access_token=credentials.credentials)
 
 
@@ -50,4 +63,13 @@ async def get_checkout_service(request: Request) -> CheckoutService:
         request.app.state.unit_of_work_factory,
         request.app.state.catalogue_client,
         settings.cart_currency_code,
+    )
+
+
+async def get_order_service(request: Request) -> OrderService:
+    if request.app.state.unit_of_work_factory is None or request.app.state.catalogue_client is None:
+        raise DependencyUnavailableError
+    return OrderService(
+        request.app.state.unit_of_work_factory,
+        request.app.state.catalogue_client,
     )

@@ -20,7 +20,12 @@ class CartStatus(str, Enum):
 
 
 class OrderStatus(str, Enum):
+    PENDING = "PENDING"
     CONFIRMED = "CONFIRMED"
+    PROCESSING = "PROCESSING"
+    FULFILLED = "FULFILLED"
+    CANCELLED = "CANCELLED"
+    FAILED = "FAILED"
 
 
 class CheckoutAttemptStatus(str, Enum):

@@ -89,7 +89,11 @@ class OrderRecord(Base):
     __tablename__ = "orders"
     __table_args__ = (
         UniqueConstraint("order_number", name="uq_orders_order_number"),
-        CheckConstraint("status IN ('CONFIRMED')", name="ck_orders_status"),
+        CheckConstraint(
+            "status IN ('PENDING', 'CONFIRMED', 'PROCESSING', 'FULFILLED', "
+            "'CANCELLED', 'FAILED')",
+            name="ck_orders_status",
+        ),
         CheckConstraint("subtotal >= 0 AND total >= 0", name="ck_orders_totals_non_negative"),
         Index("ix_orders_customer_created", "customer_identity_subject", "created_at"),
     )

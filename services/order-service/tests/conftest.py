@@ -74,6 +74,7 @@ class StubCatalogueClient:
         self.reservations: dict[UUID, InventoryReservationReceipt] = {}
         self.reserve_calls: list[UUID] = []
         self.release_calls: list[UUID] = []
+        self.consume_calls: list[UUID] = []
         self.fail_reservation_for: UUID | None = None
         self.fail_release = False
 
@@ -171,6 +172,22 @@ class StubCatalogueClient:
             quantity=receipt.quantity,
             external_reference=receipt.external_reference,
             status="RELEASED",
+        )
+
+    async def consume_inventory(
+        self, reservation_id: UUID, correlation_id: str
+    ) -> InventoryReservationReceipt:
+        self.correlation_ids.append(correlation_id)
+        self.consume_calls.append(reservation_id)
+        if self.unavailable:
+            raise DependencyUnavailableError
+        receipt = self.reservations[reservation_id]
+        return InventoryReservationReceipt(
+            reservation_id=receipt.reservation_id,
+            product_id=receipt.product_id,
+            quantity=receipt.quantity,
+            external_reference=receipt.external_reference,
+            status="CONSUMED",
         )
 
 
@@ -330,8 +347,31 @@ class MemoryOrderRepository:
             raise RuntimeError("simulated order database write failure")
         self._store["orders"][order.id] = order
 
-    async def get_order(self, order_id: UUID) -> Order | None:
+    async def get_order(self, order_id: UUID, *, for_update: bool = False) -> Order | None:
+        del for_update
         return self._store["orders"].get(order_id)
+
+    async def list_orders(
+        self,
+        *,
+        customer_subject: str | None,
+        status: str | None,
+        offset: int,
+        limit: int,
+        ascending: bool,
+    ) -> tuple[list[Order], int]:
+        orders = list(self._store["orders"].values())
+        if customer_subject is not None:
+            orders = [
+                order for order in orders if order.customer_identity_subject == customer_subject
+            ]
+        if status is not None:
+            orders = [order for order in orders if order.status.value == status]
+        orders.sort(key=lambda order: (order.created_at, str(order.id)), reverse=not ascending)
+        return orders[offset : offset + limit], len(orders)
+
+    async def update_order(self, order: Order) -> None:
+        self._store["orders"][order.id] = order
 
     def add_order_item(self, item: OrderItem) -> None:
         self._store["order_items"][item.id] = item
@@ -342,8 +382,23 @@ class MemoryOrderRepository:
     def add_status_history(self, history: OrderStatusHistory) -> None:
         self._store["history"][history.id] = history
 
+    async def list_status_history(self, order_id: UUID) -> list[OrderStatusHistory]:
+        return sorted(
+            (entry for entry in self._store["history"].values() if entry.order_id == order_id),
+            key=lambda entry: (entry.occurred_at, str(entry.id)),
+        )
+
     def add_audit_event(self, event: OrderAuditEvent) -> None:
         self._store["audits"][event.id] = event
+
+    async def list_audit_events(
+        self, order_id: UUID, *, offset: int, limit: int
+    ) -> tuple[list[OrderAuditEvent], int]:
+        entries = sorted(
+            (entry for entry in self._store["audits"].values() if entry.order_id == order_id),
+            key=lambda entry: (entry.occurred_at, str(entry.id)),
+        )
+        return entries[offset : offset + limit], len(entries)
 
 
 class MemoryOutboxRepository:
