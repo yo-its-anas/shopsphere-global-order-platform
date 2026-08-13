@@ -110,7 +110,7 @@ Tests use signed simulated identities and an in-memory repository adapter for de
 - The three-revision Alembic chain has one base and one head (`003_domain_event_outbox`), and the PostgreSQL offline upgrade SQL compiled.
 - Catalogue-service, Redis, Kafka and API Gateway manifests passed non-destructive validation; current read-only checks observed one Ready instance of each.
 - Earlier controlled platform evidence records simulated category/product/price/inventory changes and successful outbox/Kafka publication.
-- The new live catalogue integration report contains 11 skipped tests and therefore provides no authenticated end-to-end pass.
+- The explicitly enabled live catalogue integration report contains 11 passed tests in 79.09 seconds with zero failures, errors or skips; it includes authenticated Gateway, RBAC, statistics, cache, event publication, Redis fallback and Kafka recovery scenarios.
 
 PostgreSQL is the source of truth. Redis is a disposable performance optimization only.
 Kafka is asynchronous domain-event transport; it does not determine whether a command

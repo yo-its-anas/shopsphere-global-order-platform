@@ -88,10 +88,11 @@ catalogue/inventory suite passed 6 tests; Gateway proxy tests cover the allow-li
 transport. Current platform checks observed Ready internal Gateway and catalogue-service
 workloads, and an unauthenticated live route reached backend JWT enforcement.
 
-The catalogue integration report contains **11 skipped tests**. It does not prove an
-authenticated browser or API workflow and must not be reported as passed. Accordingly,
-the routes above are **Implemented**, **Unit Validated**, and platform-deployed at the
-stated boundaries, but are **Pending / Not Verified** end to end.
+The explicitly enabled catalogue integration report contains **11 passed tests**, zero
+failures, errors or skips. It validates authenticated API Gateway workflows, RBAC,
+statistics, cache behavior, event publication, and controlled Redis/Kafka recovery.
+Manual browser evidence separately validates the principal administrator and customer
+catalogue journeys. The inventory-statistics browser page remains unverified.
 
 PostgreSQL is authoritative for catalogue, pricing and inventory data. Redis caches
 bounded read responses only and may be unavailable without invalidating PostgreSQL.

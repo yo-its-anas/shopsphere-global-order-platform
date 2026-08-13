@@ -61,9 +61,9 @@ misses, not manual reconstruction of authoritative balances.
 ## Current evidence and limitations
 
 Backend, frontend and platform checks passed at the boundaries documented in the
-[evidence assessment](../evidence/catalogue-inventory-integration-evidence.md). The live
-integration suite has 11 skipped tests, so no administrator workflow is end-to-end
-validated.
+[evidence assessment](../evidence/catalogue-inventory-integration-evidence.md). The
+explicitly enabled live integration suite passed all 11 scenarios, and the principal
+administrator workflow was also validated manually through the authenticated UI.
 
 The PoC has one PostgreSQL instance, one Redis instance, one Kafka broker/controller,
 one kind node and one physical VM. It has no host-level high availability. Production

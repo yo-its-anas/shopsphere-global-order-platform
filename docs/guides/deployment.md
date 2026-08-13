@@ -111,9 +111,10 @@ make api-gateway-status
 ```
 
 Current evidence records Ready internal PostgreSQL, Keycloak, Redis, Kafka,
-customer-service, catalogue-service and API Gateway workloads. This is platform health,
-not an authenticated end-to-end catalogue pass. The retained catalogue integration
-report contains 11 skipped tests.
+customer-service, catalogue-service and API Gateway workloads. The explicitly enabled
+catalogue integration suite passed all 11 authenticated Gateway/platform scenarios;
+Redis and Kafka recovery and post-test readiness were verified. Platform health alone
+must still be distinguished from those functional results.
 
 The React frontend is run/built outside Kubernetes in this PoC. Use protected SSH
 tunnels and `kubectl port-forward`; do not create NodePort/LoadBalancer resources or

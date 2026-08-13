@@ -1,6 +1,6 @@
 # Product Catalogue Validation Record
 
-This record covers the implemented Product Catalogue, Inventory, cache-aside, transactional outbox/event producer, internal PoC deployment boundary, API Gateway transport, and frontend component validation. Order reservations, event consumers, and authenticated end-to-end catalogue journeys remain outside this evidence. API Gateway is internally deployed; the React frontend is implemented and build-validated but is not deployed in Kubernetes.
+This record covers the implemented Product Catalogue, Inventory, cache-aside, transactional outbox/event producer, internal PoC deployment boundary, API Gateway transport, frontend component validation, authenticated live integration, and the principal manual browser journey. Order reservations and event consumers remain outside this evidence. API Gateway is internally deployed; the React frontend is implemented and build-validated but is not deployed in Kubernetes.
 
 ## Kafka and outbox validation
 
@@ -32,7 +32,13 @@ This evidence does not prove broker failover or high availability. Kafka and the
 | API Gateway transport | Fixed Catalogue/Inventory route allow-list, query/pagination/body forwarding, bearer and correlation propagation, normalized timeout/unavailable/protocol failures, safe logging, readiness dependency status, and OpenAPI exposure | Passed in the isolated gateway suite; deployed gateway Ready and live route reached backend authentication |
 | Catalogue dependency access | `catalogue_db` identity, authenticated Redis ping, Keycloak JWKS retrieval, Kafka socket connectivity, and outbox acknowledgement | Passed without displaying credentials; eight simulated events reached `published` |
 | Frontend catalogue/inventory | Focused Vitest component/route/API-adapter coverage | 6 tests passed; production build passed |
-| Live catalogue integration suite | Explicitly enabled authenticated Gateway scenarios | 11 tests collected and 11 skipped; **not passed and not end-to-end evidence** |
+| Live catalogue integration suite | Explicitly enabled authenticated Gateway, RBAC, inventory/statistics, cache and event/recovery scenarios | **11 passed in 79.09 seconds; zero failures, errors or skips** |
+
+The live suite temporarily scaled Redis and Kafka to zero only in their explicitly
+authorized recovery tests. Both workloads were restored and passed status checks;
+catalogue-service and API Gateway remained Ready afterward. Three synthetic users and
+both ephemeral Keycloak test clients were removed. JUnit output is retained at
+`test-results/integration/catalogue-inventory.xml`.
 
 Catalogue revisions `001_product_catalogue`, `002_enterprise_inventory`, and `003_domain_event_outbox` are present in the connected migration chain. Earlier deployment evidence confirms the init container applied the catalogue schema without recreating the database, PostgreSQL pod, or persistent volume. Redis runtime credentials exist only in namespace-scoped Kubernetes Secrets and were not displayed.
 
