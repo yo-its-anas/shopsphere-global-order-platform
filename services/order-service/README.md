@@ -1,6 +1,9 @@
 # Order Service
 
-FastAPI foundation for the planned order capture, validation, lifecycle, orchestration, and domain-event boundary. No order business behavior, persistence, Kafka integration, or authentication is implemented.
+FastAPI foundation for the planned order capture, validation, lifecycle, orchestration,
+and domain-event boundary. The PoC platform provides an empty logical `order_db` owned
+by dedicated `order_app`, but no order schema, migration, repository behavior, business
+logic, Kafka integration, or authentication is implemented.
 
 The accepted target domain design is documented in
 [`docs/architecture/order-processing-domain-design.md`](../../docs/architecture/order-processing-domain-design.md),
