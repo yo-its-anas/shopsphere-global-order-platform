@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the target Order Processing design — implementation is Planned.
+Accepted and implemented for the PoC.
 
 ## Context
 
@@ -12,23 +12,22 @@ after timeouts, and either service or Kafka may be temporarily unavailable. A di
 cross-service database transaction would violate ownership and cannot be made reliable
 as an ordinary PostgreSQL transaction across independently evolving services.
 
-Inventory now implements a unit-validated single-product reservation participant with
+Inventory implements a single-product reservation participant with
 reserve/retrieve/release/consume commands, PostgreSQL locking, idempotent external
 references, movements, cache invalidation, and outbox facts. Order-service implements
-customer-owned carts but not checkout or Saga orchestration.
+customer-owned carts, idempotent checkout and Saga orchestration.
 
 ## Decision
 
 Use an order-service-orchestrated Saga for checkout. A customer-scoped idempotency record
-is claimed and the cart version is frozen before remote work. Order-service requests one
-atomic, service-authenticated Catalogue quote-and-hold operation for all cart lines.
-Catalogue validates current
-product lifecycle, effective Decimal prices, currency, and availability while locking
-inventory rows in deterministic order. It persists the reservation, balance movements,
-and inventory event intent atomically and returns the authoritative commercial snapshot.
+is claimed before remote work. Order-service obtains authoritative Catalogue data and
+requests one idempotent, service-authenticated reservation per cart line. Catalogue
+validates product lifecycle, effective Decimal prices, currency, and availability while
+locking each inventory row. Each reservation atomically persists its balance movement
+and event intent. If a later line fails, order-service releases every reservation already
+obtained and retains compensation evidence.
 
-Order-service recalculates totals and stores immutable OrderItems while the Saga remains
-pending, then idempotently allocates the hold to the durable order. It finally commits
+Order-service recalculates totals and stores immutable OrderItems. It then commits
 confirmation state, checked-out cart, status/audit history, idempotent result, and
 OrderOutboxEvent. Release is the compensation for a hold/allocation that cannot become a
 confirmed order. Hold leases and reconciliation recover crashes or unknown remote
@@ -67,14 +66,16 @@ event payloads exclude tokens, credentials, payment data, and unnecessary PII.
 
 ## PoC limitations
 
-The logical `order_db` and dedicated `order_app` identity are provisioned on the shared
-PoC PostgreSQL instance, and cart source/migration exist. Catalogue reservation source is
-unit validated, but its migration, topics, and service identity are not deployed or
-platform validated. No checkout/order schema, Saga, order event producer, gateway order
-route, order UI, or deployed order workload exists yet. The PoC
-still runs on one PostgreSQL instance, one Kafka broker, one kind node, and one physical
-VM, with no host-level high availability. A local background reconciler is
-demonstrative, not a substitute for a durable production workflow platform.
+The logical `order_db` and dedicated `order_app` identity share the PoC PostgreSQL
+instance. The Catalogue reservation migration and dedicated `order_service` identity,
+Order schema/Saga/outbox, fixed Gateway routes and internal Kubernetes workload are
+deployed and platform-validated. A live simulated checkout/cancellation proved release
+compensation and broker acknowledgement; the browser Order UI remains unimplemented.
+Reservations have no automatic expiry worker, and multi-line checkout uses sequential
+per-line reservations with compensation rather than an atomic multi-product hold. The
+PoC still runs on one PostgreSQL instance, one Kafka broker, one kind node, and one
+physical VM, with no host-level high availability. The in-process outbox publisher is
+demonstrative, not a substitute for a separately operated production worker.
 
 ## Production evolution
 

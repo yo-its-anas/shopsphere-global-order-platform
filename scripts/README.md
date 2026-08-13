@@ -20,6 +20,10 @@ Run all checks with `make doctor`. A non-zero result means one or more prerequis
 - `create-postgresql-secret.sh` is an explicit operational helper. It creates the Kubernetes Secret directly from hidden prompts, or generates strong values only when `--generate` is supplied. It never prints credentials and adds only missing service keys to an existing Secret.
 - `reconcile-postgresql-databases.sh` safely creates only missing service roles/databases and reapplies restricted connection grants against the retained PostgreSQL volume.
 - `create-order-service-secret.sh` derives the order-service database URL from the protected PostgreSQL Secret and creates a namespace-local runtime Secret without displaying it.
+- `reconcile-order-service-identity.sh` idempotently configures the dedicated Keycloak service account with only the `order_service` role and writes its credential directly to a namespace-local Secret.
+- `validate-order-service-manifests.sh` renders and statically checks the hardened order-service overlay without changing the cluster.
+- `check-order-service.sh` verifies readiness, ClusterIP-only exposure, database access, Catalogue reachability and Kafka connectivity without displaying credentials.
+- `smoke-test-order-platform.sh` uses a temporary simulated Keycloak customer to execute Gateway cart/checkout/cancellation and waits for broker-acknowledged Order outbox events; the temporary client is removed automatically.
 
 ## Keycloak operations
 

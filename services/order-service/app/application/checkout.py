@@ -136,6 +136,19 @@ class CheckoutService:
             recovered = await self._recover_confirmed(attempt)
             if recovered is not None:
                 return recovered
+            original = getattr(exc, "orig", None)
+            diagnostic = getattr(original, "diag", None)
+            logger.error(
+                "order_persistence_failed",
+                extra={
+                    "event": "order_persistence_failed",
+                    "checkout_attempt_id": str(attempt.id),
+                    "error_type": type(exc).__name__,
+                    "sqlstate": getattr(original, "sqlstate", None),
+                    "constraint_name": getattr(diagnostic, "constraint_name", None),
+                    "correlation_id": correlation_id,
+                },
+            )
             await self._compensate(attempt, receipts, correlation_id, "order_persistence_failed")
             raise DependencyUnavailableError from exc
 
@@ -218,6 +231,9 @@ class CheckoutService:
             ):
                 raise ConflictError
             work.orders.add_order(order)
+            # Repository records deliberately expose no ORM relationships. Establish
+            # the parent row before dependent evidence while retaining one transaction.
+            await work.flush()
             for order_item in order_items:
                 work.orders.add_order_item(order_item)
             work.orders.add_status_history(
@@ -256,12 +272,14 @@ class CheckoutService:
             ):
                 raise ConflictError
             await work.carts.clear_items(cart.id)
+            # SQLAlchemy bulk updates execute immediately. Flush the new order and its
+            # atomic evidence first so the checkout-attempt foreign key can reference it.
+            await work.flush()
             current_attempt.status = CheckoutAttemptStatus.CONFIRMED
             current_attempt.order_id = order.id
             current_attempt.reservation_ids = [str(value.reservation_id) for value in receipts]
             current_attempt.updated_at = now
             await work.orders.update_checkout_attempt(current_attempt)
-            await work.flush()
             await work.commit()
         return order, order_items
 

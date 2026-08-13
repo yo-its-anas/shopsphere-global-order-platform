@@ -3,8 +3,7 @@
 FastAPI service for the ShopSphere Enterprise Order Processing boundary. The implemented
 scope includes authenticated customer-owned carts and idempotent checkout orchestration.
 It also includes actor-scoped order history and controlled lifecycle transitions.
-Payment, shipment tracking, Gateway routes, frontend screens, and Kubernetes deployment
-remain outside this implementation.
+Payment, shipment tracking, and frontend screens remain outside this implementation.
 
 ## Implemented behavior
 
@@ -126,8 +125,35 @@ multi-line behavior, inventory failures and compensation, idempotent retry/confl
 ownership, audit/history, and outbox intent. PostgreSQL schema structure is validated
 independently through Alembic. No real credentials, customer records, or tokens are used.
 
+## Kubernetes PoC deployment
+
+The workload runs as a non-root, read-only-root-filesystem container with all Linux
+capabilities dropped. An init container applies Alembic migrations to `order_db` before
+startup. The Service is ClusterIP-only and the API Gateway is the intended caller.
+Runtime database and Keycloak service-account credentials are referenced only from
+Kubernetes Secrets.
+
+Readiness deliberately checks PostgreSQL only. Catalogue is required for cart validation
+and checkout but not persisted order-history reads. Kafka is downstream of the recoverable
+transactional outbox and does not participate in the synchronous database commit. A
+temporary Catalogue, Keycloak or Kafka failure therefore does not mark the entire service
+unready; affected operations return safe dependency errors or retry asynchronously.
+
+```bash
+make order-service-secret
+make order-service-identity
+make validate-order-service
+make order-service-build
+make order-service-load
+make order-service-apply
+make order-service-status
+```
+
+NetworkPolicy permits intended traffic only from API Gateway and required egress to DNS,
+PostgreSQL, Catalogue, Keycloak and Kafka. The current kind `kindnet` environment does not
+guarantee NetworkPolicy enforcement. This remains a single replica on one node and one VM,
+not host-level HA.
+
 The target order model and reservation Saga are documented in
 [`docs/architecture/order-processing-domain-design.md`](../../docs/architecture/order-processing-domain-design.md)
-and [`ADR-011`](../../docs/adr/ADR-011-reservation-based-order-saga.md). Live PoC service
-identity, migration, reservation, Kafka publication, Gateway, and UI validation remain
-pending until the order-service is deployed.
+and [`ADR-011`](../../docs/adr/ADR-011-reservation-based-order-saga.md).

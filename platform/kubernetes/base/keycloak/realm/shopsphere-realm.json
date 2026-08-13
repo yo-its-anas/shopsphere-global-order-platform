@@ -76,6 +76,11 @@
         "name": "operations_admin",
         "description": "Restricted platform operations access",
         "composite": false
+      },
+      {
+        "name": "order_service",
+        "description": "Least-privilege inventory reservation access for order-service",
+        "composite": false
       }
     ]
   },
@@ -154,6 +159,37 @@
       "bearerOnly": false,
       "consentRequired": false,
       "fullScopeAllowed": false,
+      "defaultClientScopes": []
+    },
+    {
+      "clientId": "shopsphere-order-service",
+      "name": "ShopSphere Order Service",
+      "description": "Confidential service account for inventory reservation commands",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "shopsphere-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "shopsphere-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
       "defaultClientScopes": []
     },
     {

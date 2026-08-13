@@ -155,6 +155,7 @@ Forty-six isolated order-service tests pass, including cart behavior/security,
 fixed-origin Catalogue client, checkout success/failure/idempotency/Saga evidence,
 order retrieval/IDOR, role policy, lifecycle, cancellation, audit and events.
 Gateway route behavior is unit validated with fixed-path, propagation, failure, status
-preservation, and log-safety tests. Live PostgreSQL checkout migration, service identity,
-Catalogue reservation, Kafka, Kubernetes, frontend and end-to-end validation remain
-Pending / Not Verified.
+preservation, and log-safety tests. The live PostgreSQL migrations, dedicated service
+identity, Catalogue reservation/release, Kubernetes workload, Gateway checkout and Kafka
+outbox publication were platform-validated with simulated data. The browser frontend and
+browser end-to-end order journey remain Pending / Not Verified.

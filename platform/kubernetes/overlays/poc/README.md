@@ -10,6 +10,14 @@ The [customer-service overlay](customer-service/README.md) deploys the internal 
 
 The [Redis overlay](redis/README.md) deploys an authenticated internal cache after matching data/application runtime Secrets are created. The [catalogue-service overlay](catalogue-service/README.md) deploys the internal Catalogue and Inventory capability with PostgreSQL authoritative and Redis optional at runtime.
 
-The [API Gateway overlay](api-gateway/README.md) is applied after customer-service and catalogue-service. It provides the normal application API entry point through an internal ClusterIP Service; external PoC access uses controlled port-forwarding rather than public service exposure.
+The [order-service overlay](order-service/README.md) deploys the internal Order Processing
+capability after PostgreSQL, Catalogue, Kafka, and the dedicated Keycloak service identity
+are configured. PostgreSQL alone gates pod readiness; Catalogue checkout failures and
+recoverable Kafka outbox delivery failures are reported at their operation boundaries.
+
+The [API Gateway overlay](api-gateway/README.md) is applied after customer-service,
+catalogue-service, and order-service. It provides the normal application API entry point
+through an internal ClusterIP Service; external PoC access uses controlled port-forwarding
+rather than public service exposure.
 
 The [Kafka overlay](kafka/README.md) deploys one internal KRaft broker/controller with retained PoC storage. It is opt-in, has no public listener, and provides no broker or host-level high availability.

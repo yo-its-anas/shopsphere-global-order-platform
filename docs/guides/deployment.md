@@ -1,7 +1,8 @@
 # ShopSphere PoC Deployment Guide
 
-This runbook covers the implemented Customer Identity and Product Catalogue/Inventory
-workloads on the existing `kind-shopsphere-poc` cluster. It performs no production
+This runbook covers the implemented Customer Identity, Product Catalogue/Inventory,
+and Enterprise Order Processing workloads on the existing `kind-shopsphere-poc`
+cluster. It performs no production
 deployment and creates no public service exposure.
 
 ## Deployment order
@@ -23,8 +24,7 @@ deployment and creates no public service exposure.
    make order-service-secret
    ```
 
-   The final command prepares the namespace-local order-service database URL Secret. It
-   does not deploy order-service or imply that order business behavior is implemented.
+   The final command prepares the namespace-local order-service database URL Secret.
 
 3. Create and verify Keycloak:
 
@@ -76,7 +76,19 @@ deployment and creates no public service exposure.
    make catalogue-service-status
    ```
 
-8. Build, load and apply API Gateway after both upstream services are Ready:
+8. Reconcile the least-privilege order-service identity, then build, load and apply
+   order-service:
+
+   ```bash
+   make order-service-identity
+   make order-service-build
+   make order-service-load
+   make validate-order-service
+   make order-service-apply
+   make order-service-status
+   ```
+
+9. Build, load and apply API Gateway after all three upstream services are Ready:
 
    ```bash
    make api-gateway-build
@@ -96,8 +108,14 @@ existing PostgreSQL data and credentials.
 - Redis is a cache-only optimization. Catalogue reads fall back to PostgreSQL and Redis
   does not participate in readiness.
 - Kafka receives committed outbox events asynchronously. Broker failure leaves retryable
-  outbox rows and does not invalidate the committed catalogue operation.
-- API Gateway readiness reports its synchronous customer/catalogue upstream state but
+  outbox rows and does not invalidate a committed catalogue or order transaction.
+- Order-service readiness requires PostgreSQL because order state and outbox evidence
+  are authoritative there. Catalogue is required for cart validation and checkout, but
+  a transient Catalogue failure does not make persisted order-history reads unready.
+  Kafka publication is asynchronous and recoverable from the outbox, so Kafka does not
+  gate readiness. Keycloak is enforced per authenticated request rather than probed by
+  readiness.
+- API Gateway readiness reports its synchronous customer/catalogue/order upstream state but
   does not replace downstream JWT or RBAC enforcement.
 
 ## Verification
@@ -111,11 +129,16 @@ make redis-status
 make kafka-status
 make customer-service-status
 make catalogue-service-status
+make order-service-status
 make api-gateway-status
+make order-service-smoke
 ```
 
 Current evidence records Ready internal PostgreSQL, Keycloak, Redis, Kafka,
-customer-service, catalogue-service and API Gateway workloads. The explicitly enabled
+customer-service, catalogue-service, order-service and API Gateway workloads. A
+controlled simulated-customer smoke test completed cart creation, Gateway checkout and
+cancellation, verified inventory release, and observed `published` state for the four
+order outbox events. The explicitly enabled
 catalogue integration suite passed all 11 authenticated Gateway/platform scenarios;
 Redis and Kafka recovery and post-test readiness were verified. Platform health alone
 must still be distinguished from those functional results.
