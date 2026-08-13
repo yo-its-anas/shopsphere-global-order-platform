@@ -98,3 +98,29 @@ PostgreSQL is authoritative for catalogue, pricing and inventory data. Redis cac
 bounded read responses only and may be unavailable without invalidating PostgreSQL.
 Kafka carries asynchronous versioned facts produced through the transactional outbox;
 it is not part of the synchronous commit decision.
+
+## Order-service cart API
+
+Order-service implements the following internal `/api/v1` routes. They are not yet
+registered in API Gateway and order-service is not yet deployed to Kubernetes, so no
+external or browser availability is claimed.
+
+| Method | Internal path | Role | Behavior |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/carts/me` | `customer` | Create if absent and retrieve the caller's active cart. |
+| `POST` | `/api/v1/carts/me/items` | `customer` | Validate the product through Catalogue and add/increment a line. |
+| `PATCH` | `/api/v1/carts/me/items/{item_id}` | `customer` | Replace an owned item quantity. |
+| `DELETE` | `/api/v1/carts/me/items/{item_id}` | `customer` | Remove an owned item. |
+| `DELETE` | `/api/v1/carts/me/items` | `customer` | Clear the caller's active cart. |
+
+The validated token subject is the ownership key; clients do not submit a customer ID.
+Non-owned item identifiers receive `404`. Add-item calls a fixed internal Catalogue
+origin and propagates the bearer token solely for downstream validation without logging
+it. Cart price, availability and subtotal fields are display snapshots and explicitly
+non-authoritative. Checkout, inventory reservations, authoritative totals and orders are
+not implemented.
+
+Eighteen isolated order-service tests pass, including twelve cart behavior/security API
+tests and two fixed-origin Catalogue client tests. Live PostgreSQL migration, Catalogue,
+Gateway, Kubernetes, frontend and end-to-end
+validation remain Pending / Not Verified.

@@ -1,6 +1,6 @@
 """Kubernetes-compatible liveness and readiness endpoints."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response, status
 
 from app.core.config import Settings
 from app.schemas.system import HealthResponse
@@ -25,12 +25,15 @@ async def live(request: Request) -> HealthResponse:
 
 
 @router.get("/ready", response_model=HealthResponse, summary="Check service readiness")
-async def ready(request: Request) -> HealthResponse:
-    """Report readiness; no external dependencies are configured in this foundation."""
+async def ready(request: Request, response: Response) -> HealthResponse:
+    """Report readiness based on the authoritative order database."""
 
     settings = _settings(request)
+    ready_status = await request.app.state.readiness_check(request.app.state.database_engine)
+    if not ready_status:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     return HealthResponse(
-        status="ready",
+        status="ready" if ready_status else "not_ready",
         service=settings.service_name,
         version=settings.service_version,
     )

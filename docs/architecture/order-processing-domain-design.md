@@ -352,14 +352,19 @@ credentials, payment data, and unnecessary PII. Per-order events use the order U
 the Kafka key to preserve partition order where possible. Global ordering is not
 promised. These events and the OrderOutboxEvent model are not yet implemented.
 
-## Proposed API shape
+## API shape
 
-All routes follow `/api/v1`; exact schemas remain subject to implementation review.
+The following cart routes are implemented internally in order-service:
 
-- `POST /carts` — create or return the actor's active cart;
-- `GET /carts/me` — retrieve the actor's active cart;
-- `PUT /carts/{cart_id}/items/{product_id}` — add or replace an owned item quantity;
-- `DELETE /carts/{cart_id}/items/{product_id}` — remove an owned item;
+- `GET /api/v1/carts/me` — create if absent and retrieve the actor's active cart;
+- `POST /api/v1/carts/me/items` — validate a product and add/increment an item;
+- `PATCH /api/v1/carts/me/items/{item_id}` — replace an owned item quantity;
+- `DELETE /api/v1/carts/me/items/{item_id}` — remove an owned item; and
+- `DELETE /api/v1/carts/me/items` — clear the owned cart.
+
+Their Catalogue price/availability fields and subtotal are display snapshots, not checkout
+authority. Gateway exposure and the following checkout/order routes remain proposed:
+
 - `POST /carts/{cart_id}/checkout` — idempotent checkout using `Idempotency-Key`;
 - `GET /orders` and `GET /orders/{order_id}` — actor-scoped order list/detail;
 - `GET /orders/{order_id}/history` — actor-scoped lifecycle history;
@@ -373,10 +378,11 @@ service identity and correlation/causation propagation.
 ## PoC trade-offs and implementation boundary
 
 The PoC may package Saga orchestration and outbox relay with one order-service process.
-A separate empty logical `order_db`, owned by least-privilege `order_app`, is provisioned
+A separate logical `order_db`, owned by least-privilege `order_app`, is provisioned
 on the existing PostgreSQL server. It improves ownership hygiene but provides no
-infrastructure isolation, independent scaling, or high availability; no order schema or
-business data exists yet.
+infrastructure isolation, independent scaling, or high availability. The cart migration
+exists in source but has not been applied or platform-validated in this implementation;
+no order/checkout schema or business data exists yet.
 
 The current single PostgreSQL instance, single Redis instance, single Kafka broker,
 single kind node, and single physical GCP VM form one failure domain. Redis is not

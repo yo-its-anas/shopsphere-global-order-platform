@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.api.health import router as health_router
 from app.api.v1.router import api_v1_router
@@ -14,6 +15,15 @@ from app.core.config import Settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import CorrelationIdMiddleware
+from app.core.security import KeycloakTokenVerifier, TokenVerifier
+from app.domain.repositories import CatalogueProductProvider, UnitOfWork
+from app.infrastructure.catalogue_client import CatalogueHttpClient
+from app.infrastructure.database import (
+    create_database_engine,
+    create_session_factory,
+    database_is_ready,
+)
+from app.infrastructure.repositories import SqlAlchemyUnitOfWork
 
 logger = logging.getLogger(__name__)
 
@@ -26,33 +36,74 @@ OPENAPI_TAGS = [
         "name": "Service information",
         "description": "Versioned, non-sensitive service identity metadata.",
     },
+    {
+        "name": "Customer shopping cart",
+        "description": (
+            "Authenticated, subject-owned cart operations with non-authoritative "
+            "catalogue display snapshots."
+        ),
+    },
 ]
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    database_engine: AsyncEngine | None = None,
+    token_verifier: TokenVerifier | None = None,
+    catalogue_client: CatalogueProductProvider | None = None,
+    unit_of_work_factory: Callable[[], UnitOfWork] | None = None,
+    readiness_check: Callable[[AsyncEngine | None], Awaitable[bool]] = database_is_ready,
+) -> FastAPI:
     """Create an independently configurable FastAPI application."""
 
     resolved_settings = settings or Settings.from_environment()
     configure_logging(resolved_settings.log_level)
+    resolved_engine = database_engine
+    if resolved_engine is None and resolved_settings.database_url:
+        resolved_engine = create_database_engine(
+            resolved_settings.database_url,
+            resolved_settings.database_connect_timeout_seconds,
+        )
+    resolved_verifier = token_verifier
+    if resolved_verifier is None and resolved_settings.keycloak_issuer:
+        resolved_verifier = KeycloakTokenVerifier(resolved_settings)
+    resolved_catalogue_client = catalogue_client
+    if resolved_catalogue_client is None and resolved_settings.catalogue_service_url:
+        resolved_catalogue_client = CatalogueHttpClient(
+            resolved_settings.catalogue_service_url,
+            resolved_settings.catalogue_timeout_seconds,
+        )
+    session_factory = create_session_factory(resolved_engine) if resolved_engine else None
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         logger.info("service_started", extra={"event": "service_started"})
         yield
+        if resolved_engine is not None:
+            await resolved_engine.dispose()
         logger.info("service_stopped", extra={"event": "service_stopped"})
 
     application = FastAPI(
         title="ShopSphere Order Service",
-        summary="Enterprise order processing boundary skeleton. Order lifecycle, persistence, orchestration, and events remain future work.",
+        summary="Customer shopping carts and the Enterprise Order Processing boundary.",
         description=(
-            "Foundation API only. No database, cache, message broker, "
-            "identity provider, authentication, or business workflow is connected."
+            "Keycloak-authenticated, customer-owned carts with catalogue-validated display "
+            "snapshots. Checkout, reservations, orders, and authoritative totals are not "
+            "implemented."
         ),
         version=resolved_settings.service_version,
         openapi_tags=OPENAPI_TAGS,
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.state.database_engine = resolved_engine
+    application.state.token_verifier = resolved_verifier
+    application.state.catalogue_client = resolved_catalogue_client
+    application.state.unit_of_work_factory = unit_of_work_factory or (
+        (lambda: SqlAlchemyUnitOfWork(session_factory)) if session_factory is not None else None
+    )
+    application.state.readiness_check = readiness_check
     application.add_middleware(CorrelationIdMiddleware)
     register_exception_handlers(application)
     application.include_router(health_router)
