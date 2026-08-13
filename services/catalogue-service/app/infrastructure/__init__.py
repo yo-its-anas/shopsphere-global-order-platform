@@ -1,1 +1,1 @@
-"""Infrastructure adapter boundary; no external integrations in this foundation."""
+"""Catalogue and Inventory persistence adapter boundary."""

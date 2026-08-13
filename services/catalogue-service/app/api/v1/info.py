@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request
 from app.core.config import Settings
 from app.schemas.system import ServiceInfoResponse
 
-router = APIRouter()
+router = APIRouter(tags=["Service information"])
 
 
 @router.get("/info", response_model=ServiceInfoResponse, summary="Describe this service")

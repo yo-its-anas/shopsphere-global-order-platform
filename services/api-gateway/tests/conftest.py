@@ -88,5 +88,20 @@ def upstream_client() -> StubUpstreamClient:
 
 
 @pytest.fixture
-def client(settings: Settings, upstream_client: StubUpstreamClient) -> Iterator[ApiClient]:
-    yield ApiClient(create_app(settings, customer_service_client=upstream_client))
+def catalogue_upstream_client() -> StubUpstreamClient:
+    return StubUpstreamClient()
+
+
+@pytest.fixture
+def client(
+    settings: Settings,
+    upstream_client: StubUpstreamClient,
+    catalogue_upstream_client: StubUpstreamClient,
+) -> Iterator[ApiClient]:
+    yield ApiClient(
+        create_app(
+            settings,
+            customer_service_client=upstream_client,
+            catalogue_service_client=catalogue_upstream_client,
+        )
+    )

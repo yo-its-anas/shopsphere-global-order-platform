@@ -74,6 +74,15 @@ spec:
                 secretKeyRef:
                   name: shopsphere-postgresql-credentials
                   key: keycloak-password
+            - name: CATALOGUE_DB_NAME
+              value: catalogue_db
+            - name: CATALOGUE_DB_USER
+              value: catalogue_app
+            - name: CATALOGUE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-postgresql-credentials
+                  key: catalogue-password
           startupProbe:
             exec:
               command:

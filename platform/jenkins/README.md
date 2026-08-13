@@ -74,12 +74,33 @@ terraform -chdir=infrastructure/terraform validate
 
 Python commands execute inside an ephemeral workspace virtual environment. Frontend commands execute inside `frontend/` against the committed `package-lock.json`.
 
-## Validation cadence and customer integration policy
+## Validation cadence and capability integration policy
 
 All checkout, static analysis, unit test, frontend build, Docker build, Terraform, and Kubernetes validation stages run on every commit. They require no live ShopSphere workload.
 
 The `PoC customer integration tests` stage is the deliberate exception because it exercises live PoC services. Jenkins marks the stage as skipped unless `SHOPSPHERE_RUN_CUSTOMER_INTEGRATION=true`; this is pipeline policy, not a synthetic passing result. When enabled, the job must inject the complete environment contract described in `tests/integration/README.md`, including masked credentials for dedicated test-only Keycloak clients. Missing configuration or unavailable services fail the enabled stage rather than being ignored.
 
 The stage creates randomized simulated identities, exercises only Keycloak, API Gateway, customer-service, and the customer database boundary, then publishes `test-results/integration/customer-identity.xml`. It does not deploy workloads, modify PostgreSQL availability, use bootstrap administrator credentials, or test incomplete business modules.
+
+The separate `PoC catalogue and inventory integration tests` stage runs only when
+`SHOPSPHERE_RUN_CATALOGUE_INTEGRATION=true`. It uses randomized synthetic catalogue
+records and publishes `test-results/integration/catalogue-inventory.xml`. Normal API
+coverage is non-disruptive. Kubernetes observation is separately enabled, and Redis or
+Kafka outage/recovery tests require their own explicit opt-ins; a skipped outage test is
+reported as skipped and is never converted into a pass. The required environment and
+cleanup boundary are documented in `tests/integration/README.md`.
+
+Catalogue validation also installs the catalogue service's pinned dependency set and
+runs Black, Ruff, Bandit, Pytest, a dedicated Docker build, focused frontend catalogue
+tests, the full frontend production build, Redis/Kafka/catalogue Kubernetes manifest
+validation, and an offline Alembic revision-graph/SQL compilation check. Machine-readable
+Ruff, Bandit, migration, frontend, backend, and integration evidence is archived.
+
+The pipeline writes capability status files under `test-results/status`. An enabled
+suite is pessimistically marked failed before execution and is reclassified from its
+JUnit XML afterward. A report containing only skipped tests becomes
+`skipped/not applicable`, not passed; partially skipped reports retain exact passed,
+failed, and skipped counts. Disabled live suites are explicitly classified
+`skipped/not applicable` with a reason.
 
 Jenkins credentials must be bound as masked environment variables by job configuration. The pipeline never echoes configuration values, credentials, access tokens, or refresh tokens.

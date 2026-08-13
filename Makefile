@@ -3,7 +3,13 @@ KUBE_CONTEXT ?= kind-shopsphere-poc
 POSTGRESQL_OVERLAY := platform/kubernetes/overlays/poc/postgresql
 KEYCLOAK_OVERLAY := platform/kubernetes/overlays/poc/keycloak
 CUSTOMER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/customer-service
+REDIS_OVERLAY := platform/kubernetes/overlays/poc/redis
+CATALOGUE_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/catalogue-service
+API_GATEWAY_OVERLAY := platform/kubernetes/overlays/poc/api-gateway
+KAFKA_OVERLAY := platform/kubernetes/overlays/poc/kafka
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
+CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
+API_GATEWAY_IMAGE ?= shopsphere/api-gateway:poc
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -13,10 +19,19 @@ SERVICE_DIRS := \
 
 .PHONY: help format lint test build validate validate-shell validate-kubernetes \
 	validate-postgresql postgresql-secret postgresql-apply postgresql-status \
+	postgresql-reconcile catalogue-service-secret \
 	validate-keycloak keycloak-secret keycloak-apply keycloak-configure keycloak-status doctor clean \
 	validate-customer-service customer-service-secret customer-service-build \
 	customer-service-load customer-service-apply customer-service-status \
-	customer-integration customer-integration-collect
+	validate-redis redis-secret redis-secret-generate redis-apply redis-status \
+	validate-catalogue-service catalogue-service-build catalogue-service-load \
+	catalogue-service-apply catalogue-service-status \
+	validate-api-gateway api-gateway-build api-gateway-load \
+	api-gateway-apply api-gateway-status \
+	validate-kafka kafka-apply kafka-topics kafka-status \
+	catalogue-event-smoke \
+	customer-integration customer-integration-collect \
+	catalogue-integration catalogue-integration-collect
 
 help: ## Show available foundation targets
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z_-]+:.*## / {printf "%-12s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -46,7 +61,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-api-gateway ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -68,7 +83,17 @@ postgresql-secret: ## Create the PostgreSQL Secret interactively; existing Secre
 postgresql-apply: validate-postgresql ## Apply the PoC PostgreSQL component; requires its Secret
 	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get secret shopsphere-postgresql-credentials >/dev/null 2>&1 || { \
 		echo "Create shopsphere-postgresql-credentials first with 'make postgresql-secret'." >&2; exit 1; }
+	@test "$$(kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get secret shopsphere-postgresql-credentials -o go-template='{{if index .data "catalogue-password"}}present{{end}}')" = "present" || { \
+		echo "Add the catalogue credential first with 'make postgresql-secret'." >&2; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(POSTGRESQL_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data rollout status statefulset/postgresql --timeout=300s
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/reconcile-postgresql-databases.sh
+
+postgresql-reconcile: ## Idempotently reconcile required logical databases without recreating existing data
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/reconcile-postgresql-databases.sh
+
+catalogue-service-secret: ## Derive the catalogue database URL Secret without displaying credentials
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-catalogue-service-secret.sh
 
 postgresql-status: ## Run read-only PostgreSQL workload, service, PVC, and database checks
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-postgresql.sh
@@ -114,6 +139,85 @@ customer-service-apply: validate-customer-service ## Apply the internal customer
 customer-service-status: ## Run read-only customer-service workload, probe, and exposure checks
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-customer-service.sh
 
+validate-redis: ## Validate Redis manifests without changing the cluster
+	@./scripts/validate-redis-manifests.sh
+
+redis-secret: ## Create Redis runtime Secrets through hidden interactive input
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-redis-secret.sh
+
+redis-secret-generate: ## Explicitly generate Redis runtime Secrets without displaying values
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-redis-secret.sh --generate
+
+redis-apply: validate-redis ## Apply the internal PoC Redis cache; requires runtime Secrets
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get secret shopsphere-redis-credentials >/dev/null 2>&1 || { \
+		echo "Create Redis runtime Secrets first with 'make redis-secret' or 'make redis-secret-generate'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-catalogue-cache >/dev/null 2>&1 || { \
+		echo "Create Redis runtime Secrets first with 'make redis-secret' or 'make redis-secret-generate'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(REDIS_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data rollout status deployment/redis --timeout=180s
+
+redis-status: ## Verify Redis readiness, authentication, and internal exposure
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-redis.sh
+
+validate-catalogue-service: ## Validate catalogue-service manifests without changing the cluster
+	@./scripts/validate-catalogue-service-manifests.sh
+
+catalogue-service-build: ## Build the cache-enabled catalogue-service PoC image
+	@docker build --tag "$(CATALOGUE_SERVICE_IMAGE)" services/catalogue-service
+
+catalogue-service-load: ## Load the existing catalogue-service image into the kind node
+	@./platform/kind/load-images.sh "$(CATALOGUE_SERVICE_IMAGE)"
+
+catalogue-service-apply: validate-catalogue-service ## Apply the internal catalogue-service workload
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-catalogue-service-database >/dev/null 2>&1 || { \
+		echo "Create the catalogue database Secret first with 'make catalogue-service-secret'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get secret shopsphere-catalogue-cache >/dev/null 2>&1 || { \
+		echo "Create Redis runtime Secrets first with 'make redis-secret' or 'make redis-secret-generate'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-data get service redis >/dev/null 2>&1 || { \
+		echo "Apply Redis first with 'make redis-apply'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(CATALOGUE_SERVICE_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/catalogue-service --timeout=300s
+
+catalogue-service-status: ## Verify catalogue-service health, Redis connectivity, and internal exposure
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-catalogue-service.sh
+
+validate-api-gateway: ## Validate API Gateway manifests without changing the cluster
+	@./scripts/validate-api-gateway-manifests.sh
+
+api-gateway-build: ## Build the internal API Gateway PoC image
+	@docker build --tag "$(API_GATEWAY_IMAGE)" services/api-gateway
+
+api-gateway-load: ## Load the existing API Gateway image into the kind node
+	@./platform/kind/load-images.sh "$(API_GATEWAY_IMAGE)"
+
+api-gateway-apply: validate-api-gateway ## Apply the internal API Gateway after its upstream services
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service customer-service >/dev/null 2>&1 || { \
+		echo "Deploy customer-service before the API Gateway." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service catalogue-service >/dev/null 2>&1 || { \
+		echo "Deploy catalogue-service before the API Gateway." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(API_GATEWAY_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/api-gateway --timeout=180s
+
+api-gateway-status: ## Verify API Gateway readiness, exposure, and catalogue forwarding
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-api-gateway.sh
+
+validate-kafka: ## Validate the single-broker KRaft manifests without changing the cluster
+	@./scripts/validate-kafka-manifests.sh
+
+kafka-apply: validate-kafka ## Apply the internal single-broker Kafka PoC
+	@kubectl --context "$(KUBE_CONTEXT)" apply -f platform/kubernetes/base/resource-quotas.yaml
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(KAFKA_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-platform rollout status statefulset/kafka --timeout=420s
+
+kafka-topics: ## Idempotently create and configure governed domain-event topics
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/reconcile-kafka-topics.sh
+
+kafka-status: ## Verify broker readiness, internal exposure, storage, and topics
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-kafka.sh
+
+catalogue-event-smoke: ## Create simulated catalogue changes and verify producer input safely
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/smoke-test-catalogue-events.sh
+
 customer-integration: ## Run opt-in live customer capability integration tests with JUnit output
 	@mkdir -p test-results/integration
 	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
@@ -123,6 +227,16 @@ customer-integration: ## Run opt-in live customer capability integration tests w
 customer-integration-collect: ## Collect customer integration tests without contacting services
 	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
 		tests/integration/customer_identity --collect-only
+
+catalogue-integration: ## Run opt-in catalogue/inventory integration tests with JUnit output
+	@mkdir -p test-results/integration
+	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
+		tests/integration/catalogue_inventory \
+		--junitxml=test-results/integration/catalogue-inventory.xml
+
+catalogue-integration-collect: ## Collect catalogue/inventory integration tests without services
+	@$(PYTHON) -m pytest -c tests/integration/pytest.ini \
+		tests/integration/catalogue_inventory --collect-only
 
 doctor: ## Run non-destructive host and tool checks
 	@status=0; \

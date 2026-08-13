@@ -7,6 +7,15 @@ import {
 
 import { AppShell } from "../layouts/AppShell";
 import { AuthenticatedRoute, RoleRoute } from "../features/auth/RouteGuards";
+import { CategoriesPage } from "../features/catalogue/pages/CategoriesPage";
+import { InventoryAdjustmentPage } from "../features/catalogue/pages/InventoryAdjustmentPage";
+import { InventoryMovementsPage } from "../features/catalogue/pages/InventoryMovementsPage";
+import { InventoryPage } from "../features/catalogue/pages/InventoryPage";
+import { InventoryStatisticsPage } from "../features/catalogue/pages/InventoryStatisticsPage";
+import { PricingPage } from "../features/catalogue/pages/PricingPage";
+import { ProductDetailsPage } from "../features/catalogue/pages/ProductDetailsPage";
+import { ProductFormPage } from "../features/catalogue/pages/ProductFormPage";
+import { ProductsPage } from "../features/catalogue/pages/ProductsPage";
 import { AccountActivityPage } from "../pages/AccountActivityPage";
 import { AddressesPage } from "../pages/AddressesPage";
 import { CustomerAdministrationPage } from "../pages/CustomerAdministrationPage";
@@ -75,19 +84,81 @@ export const appRoutes: RouteObject[] = [
       {
         path: "products",
         element: (
-          <PlaceholderPage
-            title="Product Catalogue"
-            description="Product catalogue presentation will be integrated later."
-          />
+          <RoleRoute roles={["customer", "support", "operations_admin"]}>
+            <ProductsPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "products/new",
+        element: (
+          <RoleRoute roles={["operations_admin"]}>
+            <ProductFormPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "products/:productId",
+        element: (
+          <RoleRoute roles={["customer", "support", "operations_admin"]}>
+            <ProductDetailsPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "products/:productId/edit",
+        element: (
+          <RoleRoute roles={["operations_admin"]}>
+            <ProductFormPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "categories",
+        element: (
+          <RoleRoute roles={["support", "operations_admin"]}>
+            <CategoriesPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "pricing",
+        element: (
+          <RoleRoute roles={["customer", "support", "operations_admin"]}>
+            <PricingPage />
+          </RoleRoute>
         ),
       },
       {
         path: "inventory",
         element: (
-          <PlaceholderPage
-            title="Inventory"
-            description="Inventory visibility and controls will be integrated later."
-          />
+          <RoleRoute roles={["support", "operations_admin"]}>
+            <InventoryPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "inventory/statistics",
+        element: (
+          <RoleRoute roles={["support", "operations_admin"]}>
+            <InventoryStatisticsPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "inventory/:productId/adjust",
+        element: (
+          <RoleRoute roles={["operations_admin"]}>
+            <InventoryAdjustmentPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "inventory/:productId/movements",
+        element: (
+          <RoleRoute roles={["support", "operations_admin"]}>
+            <InventoryMovementsPage />
+          </RoleRoute>
         ),
       },
       {

@@ -1,6 +1,6 @@
 # Customer Profile and Address User Guide
 
-The React customer screens are implemented, but the complete browser-to-live-platform journey has not been validated because API Gateway and frontend are not deployed in the current cluster and the live integration suite has not passed. Use only simulated customer information in demonstrations.
+The React customer screens are implemented, but the complete browser-to-live-platform journey has not been validated because the frontend is not deployed in the current cluster and the live integration suite has not passed. The API Gateway is deployed internally. Use only simulated customer information in demonstrations.
 
 ## Registration and sign-in
 

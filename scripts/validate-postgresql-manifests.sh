@@ -45,6 +45,10 @@ main() {
     require_text "$rendered" "storage: 80Gi"
     require_text "$rendered" "customer_db"
     require_text "$rendered" "keycloak_db"
+    require_text "$rendered" "catalogue_db"
+    require_text "$rendered" "key: catalogue-password"
+    require_text "$rendered" "requests:"
+    require_text "$rendered" "limits:"
 
     printf '%s\n' "$rendered" | kubectl create --dry-run=client --validate=false -f - >/dev/null
     printf '[OK] PostgreSQL manifests rendered and passed non-destructive client validation.\n'

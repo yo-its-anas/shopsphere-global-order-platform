@@ -26,12 +26,13 @@ async def live(request: Request) -> HealthResponse:
 
 @router.get("/ready", response_model=HealthResponse, summary="Check service readiness")
 async def ready(request: Request, response: Response) -> HealthResponse:
-    """Report whether the configured customer capability can accept traffic."""
+    """Report whether all configured synchronous capabilities can accept traffic."""
 
     settings = _settings(request)
-    if not await request.app.state.customer_service_proxy.is_ready(
-        str(request.state.correlation_id)
-    ):
+    request_id = str(request.state.correlation_id)
+    customer_ready = await request.app.state.customer_service_proxy.is_ready(request_id)
+    catalogue_ready = await request.app.state.catalogue_service_proxy.is_ready(request_id)
+    if not customer_ready or not catalogue_ready:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
         return HealthResponse(
             status="not_ready",

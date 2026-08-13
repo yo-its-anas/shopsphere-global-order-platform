@@ -28,7 +28,7 @@ The separation prevents PoC shortcuts from becoming implicit production controls
 
 ## PoC limitations
 
-Current PoC evidence includes a single-node cluster, internal PostgreSQL and Keycloak, customer-service, configuration validation scripts, trust-boundary and sequence diagrams, and explicit availability limitations. API Gateway and frontend are not deployed. The production reference is not deployable or validated production infrastructure.
+Current PoC evidence includes a single-node cluster, internal PostgreSQL and Keycloak, customer-service, catalogue-service, Redis, Kafka, an internal API Gateway, configuration validation scripts, trust-boundary and sequence diagrams, and explicit availability limitations. The frontend is not deployed. The production reference is not deployable or validated production infrastructure.
 
 ## Production evolution
 

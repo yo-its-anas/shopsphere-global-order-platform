@@ -1,1 +1,1 @@
-"""Application use-case boundary; intentionally empty in this foundation."""
+"""Product Catalogue and Inventory application use-case boundary."""

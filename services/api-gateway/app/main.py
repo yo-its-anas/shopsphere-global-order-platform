@@ -7,9 +7,11 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.health import router as health_router
 from app.api.v1.router import api_v1_router
+from app.application.catalogue_proxy import CatalogueServiceProxy
 from app.application.customer_proxy import CustomerServiceProxy
 from app.core.config import Settings
 from app.core.exceptions import register_exception_handlers
@@ -35,6 +37,13 @@ OPENAPI_TAGS = [
             "enforces roles and ownership, and owns all customer domain behavior."
         ),
     },
+    {
+        "name": "Catalogue capability",
+        "description": (
+            "Transport-only routes to catalogue-service. Catalogue-service validates JWTs "
+            "and authoritatively enforces catalogue and inventory roles."
+        ),
+    },
 ]
 
 
@@ -42,6 +51,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     customer_service_client: UpstreamHttpClient | None = None,
+    catalogue_service_client: UpstreamHttpClient | None = None,
 ) -> FastAPI:
     """Create an independently configurable FastAPI application."""
 
@@ -53,6 +63,12 @@ def create_app(
         resolved_settings.customer_service_timeout_seconds,
     )
     customer_service_proxy = CustomerServiceProxy(resolved_customer_client)
+    owns_catalogue_client = catalogue_service_client is None
+    resolved_catalogue_client = catalogue_service_client or ConfiguredHttpClient(
+        resolved_settings.catalogue_service_url,
+        resolved_settings.catalogue_service_timeout_seconds,
+    )
+    catalogue_service_proxy = CatalogueServiceProxy(resolved_catalogue_client)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -60,15 +76,17 @@ def create_app(
         yield
         if owns_customer_client:
             await resolved_customer_client.aclose()
+        if owns_catalogue_client:
+            await resolved_catalogue_client.aclose()
         logger.info("service_stopped", extra={"event": "service_stopped"})
 
     application = FastAPI(
         title="ShopSphere API Gateway",
-        summary="Versioned ShopSphere API entry point with customer capability routing.",
+        summary="Versioned ShopSphere API entry point for customer and catalogue capabilities.",
         description=(
-            "Routes authenticated customer traffic to customer-service without implementing "
-            "customer domain logic. Bearer tokens are propagated for authoritative downstream "
-            "validation and are never written to gateway logs."
+            "Routes authenticated traffic to fixed customer and catalogue upstreams without "
+            "implementing domain logic. Bearer tokens are propagated for authoritative "
+            "downstream validation and are never written to gateway logs."
         ),
         version=resolved_settings.service_version,
         openapi_tags=OPENAPI_TAGS,
@@ -76,7 +94,16 @@ def create_app(
     )
     application.state.settings = resolved_settings
     application.state.customer_service_proxy = customer_service_proxy
+    application.state.catalogue_service_proxy = catalogue_service_proxy
     application.add_middleware(CorrelationIdMiddleware)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(resolved_settings.cors_allowed_origins),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Accept", "Authorization", "Content-Type", "X-Request-ID"],
+        expose_headers=["X-Request-ID"],
+    )
     register_exception_handlers(application)
     application.include_router(health_router)
     application.include_router(api_v1_router)

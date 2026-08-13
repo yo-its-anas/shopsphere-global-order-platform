@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kafka-ingress
+  namespace: shopsphere-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+      app.kubernetes.io/component: event-broker
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              shopsphere.io/tier: applications
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: catalogue-service
+      ports:
+        - protocol: TCP
+          port: 9092
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kafka
+              app.kubernetes.io/component: event-broker
+      ports:
+        - protocol: TCP
+          port: 9092
+        - protocol: TCP
+          port: 9093

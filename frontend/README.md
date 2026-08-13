@@ -1,32 +1,21 @@
 # ShopSphere Enterprise Frontend
 
-React, TypeScript, and Vite frontend for ShopSphere Global Enterprise Order Management. The executive dashboard retains clearly labelled development fixtures; Customer Identity and Account Management pages use authenticated API Gateway requests.
+React, TypeScript, and Vite frontend for ShopSphere Global Enterprise Order Management. The executive dashboard retains clearly labelled development fixtures; Customer Identity and Product Catalogue/Inventory capabilities use authenticated API Gateway requests.
 
-## Stitch design integration
+## Enterprise UI architecture
 
-Two static Stitch exports informed this frontend. The original operations dashboard established the application shell. The customer export at `/opt/shopsphere/stitch-customer-ui/stitch_shopsphere_enterprise_operations` added visual references for secure entry, registration, profile, addresses, account activity, and customer administration.
-
-Preserved design elements include:
+The shared visual system includes:
 
 - the dark enterprise sidebar, fixed header, compact navigation, and environment context;
 - white outlined surfaces, deep-blue primary actions, restrained status colors, and dense tables;
 - profile summary and identity-provider management panels;
 - address cards with default-address treatment and explicit actions;
 - activity and administration table hierarchy;
+- catalogue search/filter toolbars, product detail surfaces, and governed forms;
+- inventory balance and movement tables, status indicators, adjustment confirmation, and statistic cards;
 - centered sign-in and registration cards.
 
-The generated HTML was not copied directly. The following were discarded:
-
-- repeated HTML document shells and per-page Tailwind CDN configuration;
-- duplicate Google font and Material Symbols imports;
-- remote profile images and generated brand-image placeholders;
-- `href="#"` navigation and controls without behavior;
-- hard-coded customer names, addresses, activity records, IP addresses, production labels, roles, and account statistics;
-- local sign-in and registration forms that would incorrectly duplicate Keycloak credential ownership;
-- the Stitch profile reference to Okta, because ShopSphere uses Keycloak;
-- CSV export buttons because no reviewed export API currently exists.
-
-No Stitch dependency or runtime is required.
+Presentation is implemented as React components using repository-owned CSS tokens. There is no runtime CSS CDN, remote icon library, duplicated page shell, placeholder navigation, or hard-coded catalogue/inventory data. Unsupported export, warehouse, supplier, transfer, wholesale-price, and product-media controls are not presented as functional capabilities.
 
 ## Authentication architecture
 
@@ -41,36 +30,45 @@ The official `keycloak-js` adapter provides centralized authentication state in 
 - adapter role APIs rather than application-written JWT decoding;
 - disabled adapter logging so tokens are not written to the console.
 
-Frontend role checks are presentation controls only. They determine navigation and route visibility but do not grant access. API Gateway and customer-service remain authoritative for authentication, role authorization, ownership, and IDOR prevention.
+Frontend role checks are presentation controls only. They determine navigation and route visibility but do not grant access. API Gateway and downstream services remain authoritative for authentication, role authorization, ownership, visibility, and domain invariants.
 
 The Keycloak client must use exact environment-specific redirect URIs and web origins. Do not use wildcard production origins.
 
 ## Routes
 
-| Route                                                                   | Access                                  | Data source                         |
-| ----------------------------------------------------------------------- | --------------------------------------- | ----------------------------------- |
-| `/login`                                                                | Public                                  | Keycloak redirect                   |
-| `/register`                                                             | Public                                  | Keycloak self-registration redirect |
-| `/dashboard`                                                            | Authenticated                           | Centralized dashboard mock data     |
-| `/customers`                                                            | Authenticated                           | Role-aware landing redirect         |
-| `/profile`                                                              | `customer` UX role                      | API Gateway customer profile API    |
-| `/addresses`                                                            | `customer` UX role                      | API Gateway address APIs            |
-| `/account-activity`                                                     | `customer` UX role                      | API Gateway normalized activity API |
-| `/customer-administration`                                              | `support` or `operations_admin` UX role | API Gateway administration API      |
-| `/products`, `/inventory`, `/orders`, `/platform-health`, `/audit-logs` | Authenticated                           | Existing honest placeholders        |
-| `/unauthorized`                                                         | Authenticated                           | Local safe authorization state      |
+| Route                                        | Access                                  | Data source                                     |
+| -------------------------------------------- | --------------------------------------- | ----------------------------------------------- |
+| `/login`                                     | Public                                  | Keycloak redirect                               |
+| `/register`                                  | Public                                  | Keycloak self-registration redirect             |
+| `/dashboard`                                 | Authenticated                           | Centralized dashboard mock data                 |
+| `/customers`                                 | Authenticated                           | Role-aware landing redirect                     |
+| `/profile`                                   | `customer` UX role                      | API Gateway customer profile API                |
+| `/addresses`                                 | `customer` UX role                      | API Gateway address APIs                        |
+| `/account-activity`                          | `customer` UX role                      | API Gateway normalized activity API             |
+| `/customer-administration`                   | `support` or `operations_admin` UX role | API Gateway administration API                  |
+| `/products`                                  | customer, support, operations UX roles  | API Gateway catalogue search/read API           |
+| `/products/:productId`                       | customer, support, operations UX roles  | API Gateway product, pricing, availability APIs |
+| `/products/new`, `/products/:productId/edit` | `operations_admin` UX role              | API Gateway product commands                    |
+| `/categories`                                | support or `operations_admin` UX role   | API Gateway category API                        |
+| `/pricing`                                   | customer, support, operations UX roles  | API Gateway pricing API                         |
+| `/inventory`                                 | support or `operations_admin` UX role   | API Gateway operational inventory API           |
+| `/inventory/:productId/adjust`               | `operations_admin` UX role              | API Gateway inventory commands                  |
+| `/inventory/:productId/movements`            | support or `operations_admin` UX role   | API Gateway movement API                        |
+| `/inventory/statistics`                      | support or `operations_admin` UX role   | API Gateway persisted statistics API            |
+| `/orders`, `/platform-health`, `/audit-logs` | Authenticated                           | Existing honest placeholders                    |
+| `/unauthorized`                              | Authenticated                           | Local safe authorization state                  |
 
 Operations administrators can request explicit customer status changes. Support users receive a read-only administration view. The backend enforces the actual permissions in both cases.
 
 ## API integration boundary
 
-`src/services/apiClient.ts` is the only generic HTTP boundary. `src/services/customerApi.ts` maps typed customer operations onto relative paths beneath `VITE_API_BASE_URL`. That base URL must identify API Gateway; frontend code contains no customer-service origin.
+`src/services/apiClient.ts` is the only generic HTTP boundary. `src/services/customerApi.ts` and `src/services/catalogueApi.ts` map typed capability operations onto relative paths beneath `VITE_API_BASE_URL`. That base URL must identify API Gateway; frontend code contains no direct customer-service or catalogue-service origin.
 
 The client refreshes the access token immediately before an authenticated request and adds it to the `Authorization` header. Tokens are never placed in local storage, session storage, UI state, errors, or logs.
 
-Profile loading performs a GET first. A genuine 404 triggers the idempotent profile-provisioning PUT; other errors remain errors. Customer pages provide loading, empty, validation/error, unauthorized, and API-unavailable presentations.
+Profile loading performs a GET first. A genuine 404 triggers the idempotent profile-provisioning PUT; other errors remain errors. Catalogue pages load real products, categories, prices, availability, operational inventory, movements, and calculated statistics through gateway routes. Stock mutation requires explicit confirmation and sends a unique idempotency key plus the current inventory version. Pages provide loading, empty, validation/error, unauthorized, and API-unavailable presentations.
 
-Dashboard values remain in `src/mocks/dashboard.ts` and retain the visible **Demo Data** indicator. Customer API data is not replaced with fixtures in the running application.
+Dashboard values remain in `src/mocks/dashboard.ts` and retain the visible **Demo Data** indicator. Customer and catalogue/inventory API data are not replaced with fixtures in the running application.
 
 ## Configuration
 
@@ -97,7 +95,13 @@ npm test
 npm run build
 ```
 
-Tests cover application rendering, authenticated and unauthenticated routing, PKCE adapter initialization, role-aware navigation, profile rendering, address creation/deletion, unauthorized administration, and safe API-unavailable behavior.
+Tests cover application rendering, authenticated and unauthenticated routing, PKCE adapter initialization, role-aware navigation, profile rendering, address creation/deletion, product rendering/search/filtering, customer write restrictions, product/category/price commands, inventory display/adjustment confirmation, movement history, statistics, unauthorized routes, and safe API-unavailable behavior.
+
+The focused catalogue/inventory file currently records 6 passing component tests, and
+the production build passes. These tests validate presentation, routing and API-adapter
+behavior with controlled responses; they are not a live browser journey. The retained
+catalogue integration report contains 11 skips, so the catalogue UI is **Implemented**
+and **Unit Validated**, but **End-to-End Pending / Not Verified**.
 
 ## Container build
 

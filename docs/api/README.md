@@ -1,6 +1,6 @@
-# Customer Identity API Documentation
+# ShopSphere API Documentation
 
-FastAPI remains the executable OpenAPI source. Customer-facing clients use API Gateway paths beneath `/api/v1`; the gateway forwards only registered method/path combinations to the internal ClusterIP-only customer-service. The gateway propagates bearer tokens but does not currently validate them. Customer-service is the authoritative JWT, role, and ownership enforcement point.
+FastAPI remains the executable OpenAPI source. Clients use API Gateway paths beneath `/api/v1`; the gateway forwards only registered method/path combinations to the internal ClusterIP-only customer-service and catalogue-service. The gateway propagates bearer tokens but does not currently validate them. Each downstream service remains authoritative for JWT validation, role enforcement, visibility, ownership, and domain invariants.
 
 Interactive OpenAPI is available from a locally reachable service at `/docs`; the machine-readable document is `/openapi.json`. Do not expose the internal customer-service documentation endpoint publicly.
 
@@ -52,6 +52,49 @@ Normalized activity returns `timestamp`, `event_category`, `action`, `source`, `
 - `GET /health/ready` checks database connectivity and returns `503` when unavailable.
 - `GET /api/v1/info` returns non-sensitive service metadata.
 
+## Product Catalogue service
+
+Catalogue-service implements `/api/v1` category, product, search, lifecycle, effective-pricing, inventory, availability, movement, and statistics routes. The API Gateway registers the exact same external method/path combinations and forwards them to its fixed `CATALOGUE_SERVICE_URL`; arbitrary catalogue subpaths are not proxied.
+
+| Method | Path | Roles | Behavior |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/categories` | `operations_admin` | Create a normalized unique category. |
+| `GET` | `/api/v1/categories[?active=...]` | All governed roles | List role-visible categories with pagination. |
+| `GET` | `/api/v1/categories/{category_id}` | All governed roles | Retrieve a role-visible category. |
+| `PATCH` | `/api/v1/categories/{category_id}` | `operations_admin` | Update allowed category fields and safe parent relationship. |
+| `POST` | `/api/v1/products` | `operations_admin` | Register a product with immutable normalized SKU. |
+| `GET` | `/api/v1/products` | All governed roles | Search/filter/sort/paginate products with customer visibility enforcement. |
+| `GET` | `/api/v1/products/{product_id}` | All governed roles | Retrieve a role-visible product. |
+| `PATCH` | `/api/v1/products/{product_id}` | `operations_admin` | Update explicitly allowed product fields. |
+| `POST` | `/api/v1/products/{product_id}/deactivate` | `operations_admin` | Make a product inactive and non-searchable. |
+| `GET` | `/api/v1/products/{product_id}/prices` | All governed roles | Retrieve current pricing; history is operational-role-only. |
+| `PUT` | `/api/v1/products/{product_id}/prices/{currency_code}` | `operations_admin` | Close the prior price and create an immediately effective decimal price. |
+| `GET` | `/api/v1/inventory/products/{product_id}/availability` | All governed roles | Return derived availability; customers receive no operational balance fields. |
+| `GET` | `/api/v1/inventory/products/{product_id}` | `support`, `operations_admin` | Return operational on-hand, reserved, available, threshold, and version values. |
+| `POST` | `/api/v1/inventory/products/{product_id}/initialize` | `operations_admin` | Establish tracked stock and its `INITIAL_STOCK` movement idempotently. |
+| `POST` | `/api/v1/inventory/products/{product_id}/adjustments` | `operations_admin` | Apply a locked/versioned stock delta and append movement evidence. |
+| `PATCH` | `/api/v1/inventory/products/{product_id}/settings` | `operations_admin` | Change the reorder threshold with an optional version guard. |
+| `GET` | `/api/v1/inventory/products/{product_id}/movements` | `support`, `operations_admin` | Page through append-only movement history. |
+| `GET` | `/api/v1/inventory[?state=...]` | `support`, `operations_admin` | List tracked balances and filter by derived availability state. |
+| `GET` | `/api/v1/inventory/statistics` | `support`, `operations_admin` | Calculate stock counts and unit totals from persisted balances. |
+
+Catalogue-service independently validates the same Keycloak issuer/audience/role assumptions as customer-service. Customers see active/searchable products, current prices, and safe derived availability only; support is read-only; operations administrators own mutations. API responses contain domain schemas rather than SQLAlchemy records. Inventory reservation/release/fulfilment commands remain unavailable until Order Processing integration is implemented.
+
 ## Evidence boundary
 
-Route implementations, OpenAPI metadata, gateway mappings, schemas, and automated tests exist. Frontend API-consumer tests passed in the current review. The customer-service test run did not complete, and the retained live integration report contains seven skips. These APIs are therefore documented as implemented, not as a successfully executed end-to-end contract. Run the documented service and live integration suites before presenting functional execution evidence.
+Catalogue route implementations, OpenAPI metadata, fixed Gateway mappings, schemas and
+automated tests exist. The catalogue-service suite passed 48 tests; the focused React
+catalogue/inventory suite passed 6 tests; Gateway proxy tests cover the allow-listed
+transport. Current platform checks observed Ready internal Gateway and catalogue-service
+workloads, and an unauthenticated live route reached backend JWT enforcement.
+
+The explicitly enabled catalogue integration report contains **11 passed tests**, zero
+failures, errors or skips. It validates authenticated API Gateway workflows, RBAC,
+statistics, cache behavior, event publication, and controlled Redis/Kafka recovery.
+Manual browser evidence separately validates the principal administrator and customer
+catalogue journeys. The inventory-statistics browser page remains unverified.
+
+PostgreSQL is authoritative for catalogue, pricing and inventory data. Redis caches
+bounded read responses only and may be unavailable without invalidating PostgreSQL.
+Kafka carries asynchronous versioned facts produced through the transactional outbox;
+it is not part of the synchronous commit decision.

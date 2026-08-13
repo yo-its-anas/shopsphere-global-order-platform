@@ -9,3 +9,15 @@ The production identity direction is governed by the production-evolution sectio
 Unlike the PoC, production must not place the only identity provider and only transactional database on one physical host. Use a supported multi-instance Keycloak topology or evaluated managed identity service across independent failure domains. Store identity and customer data in separately governed, regional managed PostgreSQL services or equivalent isolated databases with replication, encrypted automated backups, point-in-time recovery, tested failover, and explicit recovery objectives.
 
 Production also requires private administrative access, TLS throughout exposed paths, external secret management and rotation, phishing-resistant MFA, verified-email and recovery delivery, durable privacy-governed identity-event export, immutable domain-audit retention, rate limiting, abuse monitoring, capacity testing, and disaster-recovery exercises. Merely increasing replicas inside the single-node PoC would not satisfy these requirements.
+
+## Catalogue and inventory evolution
+
+The [Product Catalogue and Inventory domain design](../catalogue-inventory-domain-design.md) preserves separate Catalogue and Inventory ownership while allowing one PoC deployment. Production may split these contexts when independently measured scale, availability, ownership, or release cadence warrants it. Inventory requires managed regional/high-availability PostgreSQL, encrypted automated backups, PITR, tested failover, contention monitoring, reconciliation and durable movement history. Search, statistics and Redis-based views remain disposable projections; Redis should be replicated across zones with TLS, authentication and automatic failover.
+
+The PoC transactional outbox and producer must evolve to managed or multi-broker Kafka
+across zones, replicated topics, durable encrypted storage, governed schemas, TLS,
+least-privilege ACLs, monitored relay lag and independently idempotent consumers. Run
+application workloads on multiple Kubernetes nodes/zones with disruption budgets,
+measured horizontal autoscaling, private connectivity, workload identity, external
+secret management, and enforced network/ingress/egress policy. These are production
+recommendations, not evidence that the current single-VM PoC is highly available.
