@@ -3,12 +3,19 @@ import { environment } from "../config/environment";
 export class ApiClientError extends Error {
   readonly status: number;
   readonly requestId: string | null;
+  readonly code: string | null;
 
-  constructor(message: string, status: number, requestId: string | null) {
+  constructor(
+    message: string,
+    status: number,
+    requestId: string | null,
+    code: string | null = null,
+  ) {
     super(message);
     this.name = "ApiClientError";
     this.status = status;
     this.requestId = requestId;
+    this.code = code;
   }
 }
 
@@ -55,10 +62,23 @@ export function createApiClient(
       }
 
       if (!response.ok) {
+        let responseCode: string | null = null;
+        let responseMessage: string | null = null;
+        try {
+          const body = (await response.json()) as {
+            error?: { code?: unknown; message?: unknown };
+            correlation_id?: unknown;
+          };
+          if (typeof body.error?.code === "string") responseCode = body.error.code;
+          if (typeof body.error?.message === "string") responseMessage = body.error.message;
+        } catch {
+          // The gateway may return no JSON body; retain the safe status-derived message.
+        }
         throw new ApiClientError(
-          messageForStatus(response.status),
+          responseMessage ?? messageForStatus(response.status),
           response.status,
           response.headers.get("X-Request-ID"),
+          responseCode,
         );
       }
 

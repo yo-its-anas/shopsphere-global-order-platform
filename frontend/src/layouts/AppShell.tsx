@@ -45,7 +45,14 @@ const navigationItems: NavigationItem[] = [
     icon: "health",
     roles: ["support", "operations_admin"],
   },
-  { label: "Orders", path: "/orders", icon: "orders" },
+  { label: "Shopping Cart", path: "/cart", icon: "orders", roles: ["customer"] },
+  { label: "My Orders", path: "/orders", icon: "orders", roles: ["customer"] },
+  {
+    label: "Order Management",
+    path: "/order-management",
+    icon: "orders",
+    roles: ["support", "operations_admin"],
+  },
   { label: "Platform Health", path: "/platform-health", icon: "health" },
   { label: "Audit Logs", path: "/audit-logs", icon: "audit" },
 ];
@@ -92,7 +99,8 @@ export function AppShell() {
         <div className="sidebar__notice">
           <DemoDataBadge />
           <p>
-            Badge applies only to dashboard fixtures. Customer and catalogue pages use gateway APIs.
+            Badge applies only to dashboard fixtures. Customer, catalogue, and order pages use
+            gateway APIs.
           </p>
         </div>
       </aside>

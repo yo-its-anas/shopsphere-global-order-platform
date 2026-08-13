@@ -10,6 +10,8 @@ import type {
   ProductPrice,
 } from "../../../types/catalogue";
 import { useAuth } from "../../auth/useAuth";
+import { clearCheckoutAttempt } from "../../orders/checkoutAttempt";
+import { useOrderApi } from "../../orders/useOrderApi";
 import { CapabilityError, CataloguePageHeader, StatusBadge } from "../components/CatalogueUi";
 import { useCatalogueApi } from "../useCatalogueApi";
 import { formatNumber, formatTimestamp } from "../utils";
@@ -18,14 +20,32 @@ export function ProductDetailsPage() {
   const { productId = "" } = useParams();
   const api = useCatalogueApi();
   const auth = useAuth();
+  const orderApi = useOrderApi();
   const [product, setProduct] = useState<Product | null>(null);
   const [category, setCategory] = useState<ProductCategory | null>(null);
   const [prices, setPrices] = useState<ProductPrice[]>([]);
   const [availability, setAvailability] = useState<ProductAvailability | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
+  const [cartMessage, setCartMessage] = useState("");
+  const [addingToCart, setAddingToCart] = useState(false);
   const canManage = auth.hasRole("operations_admin");
   const canReadOperations = auth.hasRole("support") || canManage;
+  const canOrder = auth.hasRole("customer");
+
+  async function addToCart() {
+    setAddingToCart(true);
+    setCartMessage("");
+    try {
+      await orderApi.addItem(productId, 1);
+      clearCheckoutAttempt();
+      setCartMessage("Product added to your cart.");
+    } catch (cartError) {
+      setError(cartError);
+    } finally {
+      setAddingToCart(false);
+    }
+  }
 
   const load = useCallback(async () => {
     setError(null);
@@ -73,6 +93,16 @@ export function ProductDetailsPage() {
             <Link className="button button--secondary" to="/products">
               Back to catalogue
             </Link>
+            {canOrder && product.status === "active" && (
+              <button
+                className="button button--primary"
+                disabled={addingToCart || availability?.quantity_available === 0}
+                onClick={() => void addToCart()}
+                type="button"
+              >
+                {addingToCart ? "Adding…" : "Add to cart"}
+              </button>
+            )}
             {canManage && (
               <Link className="button button--primary" to={`/products/${product.id}/edit`}>
                 Edit product
@@ -81,6 +111,12 @@ export function ProductDetailsPage() {
           </>
         }
       />
+
+      {cartMessage && (
+        <p className="success-alert" role="status">
+          {cartMessage}
+        </p>
+      )}
 
       <div className="catalogue-detail-grid">
         <article className="panel detail-card detail-card--wide">
