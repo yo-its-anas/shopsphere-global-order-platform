@@ -31,7 +31,7 @@ SERVICE_DIRS := \
 	validate-api-gateway api-gateway-build api-gateway-load \
 	api-gateway-apply api-gateway-status \
 	validate-order-service order-service-identity order-service-build \
-	order-service-load order-service-apply order-service-status order-service-smoke \
+	order-service-load order-service-apply order-service-status order-service-smoke order-e2e \
 	validate-kafka kafka-apply kafka-topics kafka-status \
 	catalogue-event-smoke \
 	customer-integration customer-integration-collect \
@@ -219,6 +219,10 @@ order-service-status: ## Verify order-service health, exposure, and internal dep
 
 order-service-smoke: ## Verify Gateway checkout, cancellation, reservation release, and outbox publication
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/smoke-test-order-platform.sh
+
+order-e2e: ## Execute controlled live Order Processing scenarios with JSON/JUnit evidence
+	@SHOPSPHERE_RUN_ORDER_E2E=true KUBE_CONTEXT="$(KUBE_CONTEXT)" \
+		$(PYTHON) tests/end-to-end/order_processing/run.py
 
 validate-api-gateway: ## Validate API Gateway manifests without changing the cluster
 	@./scripts/validate-api-gateway-manifests.sh
