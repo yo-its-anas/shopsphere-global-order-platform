@@ -209,6 +209,7 @@ class OrderOutboxRecord(Base):
         CheckConstraint("event_version > 0", name="ck_order_outbox_version_positive"),
         CheckConstraint("status IN ('pending', 'published')", name="ck_order_outbox_status"),
         Index("ix_order_outbox_dispatch", "status", "available_at", "occurred_at"),
+        Index("ix_order_outbox_aggregate", "aggregate_type", "aggregate_id", "occurred_at"),
     )
 
     event_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)

@@ -144,7 +144,7 @@ Catalogue data, reserves Inventory through a confidential service identity, calc
 Decimal totals, and returns the committed immutable confirmation. Partial failures are
 compensated and unresolved releases retain reconciliation evidence.
 
-Forty isolated order-service tests pass, including cart behavior/security,
+Forty-six isolated order-service tests pass, including cart behavior/security,
 fixed-origin Catalogue client, checkout success/failure/idempotency/Saga evidence,
 order retrieval/IDOR, role policy, lifecycle, cancellation, audit and events.
 Live PostgreSQL checkout migration, service identity, Catalogue reservation, Kafka,

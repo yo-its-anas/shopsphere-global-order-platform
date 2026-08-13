@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -34,6 +35,10 @@ class Settings:
     kafka_bootstrap_servers: str | None = None
     kafka_client_id: str = "order-service-outbox"
     kafka_request_timeout_ms: int = 5000
+    outbox_poll_interval_seconds: float = 2.0
+    outbox_retry_base_seconds: float = 2.0
+    outbox_batch_size: int = 50
+    outbox_lease_seconds: int = 60
     cart_currency_code: str = "USD"
     cart_max_item_quantity: int = 100
 
@@ -66,6 +71,10 @@ class Settings:
             catalogue_timeout_seconds = float(os.getenv("CATALOGUE_TIMEOUT_SECONDS", "3"))
             cart_max_item_quantity = int(os.getenv("CART_MAX_ITEM_QUANTITY", "100"))
             kafka_request_timeout_ms = int(os.getenv("KAFKA_REQUEST_TIMEOUT_MS", "5000"))
+            outbox_poll_interval_seconds = float(os.getenv("OUTBOX_POLL_INTERVAL_SECONDS", "2"))
+            outbox_retry_base_seconds = float(os.getenv("OUTBOX_RETRY_BASE_SECONDS", "2"))
+            outbox_batch_size = int(os.getenv("OUTBOX_BATCH_SIZE", "50"))
+            outbox_lease_seconds = int(os.getenv("OUTBOX_LEASE_SECONDS", "60"))
         except ValueError as exc:
             raise ValueError("Numeric configuration values are invalid") from exc
 
@@ -114,8 +123,23 @@ class Settings:
             raise ValueError("CART_CURRENCY_CODE must be a three-letter currency code")
         if not 1 <= cart_max_item_quantity <= 1000:
             raise ValueError("CART_MAX_ITEM_QUANTITY must be between 1 and 1000")
-        if not kafka_client_id or not 1000 <= kafka_request_timeout_ms <= 30000:
-            raise ValueError("Kafka client configuration is invalid")
+        if kafka_bootstrap_servers:
+            for endpoint in kafka_bootstrap_servers.split(","):
+                host, separator, port = endpoint.strip().rpartition(":")
+                if not separator or not host or not port.isdigit() or not 1 <= int(port) <= 65535:
+                    raise ValueError("KAFKA_BOOTSTRAP_SERVERS must contain host:port values")
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]{2,80}", kafka_client_id):
+            raise ValueError("KAFKA_CLIENT_ID contains unsupported characters")
+        if not 1000 <= kafka_request_timeout_ms <= 30000:
+            raise ValueError("KAFKA_REQUEST_TIMEOUT_MS must be between 1000 and 30000")
+        if not 0.25 <= outbox_poll_interval_seconds <= 60:
+            raise ValueError("OUTBOX_POLL_INTERVAL_SECONDS must be between 0.25 and 60")
+        if not 0.25 <= outbox_retry_base_seconds <= 60:
+            raise ValueError("OUTBOX_RETRY_BASE_SECONDS must be between 0.25 and 60")
+        if not 1 <= outbox_batch_size <= 500:
+            raise ValueError("OUTBOX_BATCH_SIZE must be between 1 and 500")
+        if not 10 <= outbox_lease_seconds <= 600:
+            raise ValueError("OUTBOX_LEASE_SECONDS must be between 10 and 600")
 
         return cls(
             service_name=service_name,
@@ -137,6 +161,10 @@ class Settings:
             kafka_bootstrap_servers=kafka_bootstrap_servers,
             kafka_client_id=kafka_client_id,
             kafka_request_timeout_ms=kafka_request_timeout_ms,
+            outbox_poll_interval_seconds=outbox_poll_interval_seconds,
+            outbox_retry_base_seconds=outbox_retry_base_seconds,
+            outbox_batch_size=outbox_batch_size,
+            outbox_lease_seconds=outbox_lease_seconds,
             cart_currency_code=cart_currency_code,
             cart_max_item_quantity=cart_max_item_quantity,
         )

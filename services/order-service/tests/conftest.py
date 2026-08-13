@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.config import Settings
 from app.core.errors import DependencyUnavailableError, ProductUnavailableError
 from app.core.security import KeycloakTokenVerifier
+from app.domain.events import DomainEvent
 from app.domain.models import (
     CartItem,
     CartStatus,
@@ -26,7 +27,6 @@ from app.domain.models import (
     InventoryReservationReceipt,
     Order,
     OrderAuditEvent,
-    OrderDomainEvent,
     OrderItem,
     OrderStatusHistory,
     ShoppingCart,
@@ -405,7 +405,7 @@ class MemoryOutboxRepository:
     def __init__(self, store: dict[str, Any]) -> None:
         self._store = store
 
-    def add(self, event: OrderDomainEvent) -> None:
+    def add(self, event: DomainEvent) -> None:
         self._store["outbox"][event.event_id] = event
 
 

@@ -349,7 +349,7 @@ Order confirmation is a server-generated representation of the committed immutab
 snapshot and stable order reference. It is not proof of payment. Email delivery may be a
 later notification concern and must consume order facts rather than own order state.
 
-## Planned domain events
+## Implemented domain events
 
 - `order.created.v1` — durable order identity and immutable commercial snapshot exist;
 - `order.confirmed.v1` — authoritative inventory reservation was accepted;
@@ -360,8 +360,12 @@ Payloads contain opaque references, status, currency, exact amount strings, corr
 and causation identifiers, and only governed consumer data. They exclude JWTs,
 credentials, payment data, and unnecessary PII. Per-order events use the order UUID as
 the Kafka key to preserve partition order where possible. Global ordering is not
-promised. `order.created.v1` and `order.confirmed.v1`, their transactional outbox records,
-and an at-least-once relay are implemented; live Kafka publication remains unverified.
+promised. All four contracts, their transactional outbox records, PostgreSQL lease/retry
+store and the same configurable at-least-once relay used by Catalogue are implemented.
+An acknowledgement failure after Kafka accepts a message can publish the same `event_id`
+again; consumers must deduplicate that stable identifier. Structured publish/defer/poll
+logs provide operational visibility without payloads or credentials. Live Kafka
+publication by order-service remains unverified.
 
 ## API shape
 

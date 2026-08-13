@@ -108,6 +108,10 @@ def create_app(
                 resolved_settings.kafka_client_id,
                 resolved_settings.kafka_request_timeout_ms,
             ),
+            batch_size=resolved_settings.outbox_batch_size,
+            poll_interval_seconds=resolved_settings.outbox_poll_interval_seconds,
+            retry_base_seconds=resolved_settings.outbox_retry_base_seconds,
+            lease_seconds=resolved_settings.outbox_lease_seconds,
         )
 
     @asynccontextmanager

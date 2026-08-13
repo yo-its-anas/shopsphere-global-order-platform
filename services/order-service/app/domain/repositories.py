@@ -7,6 +7,7 @@ from types import TracebackType
 from typing import Protocol
 from uuid import UUID
 
+from app.domain.events import DomainEvent
 from app.domain.models import (
     CartItem,
     CatalogueProductSnapshot,
@@ -14,7 +15,6 @@ from app.domain.models import (
     InventoryReservationReceipt,
     Order,
     OrderAuditEvent,
-    OrderDomainEvent,
     OrderItem,
     OrderStatusHistory,
     ShoppingCart,
@@ -139,4 +139,4 @@ class OrderRepository(Protocol):
 
 
 class OrderOutboxRepository(Protocol):
-    def add(self, event: OrderDomainEvent) -> None: ...
+    def add(self, event: DomainEvent) -> None: ...

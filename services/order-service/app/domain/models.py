@@ -154,29 +154,3 @@ class CheckoutAttempt:
     failure_code: str | None = None
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
-
-
-@dataclass(frozen=True, slots=True)
-class OrderDomainEvent:
-    event_type: str
-    aggregate_id: UUID
-    correlation_id: str
-    payload: dict[str, Any]
-    event_id: UUID = field(default_factory=uuid4)
-    event_version: int = 1
-    aggregate_type: str = "order"
-    producer: str = "order-service"
-    occurred_at: datetime = field(default_factory=utc_now)
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "event_id": str(self.event_id),
-            "event_type": self.event_type,
-            "event_version": self.event_version,
-            "aggregate_type": self.aggregate_type,
-            "aggregate_id": str(self.aggregate_id),
-            "occurred_at": self.occurred_at.isoformat(),
-            "correlation_id": self.correlation_id,
-            "producer": self.producer,
-            "payload": self.payload,
-        }

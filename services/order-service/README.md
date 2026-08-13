@@ -34,8 +34,11 @@ remain outside this implementation.
   reconciliation.
 - A successful checkout atomically records the order, status history, safe audit events,
   cart completion, and `order.created.v1`/`order.confirmed.v1` outbox intents.
+- Accepted lifecycle changes atomically add `order.status_changed.v1`; cancellation adds
+  both the status-change fact and `order.cancelled.v1` after reservation release.
 - The outbox relay is at-least-once: Kafka failure does not roll back a committed order;
-  consumers must be idempotent by `event_id`.
+  acknowledgement failure can cause duplicate delivery, so consumers must be idempotent
+  by `event_id`.
 - Customers can list and retrieve only their own immutable order snapshots, history and
   safe audit activity; cross-customer identifiers return `404`.
 - Support has operational read access only. `operations_admin` alone can perform the
@@ -79,7 +82,10 @@ Copy `.env.example` and supply values through the runtime environment. Required 
 dependencies are configured by `DATABASE_URL`, `KEYCLOAK_ISSUER`,
 `CATALOGUE_SERVICE_URL`, and a confidential `SERVICE_TOKEN_*` identity authorized only
 for internal inventory reservation commands. Optional `KAFKA_BOOTSTRAP_SERVERS` enables
-the recoverable outbox relay. Credentials belong in a secret manager or Kubernetes
+the same recoverable outbox relay used by Catalogue. Batch, poll, retry and lease behavior
+uses the validated `OUTBOX_*` settings. Structured `domain_event_published`,
+`domain_event_publish_deferred`, and `outbox_poll_failed` logs provide non-sensitive
+operational visibility. Credentials belong in a secret manager or Kubernetes
 Secret and must not be committed. The Catalogue and token URLs are trusted fixed origins;
 clients cannot supply an upstream URL.
 

@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.domain.events import DomainEvent
 from app.domain.models import (
     CartItem,
     CartStatus,
@@ -16,7 +17,6 @@ from app.domain.models import (
     CheckoutAttemptStatus,
     Order,
     OrderAuditEvent,
-    OrderDomainEvent,
     OrderItem,
     OrderStatus,
     OrderStatusHistory,
@@ -440,7 +440,7 @@ class SqlAlchemyOrderOutboxRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    def add(self, event: OrderDomainEvent) -> None:
+    def add(self, event: DomainEvent) -> None:
         self._session.add(
             OrderOutboxRecord(
                 event_id=event.event_id,
@@ -465,9 +465,9 @@ class SqlAlchemyOrderOutboxStore:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    async def claim(self, batch_size: int, lease_seconds: int) -> list[OrderDomainEvent]:
+    async def claim(self, batch_size: int, lease_seconds: int) -> list[DomainEvent]:
         now = datetime.now(timezone.utc)
-        expired = now - timedelta(seconds=lease_seconds)
+        expired_before = now - timedelta(seconds=lease_seconds)
         async with self._session_factory() as session, session.begin():
             records = list(
                 await session.scalars(
@@ -477,7 +477,7 @@ class SqlAlchemyOrderOutboxStore:
                         OrderOutboxRecord.available_at <= now,
                         or_(
                             OrderOutboxRecord.locked_at.is_(None),
-                            OrderOutboxRecord.locked_at < expired,
+                            OrderOutboxRecord.locked_at < expired_before,
                         ),
                     )
                     .order_by(OrderOutboxRecord.occurred_at, OrderOutboxRecord.event_id)
@@ -489,7 +489,7 @@ class SqlAlchemyOrderOutboxStore:
                 record.locked_at = now
                 record.attempts += 1
             return [
-                OrderDomainEvent(
+                DomainEvent(
                     event_id=record.event_id,
                     event_type=record.event_type,
                     event_version=record.event_version,
@@ -520,7 +520,9 @@ class SqlAlchemyOrderOutboxStore:
                 )
             )
 
-    async def release_for_retry(self, event_id: UUID, delay: float, code: str) -> None:
+    async def release_for_retry(
+        self, event_id: UUID, delay_seconds: float, error_code: str
+    ) -> None:
         now = datetime.now(timezone.utc)
         async with self._session_factory() as session, session.begin():
             await session.execute(
@@ -530,9 +532,9 @@ class SqlAlchemyOrderOutboxStore:
                     OrderOutboxRecord.status == "pending",
                 )
                 .values(
-                    available_at=now + timedelta(seconds=delay),
+                    available_at=now + timedelta(seconds=delay_seconds),
                     locked_at=None,
-                    last_error_code=code,
+                    last_error_code=error_code,
                 )
             )
 
