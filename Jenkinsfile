@@ -4,7 +4,7 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         timestamps()
-        timeout(time: 60, unit: 'MINUTES')
+        timeout(time: 90, unit: 'MINUTES')
         disableConcurrentBuilds()
         buildDiscarder(logRotator(
             daysToKeepStr: '30',
@@ -75,6 +75,10 @@ required_paths=(
     infrastructure/terraform/versions.tf
     platform/kind/cluster-config.yaml
     platform/kubernetes/overlays/poc/kustomization.yaml
+    platform/kubernetes/overlays/poc/order-service/kustomization.yaml
+    scripts/validate-order-service-manifests.sh
+    scripts/validate-order-migrations.py
+    tests/end-to-end/order_processing/run.py
     services/customer-service/pyproject.toml
     services/catalogue-service/pyproject.toml
     services/order-service/pyproject.toml
@@ -108,6 +112,7 @@ mkdir -p test-results/status
 classify_suite() {
     local flag_name="$1"
     local status_file="$2"
+    local disabled_reason="${3:-live PoC execution was not enabled}"
     local enabled="${!flag_name:-false}"
 
     case "$enabled" in
@@ -116,8 +121,8 @@ classify_suite() {
                 >"$status_file"
             ;;
         false|'')
-            printf 'status=skipped/not applicable\nreason=live PoC execution was not enabled\n' \
-                >"$status_file"
+            printf 'status=skipped/not applicable\nreason=%s\n' \
+                "$disabled_reason" >"$status_file"
             ;;
         *)
             echo "ERROR: ${flag_name} must be true or false." >&2
@@ -130,6 +135,12 @@ classify_suite SHOPSPHERE_RUN_CUSTOMER_INTEGRATION \
     test-results/status/customer-integration.properties
 classify_suite SHOPSPHERE_RUN_CATALOGUE_INTEGRATION \
     test-results/status/catalogue-inventory-integration.properties
+classify_suite SHOPSPHERE_RUN_ORDER_INTEGRATION \
+    test-results/status/order-integration.properties \
+    'environment-dependent live PoC order integration was not enabled'
+classify_suite SHOPSPHERE_RUN_ORDER_E2E \
+    test-results/status/order-e2e.properties \
+    'environment-dependent live PoC order E2E execution was not enabled'
 
 echo 'Integration suites are classified explicitly; disabled suites are skipped/not applicable.'
 ''')
@@ -165,6 +176,20 @@ set -Eeuo pipefail
             }
         }
 
+        stage('Order-service dependency installation') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Install pinned order-service dependencies', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+"$CI_VENV/bin/python" -m pip install -e 'services/order-service[dev]'
+"$CI_VENV/bin/python" -m pip check
+''')
+            }
+        }
+
         stage('Python Black check') {
             options {
                 timeout(time: 5, unit: 'MINUTES')
@@ -185,16 +210,15 @@ for service in "${services[@]}"; do
     echo "== Black: $service =="
     (
         cd "$service"
-        checked=0
-        while IFS= read -r -d '' source_file; do
-            "$WORKSPACE/$CI_VENV/bin/python" -m black \
-                --workers 1 --check --quiet "$source_file"
-            checked=$((checked + 1))
-        done < <(find app tests -type f -name '*.py' -print0)
+        source_roots=(app tests)
+        [[ -d migrations ]] && source_roots+=(migrations)
+        checked="$(find "${source_roots[@]}" -type f -name '*.py' -print | wc -l)"
         [[ "$checked" -gt 0 ]] || {
             echo "ERROR: No Python sources were found under $service." >&2
             exit 1
         }
+        "$WORKSPACE/$CI_VENV/bin/python" -m black \
+            --workers 1 --check --quiet "${source_roots[@]}"
         echo "Black formatting passed for $checked Python files."
     )
 done
@@ -225,14 +249,10 @@ for service in "${services[@]}"; do
     echo "== Ruff: $service =="
     (
         cd "$service"
-        if [[ "$service_name" == 'catalogue-service' ]]; then
-            "$WORKSPACE/$CI_VENV/bin/python" -m ruff check \
-                --output-format=json \
-                --output-file="$WORKSPACE/test-results/lint/catalogue-service-ruff.json" \
-                .
-        else
-            "$WORKSPACE/$CI_VENV/bin/python" -m ruff check .
-        fi
+        "$WORKSPACE/$CI_VENV/bin/python" -m ruff check \
+            --output-format=json \
+            --output-file="$WORKSPACE/test-results/lint/${service_name}-ruff.json" \
+            .
     )
 done
 ''')
@@ -281,6 +301,27 @@ mkdir -p test-results/security
             }
         }
 
+        stage('Order-service Bandit') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Scan order-service Python code with Bandit', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/security
+(
+    cd services/order-service
+    "$WORKSPACE/$CI_VENV/bin/python" -m bandit \
+        --quiet \
+        --recursive app \
+        --format json \
+        --output "$WORKSPACE/test-results/security/order-service-bandit.json"
+)
+''')
+            }
+        }
+
         stage('Python unit tests') {
             options {
                 timeout(time: 10, unit: 'MINUTES')
@@ -307,6 +348,24 @@ for service in "${services[@]}"; do
             --junitxml="$WORKSPACE/test-results/python/${service_name}.xml"
     )
 done
+''')
+            }
+        }
+
+        stage('Catalogue inventory reservation tests') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run focused reservation and persistence contract tests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/python
+cd services/catalogue-service
+"$WORKSPACE/$CI_VENV/bin/python" -m pytest \
+    tests/test_inventory_reservations.py \
+    tests/test_persistence_contract.py::test_reservation_database_contract_enforces_identity_quantity_and_lifecycle \
+    --junitxml="$WORKSPACE/test-results/python/catalogue-reservations.xml"
 ''')
             }
         }
@@ -357,6 +416,75 @@ printf 'status=failed\nreason=integration suite exited unsuccessfully\n' >"$stat
 "$CI_VENV/bin/python" scripts/classify-junit.py \
     --report test-results/integration/catalogue-inventory.xml \
     --status-file "$status_file"
+''')
+            }
+        }
+
+        stage('PoC order capability integration tests') {
+            when {
+                environment name: 'SHOPSPHERE_RUN_ORDER_INTEGRATION', value: 'true'
+            }
+            options {
+                timeout(time: 20, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run opt-in deployed order capability smoke validation', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/integration
+report='test-results/integration/order-capability.xml'
+status_file='test-results/status/order-integration.properties'
+status='failed'
+message='Deployed order capability smoke validation failed.'
+if KUBE_CONTEXT="${KUBE_CONTEXT:-kind-shopsphere-poc}" \
+    ./scripts/smoke-test-order-platform.sh; then
+    status='passed'
+    message='Deployed order capability smoke validation passed through API Gateway.'
+fi
+"$CI_VENV/bin/python" scripts/write-junit-status.py \
+    --report "$report" \
+    --suite order-capability-integration \
+    --test deployed-order-smoke \
+    --status "$status" \
+    --message "$message"
+"$CI_VENV/bin/python" scripts/classify-junit.py \
+    --report "$report" \
+    --status-file "$status_file"
+[[ "$status" == 'passed' ]]
+''')
+            }
+        }
+
+        stage('PoC order end-to-end tests') {
+            when {
+                environment name: 'SHOPSPHERE_RUN_ORDER_E2E', value: 'true'
+            }
+            options {
+                timeout(time: 30, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run explicitly enabled live order E2E scenarios', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/end-to-end
+status_file='test-results/status/order-e2e.properties'
+printf 'status=failed\nreason=end-to-end suite exited unsuccessfully\n' >"$status_file"
+"$CI_VENV/bin/python" scripts/write-junit-status.py \
+    --report test-results/end-to-end/order-processing.xml \
+    --suite order-processing-e2e \
+    --test prerequisites \
+    --status failed \
+    --message 'Order E2E runner did not complete.'
+run_status='failed'
+if SHOPSPHERE_RUN_ORDER_E2E=true \
+    KUBE_CONTEXT="${KUBE_CONTEXT:-kind-shopsphere-poc}" \
+        "$CI_VENV/bin/python" tests/end-to-end/order_processing/run.py; then
+    run_status='passed'
+fi
+"$CI_VENV/bin/python" scripts/classify-junit.py \
+    --report test-results/end-to-end/order-processing.xml \
+    --status-file "$status_file"
+[[ "$run_status" == 'passed' ]]
 ''')
             }
         }
@@ -424,6 +552,25 @@ npm test -- \
             }
         }
 
+        stage('Frontend order workflow tests') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run focused cart, checkout, and order frontend tests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/frontend
+cd frontend
+npm test -- \
+    src/features/orders/OrderFeature.test.tsx \
+    src/services/orderApi.test.ts \
+    --reporter=junit \
+    --outputFile="$WORKSPACE/test-results/frontend/order-workflows.xml"
+''')
+            }
+        }
+
         stage('Frontend production build') {
             options {
                 timeout(time: 10, unit: 'MINUTES')
@@ -470,6 +617,22 @@ docker build \
             }
         }
 
+        stage('Order-service Docker build') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Build the order-service image', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+docker build \
+    --label "shopsphere.ci.build=${BUILD_NUMBER}" \
+    --tag "shopsphere/order-service:ci-${BUILD_NUMBER}" \
+    services/order-service
+''')
+            }
+        }
+
         stage('Remaining Docker image build validation') {
             options {
                 timeout(time: 25, unit: 'MINUTES')
@@ -479,7 +642,6 @@ docker build \
 set -Eeuo pipefail
 
 services=(
-    services/order-service
     services/analytics-service
     services/api-gateway
 )
@@ -536,6 +698,7 @@ set -Eeuo pipefail
 make validate-kubernetes
 make validate-customer-service
 make validate-catalogue-service
+make validate-order-service
 make validate-api-gateway
 ''')
             }
@@ -586,6 +749,27 @@ mkdir -p test-results/migrations
             }
         }
 
+        stage('Order database migration integrity') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Validate order Alembic graph and compile offline migration SQL', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/migrations
+"$CI_VENV/bin/python" scripts/validate-order-migrations.py \
+    --report test-results/migrations/order-migration-integrity.json
+(
+    cd services/order-service
+    DATABASE_URL='postgresql+psycopg://validation:validation@127.0.0.1/order_validation' \
+        "$WORKSPACE/$CI_VENV/bin/python" -m alembic upgrade head --sql \
+        >"$WORKSPACE/test-results/migrations/order-upgrade.sql"
+)
+''')
+            }
+        }
+
         stage('Integration validation summary') {
             options {
                 timeout(time: 2, unit: 'MINUTES')
@@ -627,7 +811,7 @@ done
                     keepLongStdio: true
                 )
                 archiveArtifacts(
-                    artifacts: 'test-results/**/*,docs/evidence/catalogue-inventory-integration-evidence.md',
+                    artifacts: 'test-results/**/*,docs/evidence/catalogue-inventory-integration-evidence.md,docs/evidence/order-processing-e2e-evidence.md',
                     allowEmptyArchive: false,
                     fingerprint: true
                 )
@@ -644,7 +828,7 @@ done
                 keepLongStdio: true
             )
             archiveArtifacts(
-                artifacts: 'test-results/**/*,docs/evidence/catalogue-inventory-integration-evidence.md',
+                artifacts: 'test-results/**/*,docs/evidence/catalogue-inventory-integration-evidence.md,docs/evidence/order-processing-e2e-evidence.md',
                 allowEmptyArchive: true,
                 fingerprint: true
             )
