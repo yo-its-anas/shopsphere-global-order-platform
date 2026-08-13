@@ -16,6 +16,13 @@ For Inventory, PostgreSQL is authoritative for `quantity_on_hand` and `quantity_
 
 For Catalogue, normalized SKU uniqueness and category keys are enforced in the database. Monetary amounts use Python `Decimal` and fixed-precision PostgreSQL `NUMERIC`, never binary floating point. Effective-dated price records retain history and prevent overlapping active ranges for the same product and ISO 4217 currency.
 
+For the target Order Processing context, PostgreSQL will be authoritative for carts,
+orders, immutable commercial snapshots, status/audit history, checkout idempotency, Saga
+state, and order outbox rows. Monetary calculations use the same Decimal/`NUMERIC(19,4)`
+rule. A logically separate `order_db` is planned but does not currently exist. Redis is
+not part of checkout correctness and must not become authoritative for order state,
+idempotency, totals, or reservations.
+
 ## Alternatives considered
 
 - MySQL: capable, but PostgreSQL provides a strong open-source relational and extensibility baseline.
@@ -35,7 +42,7 @@ Use separate least-privilege database identities, encrypted connections, protect
 
 ## PoC limitations
 
-Single instances provide no high availability and may share host resources. Backup restoration, failover, replica behavior, and realistic cache pressure are not proven. `customer_db`, `keycloak_db`, and `catalogue_db` are logically separated by ownership but share one PostgreSQL server, volume, node, and VM. Redis is one authenticated, ephemeral pod on that node with no replication or persistence. Cache eviction/restart is expected and reconstructable; PostgreSQL remains authoritative.
+Single instances provide no high availability and may share host resources. Backup restoration, failover, replica behavior, and realistic cache pressure are not proven. `customer_db`, `keycloak_db`, and `catalogue_db` are logically separated by ownership but share one PostgreSQL server, volume, node, and VM. The proposed `order_db` has not been provisioned. Redis is one authenticated, ephemeral pod on that node with no replication or persistence. Cache eviction/restart is expected and reconstructable; PostgreSQL remains authoritative.
 
 ## Production evolution
 

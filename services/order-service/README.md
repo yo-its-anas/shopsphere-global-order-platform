@@ -2,6 +2,12 @@
 
 FastAPI foundation for the planned order capture, validation, lifecycle, orchestration, and domain-event boundary. No order business behavior, persistence, Kafka integration, or authentication is implemented.
 
+The accepted target domain design is documented in
+[`docs/architecture/order-processing-domain-design.md`](../../docs/architecture/order-processing-domain-design.md),
+with the reservation Saga decision in
+[`ADR-011`](../../docs/adr/ADR-011-reservation-based-order-saga.md). Those documents do
+not imply that carts, orders, inventory reservations, gateway routes, or events exist.
+
 ## Local development
 
 ```bash

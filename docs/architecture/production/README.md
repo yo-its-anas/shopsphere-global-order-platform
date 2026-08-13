@@ -21,3 +21,15 @@ application workloads on multiple Kubernetes nodes/zones with disruption budgets
 measured horizontal autoscaling, private connectivity, workload identity, external
 secret management, and enforced network/ingress/egress policy. These are production
 recommendations, not evidence that the current single-VM PoC is highly available.
+
+## Order Processing evolution
+
+The target order boundary is defined in the
+[Enterprise Order Processing domain design](../order-processing-domain-design.md). A
+production implementation retains Order-owned persistence and Catalogue-owned inventory
+while evolving the PoC Saga into a durable, observable workflow with reservation leases,
+reconciliation, independently managed regional/HA databases, multi-zone workloads,
+authenticated and encrypted service traffic, and managed multi-broker Kafka. Payment,
+tax, fraud, fulfilment, and notification remain separately governed capabilities rather
+than fields casually added to the Order aggregate. These are recommendations, not
+implemented capabilities.

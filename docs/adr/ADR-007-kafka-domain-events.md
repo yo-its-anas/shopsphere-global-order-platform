@@ -16,6 +16,12 @@ Use Kafka for asynchronous domain-event publication and consumption. Events use 
 
 Implemented catalogue/inventory facts are `catalogue.product.created.v1`, `catalogue.product.updated.v1`, `catalogue.price.changed.v1`, `inventory.adjusted.v1`, `inventory.low.v1`, and `inventory.out-of-stock.v1`. Low/out-of-stock events are emitted on state transitions rather than every read. Events contain the minimum non-sensitive projection and never authorize or replace the synchronous inventory transaction. A future order reservation requires an authoritative success/failure response; events distribute committed facts afterward.
 
+The accepted Order Processing design adds planned `order.created.v1`,
+`order.confirmed.v1`, `order.status_changed.v1`, and `order.cancelled.v1` facts through an
+order-owned transactional outbox. These names are contract direction, not implementation
+evidence. Checkout and reservation remain synchronous commands because an event alone
+cannot provide the immediate authoritative availability decision.
+
 ## Alternatives considered
 
 - Synchronous REST only: simpler but couples availability and limits event-driven analytics.
@@ -32,7 +38,7 @@ Restrict topic access per workload, encrypt transport, authenticate clients, pro
 
 ## PoC limitations
 
-A single combined broker/controller, one PVC, one kind node, and one VM cannot demonstrate broker redundancy, zone survival, or production throughput. The PoC internal listener is plaintext and unauthenticated, with access limited by internal Services and a declarative NetworkPolicy whose enforcement depends on the CNI. Schema-registry governance, automatic outbox archival, broker/relay monitoring, and all consumers remain unimplemented.
+A single combined broker/controller, one PVC, one kind node, and one VM cannot demonstrate broker redundancy, zone survival, or production throughput. The PoC internal listener is plaintext and unauthenticated, with access limited by internal Services and a declarative NetworkPolicy whose enforcement depends on the CNI. Schema-registry governance, automatic outbox archival, broker/relay monitoring, all consumers, and the order event producer remain unimplemented.
 
 ## Production evolution
 

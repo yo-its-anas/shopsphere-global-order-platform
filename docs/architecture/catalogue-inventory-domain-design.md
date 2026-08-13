@@ -2,7 +2,7 @@
 
 ## Status and evidence boundary
 
-This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, internal service APIs, a transactional event outbox, Kafka production, explicit API Gateway transport routes, React catalogue/inventory screens, and internal Kubernetes workloads are implemented. Backend and frontend unit/component suites and stated platform checks passed. The retained live integration report contains 11 skips, so authenticated live catalogue journeys are **Pending / Not Verified**. Order reservations and event consumers remain **Planned**.
+This document defines the domain model for Product Catalogue and Inventory Management. Catalogue categories, products, immediate effective pricing, PostgreSQL search, inventory balances, derived availability, stock adjustments, append-only movement history, calculated statistics, optional Redis cache-aside reads, SQLAlchemy repositories, Alembic migrations, JWT/RBAC enforcement, internal service APIs, a transactional event outbox, Kafka production, explicit API Gateway transport routes, React catalogue/inventory screens, and internal Kubernetes workloads are implemented. Backend and frontend unit/component suites and stated platform checks passed. The explicitly enabled live integration suite passed all 11 tests with zero skips, and the principal authenticated browser journey passed. Order reservations and event consumers remain **Planned**.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md), [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md), [ADR-005](../adr/ADR-005-keycloak-identity-rbac.md), [ADR-006](../adr/ADR-006-postgresql-redis-data-platform.md), [ADR-007](../adr/ADR-007-kafka-domain-events.md), and [ADR-010](../adr/ADR-010-utc-timestamps-json-logs.md).
 
@@ -141,9 +141,20 @@ Inventory statistics are read models derived from authoritative inventory items 
 
 ## Future Order Processing integration
 
-Order Processing is not implemented by this design. A future order workflow should request Inventory to reserve quantities using an order-owned reference and idempotency key. Inventory atomically increments `quantity_reserved` only when sufficient availability exists and returns an explicit reservation result. Cancellation/expiry releases the reservation; fulfilment atomically decrements both on-hand and reserved quantities. Order-service must not write inventory tables directly.
+Order Processing is not implemented by this service. The accepted
+[Enterprise Order Processing domain design](order-processing-domain-design.md) and
+[ADR-011](../adr/ADR-011-reservation-based-order-saga.md) require order-service to call
+an atomic Catalogue quote-and-reserve contract using an order-owned reference and
+idempotency key. Inventory increments `quantity_reserved` only when sufficient
+availability exists and returns an explicit reservation result. Cancellation/expiry
+releases the reservation; fulfilment atomically decrements both on-hand and reserved
+quantities. Order-service must not write inventory tables directly.
 
-Cross-service orchestration must define reservation expiry, retry, compensation, partial availability, and duplicate-message behavior. A production workflow may use a saga and transactional outbox. The synchronous reservation result is authoritative for checkout; later events distribute facts to other consumers.
+The accepted order-service-orchestrated Saga defines reservation expiry, retry,
+compensation, all-or-nothing PoC reservation, and duplicate-command behavior. Its
+synchronous reservation result is authoritative for checkout; transactional outbox
+events distribute committed facts afterward. The required reservation record and
+commands are still Planned.
 
 ## Implemented domain events
 

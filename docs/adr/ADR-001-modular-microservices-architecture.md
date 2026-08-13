@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — independently buildable service boundaries exist. Customer, Product Catalogue, and Inventory behavior are implemented; wider catalogue integrations remain Planned.
+Accepted — independently buildable service boundaries exist. Customer, Product Catalogue, and Inventory behavior are implemented; Enterprise Order Processing has an accepted domain design but its business behavior remains Planned.
 
 ## Context
 
@@ -16,7 +16,7 @@ For the Customer Identity and Account Management capability, Keycloak owns authe
 
 Within Product Catalogue and Inventory Management, `catalogue-service` is the PoC deployment boundary but contains two logical bounded contexts. Catalogue owns product metadata and lifecycle, category relationships, and effective-dated pricing. Inventory owns stock balances, reservations, derived availability, adjustments, immutable movement history, and inventory statistics. These contexts communicate through explicit application interfaces and must not share mutable domain objects merely because they share a process. The detailed model is defined in the [Product Catalogue and Inventory domain design](../architecture/catalogue-inventory-domain-design.md).
 
-`order-service` will later own order lifecycle and request inventory reservations through a governed contract. It must never update catalogue or inventory tables directly. The contexts may separate into independently deployable services in production if scale, ownership, or change cadence justifies the additional distributed-system cost.
+`order-service` owns the target cart, order, immutable commercial snapshot, lifecycle, status history, transaction audit, checkout idempotency, Saga state, and order-event boundary. Catalogue and Inventory remain authoritative for sellable products, prices, availability, reservations, releases, and fulfilment consumption. Order-service must never update catalogue or inventory tables directly. Checkout uses the governed reservation Saga in [ADR-011](ADR-011-reservation-based-order-saga.md), detailed by the [Enterprise Order Processing domain design](../architecture/order-processing-domain-design.md). This is accepted design; order behavior is not yet implemented.
 
 ## Alternatives considered
 
@@ -32,13 +32,18 @@ Identity lifecycle and customer-profile lifecycle are related but not identical.
 
 Packaging Catalogue and Inventory together reduces PoC operations while preserving conceptual boundaries. It requires discipline in module dependencies and tests so the deployable unit does not become an unstructured shared model.
 
+Order checkout adds an unavoidable consistency boundary. The selected Saga keeps each
+service transaction local, makes compensating release and uncertain outcomes explicit,
+and uses transactional outboxes for asynchronous facts rather than treating Kafka as a
+distributed transaction coordinator.
+
 ## Security implications
 
 Each service requires least-privilege identity, network access, secrets, authorization, and audit controls. More network boundaries increase the attack surface and require consistent gateway and service-side validation.
 
 ## PoC limitations
 
-Catalogue categories, products, effective pricing, search, inventory balances/movements/statistics, persistence adapters, migrations, internal APIs, RBAC enforcement, Redis cache-aside reads, a transactional Kafka outbox/producer, Kubernetes workloads, fixed API Gateway routes, isolated service/gateway tests, and an internal API Gateway workload are implemented. Order Processing reservations, event consumers, and deployed authenticated end-to-end tests are not implemented. Services share a VM and supporting platforms, so the PoC does not prove independent infrastructure failure isolation or high availability.
+Catalogue categories, products, effective pricing, search, inventory balances/movements/statistics, persistence adapters, migrations, internal APIs, RBAC enforcement, Redis cache-aside reads, a transactional Kafka outbox/producer, Kubernetes workloads, fixed API Gateway routes, isolated service/gateway tests, and an internal API Gateway workload are implemented. Order-service remains a system-endpoint foundation: `order_db`, carts, orders, reservation commands, Saga/outbox behavior, gateway/UI integration, and order-domain tests are not implemented. Services share a VM and supporting platforms, so the PoC does not prove independent infrastructure failure isolation or high availability.
 
 ## Production evolution
 
