@@ -46,3 +46,10 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: order-service
+      ports:
+        - protocol: TCP
+          port: 8000

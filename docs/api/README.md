@@ -1,6 +1,6 @@
 # ShopSphere API Documentation
 
-FastAPI remains the executable OpenAPI source. Clients use API Gateway paths beneath `/api/v1`; the gateway forwards only registered method/path combinations to the internal ClusterIP-only customer-service and catalogue-service. The gateway propagates bearer tokens but does not currently validate them. Each downstream service remains authoritative for JWT validation, role enforcement, visibility, ownership, and domain invariants.
+FastAPI remains the executable OpenAPI source. Clients use API Gateway paths beneath `/api/v1`; the gateway forwards only registered method/path combinations to the internal ClusterIP-only customer-service, catalogue-service, and order-service origins. The gateway propagates bearer tokens but does not currently validate them. Each downstream service remains authoritative for JWT validation, role enforcement, visibility, ownership, and domain invariants.
 
 Interactive OpenAPI is available from a locally reachable service at `/docs`; the machine-readable document is `/openapi.json`. Do not expose the internal customer-service documentation endpoint publicly.
 
@@ -111,11 +111,11 @@ bounded read responses only and may be unavailable without invalidating PostgreS
 Kafka carries asynchronous versioned facts produced through the transactional outbox;
 it is not part of the synchronous commit decision.
 
-## Order-service cart API
+## Order-service API through API Gateway
 
-Order-service implements the following internal `/api/v1` routes. They are not yet
-registered in API Gateway and order-service is not yet deployed to Kubernetes, so no
-external or browser availability is claimed.
+Order-service implements the following `/api/v1` routes and the API Gateway now registers
+the same external paths against its fixed `ORDER_SERVICE_URL`. Order-service is not yet
+deployed to Kubernetes, so live external or browser availability is not claimed.
 
 | Method | Internal path | Role | Behavior |
 | --- | --- | --- | --- |
@@ -135,6 +135,13 @@ external or browser availability is claimed.
 | `POST` | `/api/v1/orders/admin/{order_id}/status` | `operations_admin` | Explicit PROCESSING or FULFILLED command. |
 | `POST` | `/api/v1/orders/admin/{order_id}/cancellation` | `operations_admin` | Cancel an eligible order; no refund semantics. |
 
+The Gateway forwards `Authorization`, the validated/generated `X-Request-ID`, request
+query/body semantics, and a client-supplied checkout `Idempotency-Key`. It does not create
+an idempotency key when one is absent, and it preserves downstream `401`, `403`, `404`,
+`409`, and `422` responses. Transport timeout, unavailable, and protocol failures are
+normalized as safe `504`, `503`, and `502` responses. Tokens, idempotency keys, cookies,
+and other sensitive request headers are excluded from structured logs.
+
 The validated token subject is the ownership key; clients do not submit a customer ID.
 Non-owned item identifiers receive `404`. Add-item calls a fixed internal Catalogue
 origin and propagates the bearer token solely for downstream validation without logging
@@ -147,5 +154,7 @@ compensated and unresolved releases retain reconciliation evidence.
 Forty-six isolated order-service tests pass, including cart behavior/security,
 fixed-origin Catalogue client, checkout success/failure/idempotency/Saga evidence,
 order retrieval/IDOR, role policy, lifecycle, cancellation, audit and events.
-Live PostgreSQL checkout migration, service identity, Catalogue reservation, Kafka,
-Gateway, Kubernetes, frontend and end-to-end validation remain Pending / Not Verified.
+Gateway route behavior is unit validated with fixed-path, propagation, failure, status
+preservation, and log-safety tests. Live PostgreSQL checkout migration, service identity,
+Catalogue reservation, Kafka, Kubernetes, frontend and end-to-end validation remain
+Pending / Not Verified.
