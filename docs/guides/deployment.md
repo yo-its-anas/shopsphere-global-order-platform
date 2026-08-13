@@ -20,7 +20,11 @@ deployment and creates no public service exposure.
    make validate-postgresql
    make postgresql-apply
    make postgresql-status
+   make order-service-secret
    ```
+
+   The final command prepares the namespace-local order-service database URL Secret. It
+   does not deploy order-service or imply that order business behavior is implemented.
 
 3. Create and verify Keycloak:
 

@@ -66,11 +66,12 @@ event payloads exclude tokens, credentials, payment data, and unnecessary PII.
 
 ## PoC limitations
 
-No Saga, order database, reservation API, order event producer, gateway order route,
-order UI, or deployed order workload exists yet. The planned PoC would still run on one
-PostgreSQL instance, one Kafka broker, one kind node, and one physical VM, with no
-host-level high availability. A local background reconciler is demonstrative, not a
-substitute for a durable production workflow platform.
+The empty logical `order_db` and dedicated `order_app` identity are provisioned on the
+shared PoC PostgreSQL instance. No order schema, Saga, reservation API, order event
+producer, gateway order route, order UI, or deployed order workload exists yet. The PoC
+still runs on one PostgreSQL instance, one Kafka broker, one kind node, and one physical
+VM, with no host-level high availability. A local background reconciler is
+demonstrative, not a substitute for a durable production workflow platform.
 
 ## Production evolution
 

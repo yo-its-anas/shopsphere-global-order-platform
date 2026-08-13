@@ -35,8 +35,10 @@ and reservation-based Saga. [ADR-011](../../adr/ADR-011-reservation-based-order-
 records the decision to obtain an authoritative synchronous quote/reservation from
 Catalogue while publishing post-commit facts through transactional outboxes.
 
-This is a design boundary only. `order-service` currently has health and information
-endpoints; carts, orders, `order_db`, reservation commands, order gateway routes, React
-order screens, order events, Kubernetes deployment, and domain validation remain
-Planned. The existing Inventory schema has reserved balances and future movement names,
-but no callable reservation/release/fulfilment interface.
+This remains a design boundary for application behavior. The empty logical `order_db`
+and dedicated `order_app` identity are provisioned on the shared PostgreSQL instance,
+while `order-service` currently has only health and information endpoints. Cart/order
+schemas, migrations, reservation commands, order gateway routes, React order screens,
+order events, Kubernetes deployment, and domain validation remain Planned. The existing
+Inventory schema has reserved balances and future movement names, but no callable
+reservation/release/fulfilment interface.

@@ -16,8 +16,10 @@ Run all checks with `make doctor`. A non-zero result means one or more prerequis
 ## PostgreSQL operations
 
 - `validate-postgresql-manifests.sh` renders and checks the PoC PostgreSQL manifests without changing the cluster.
-- `check-postgresql.sh` performs read-only checks for workload readiness, ClusterIP-only networking, bound persistence, and the required logical database names.
-- `create-postgresql-secret.sh` is an explicit operational helper. It creates the Kubernetes Secret directly from hidden prompts, or generates strong values only when `--generate` is supplied. It never prints credentials and preserves an existing Secret.
+- `check-postgresql.sh` performs read-only checks for workload readiness, ClusterIP-only networking, bound persistence, and the required logical database/owner mappings.
+- `create-postgresql-secret.sh` is an explicit operational helper. It creates the Kubernetes Secret directly from hidden prompts, or generates strong values only when `--generate` is supplied. It never prints credentials and adds only missing service keys to an existing Secret.
+- `reconcile-postgresql-databases.sh` safely creates only missing service roles/databases and reapplies restricted connection grants against the retained PostgreSQL volume.
+- `create-order-service-secret.sh` derives the order-service database URL from the protected PostgreSQL Secret and creates a namespace-local runtime Secret without displaying it.
 
 ## Keycloak operations
 

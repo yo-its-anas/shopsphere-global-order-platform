@@ -83,6 +83,15 @@ spec:
                 secretKeyRef:
                   name: shopsphere-postgresql-credentials
                   key: catalogue-password
+            - name: ORDER_DB_NAME
+              value: order_db
+            - name: ORDER_DB_USER
+              value: order_app
+            - name: ORDER_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shopsphere-postgresql-credentials
+                  key: order-password
           startupProbe:
             exec:
               command:

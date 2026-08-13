@@ -4,10 +4,11 @@
 
 This document defines the target bounded context for Enterprise Order Processing. It is
 an accepted design baseline, not implementation evidence. The repository currently
-contains only the independently buildable `order-service` FastAPI foundation with
-health and information endpoints. Order persistence, cart and order APIs, inventory
-reservation commands, gateway routes, React order screens, order events, deployment,
-and domain tests are **Planned**.
+contains the independently buildable `order-service` FastAPI foundation with health and
+information endpoints plus an empty, platform-validated logical `order_db` owned by
+`order_app`. Order schemas/migrations, repository persistence, cart and order APIs,
+inventory reservation commands, gateway routes, React order screens, order events,
+deployment, and domain tests are **Planned**.
 
 The design is governed by [ADR-001](../adr/ADR-001-modular-microservices-architecture.md),
 [ADR-004](../adr/ADR-004-fastapi-versioned-rest-apis.md),
@@ -371,11 +372,11 @@ service identity and correlation/causation propagation.
 
 ## PoC trade-offs and implementation boundary
 
-The PoC may package Saga orchestration and outbox relay with one order-service process
-and place a separate logical `order_db` on the existing PostgreSQL server. That logical
-database does not yet exist and must not be claimed as provisioned. It would improve
-ownership hygiene but not infrastructure isolation, independent scaling, or high
-availability.
+The PoC may package Saga orchestration and outbox relay with one order-service process.
+A separate empty logical `order_db`, owned by least-privilege `order_app`, is provisioned
+on the existing PostgreSQL server. It improves ownership hygiene but provides no
+infrastructure isolation, independent scaling, or high availability; no order schema or
+business data exists yet.
 
 The current single PostgreSQL instance, single Redis instance, single Kafka broker,
 single kind node, and single physical GCP VM form one failure domain. Redis is not
