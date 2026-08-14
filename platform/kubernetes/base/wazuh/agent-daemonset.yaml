@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: wazuh-agent
+  namespace: shopsphere-security
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wazuh-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wazuh-agent
+    spec:
+      enableServiceLinks: false
+      # Wazuh agent needs to run as root to read host logs
+      securityContext:
+        runAsUser: 0
+      containers:
+        - name: wazuh-agent
+          image: wazuh/wazuh-agent:4.14.7
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: WAZUH_MANAGER
+              value: "wazuh-manager.shopsphere-security.svc.cluster.local"
+            - name: WAZUH_REGISTRATION_SERVER
+              value: "wazuh-manager.shopsphere-security.svc.cluster.local"
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: host-var-log
+              mountPath: /var/log
+              readOnly: true
+            - name: host-etc
+              mountPath: /host/etc
+              readOnly: true
+            - name: entrypoint-scripts
+              mountPath: /entrypoint-scripts/99-fix-address.sh
+              subPath: 99-fix-address.sh
+              readOnly: true
+      volumes:
+        - name: host-var-log
+          hostPath:
+            path: /var/log
+        - name: host-etc
+          hostPath:
+            path: /etc
+        - name: entrypoint-scripts
+          configMap:
+            name: wazuh-agent-scripts
+            defaultMode: 0755
