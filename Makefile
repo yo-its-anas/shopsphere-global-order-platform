@@ -13,6 +13,7 @@ OTEL_COLLECTOR_OVERLAY := platform/kubernetes/overlays/poc/opentelemetry-collect
 PROMETHEUS_OVERLAY := platform/kubernetes/overlays/poc/prometheus
 LOKI_OVERLAY := platform/kubernetes/overlays/poc/loki
 GRAFANA_OVERLAY := platform/kubernetes/overlays/poc/grafana
+WAZUH_OVERLAY := platform/kubernetes/overlays/poc/wazuh
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
 API_GATEWAY_IMAGE ?= shopsphere/api-gateway:poc
@@ -44,6 +45,7 @@ SERVICE_DIRS := \
 	validate-prometheus prometheus-apply prometheus-status \
 	validate-loki loki-apply loki-status \
 	validate-grafana grafana-secret grafana-secret-generate grafana-apply grafana-status \
+	validate-wazuh wazuh-apply wazuh-status \
 	catalogue-event-smoke \
 	customer-integration customer-integration-collect \
 	catalogue-integration catalogue-integration-collect
@@ -76,7 +78,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-analytics-service validate-api-gateway validate-opentelemetry-collector validate-prometheus validate-loki validate-grafana ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-analytics-service validate-api-gateway validate-opentelemetry-collector validate-prometheus validate-loki validate-grafana validate-wazuh ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -138,6 +140,17 @@ grafana-apply: validate-grafana ## Apply internal Grafana dashboard component
 
 grafana-status: ## Verify Grafana readiness
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-grafana.sh
+
+validate-wazuh: ## Validate internal Wazuh manifests
+	@./scripts/validate-wazuh-manifests.sh
+
+wazuh-apply: validate-wazuh ## Apply internal Wazuh security components
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(WAZUH_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-security rollout status deployment/wazuh-manager --timeout=300s
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-security rollout status daemonset/wazuh-agent --timeout=300s
+
+wazuh-status: ## Verify Wazuh readiness
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-security get pods
 
 validate-postgresql: ## Validate PostgreSQL manifests without changing the cluster
 	@./scripts/validate-postgresql-manifests.sh
