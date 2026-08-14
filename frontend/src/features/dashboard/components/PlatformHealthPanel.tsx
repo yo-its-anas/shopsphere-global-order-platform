@@ -11,7 +11,7 @@ export function PlatformHealthPanel({ metrics }: PlatformHealthPanelProps) {
     <section className="panel health-panel" aria-labelledby="platform-health-title">
       <header className="panel__header">
         <div>
-          <span className="eyebrow">Simulated telemetry</span>
+          <span className="eyebrow">Platform telemetry</span>
           <h2 id="platform-health-title">Platform Health</h2>
         </div>
         <Icon name="health" size={23} />

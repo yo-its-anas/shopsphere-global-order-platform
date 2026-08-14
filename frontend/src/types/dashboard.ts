@@ -1,6 +1,7 @@
 export type KpiTrendDirection = "up" | "down" | "flat";
 export type SemanticTone = "positive" | "warning" | "critical" | "neutral";
-export type OrderStatus = "Fulfilled" | "Processing" | "Exception";
+export type DashboardOrderStatus =
+  "Fulfilled" | "Processing" | "Exception" | "Pending" | "Cancelled";
 
 export interface KpiData {
   id: string;
@@ -18,7 +19,7 @@ export interface RecentOrder {
   id: string;
   customer: string;
   placedAt: string;
-  status: OrderStatus;
+  status: DashboardOrderStatus;
   amount: string;
 }
 
