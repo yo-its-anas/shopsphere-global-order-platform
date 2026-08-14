@@ -1,0 +1,67 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: loki-ingress
+  namespace: shopsphere-monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: loki
+      app.kubernetes.io/component: log-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: promtail
+      ports:
+        - protocol: TCP
+          port: 3100
+        - protocol: TCP
+          port: 9095
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              shopsphere.io/tier: monitoring
+      ports:
+        - protocol: TCP
+          port: 3100
+        - protocol: TCP
+          port: 9095
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: promtail-egress
+  namespace: shopsphere-monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: promtail
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: loki
+              app.kubernetes.io/component: log-server
+      ports:
+        - protocol: TCP
+          port: 3100
+        - protocol: TCP
+          port: 9095
+    # Promtail also needs to talk to the Kube APIServer for service discovery.
+    # The APIServer runs on port 443 or 6443. We allow egress to Kube APIServer on these ports.
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    # Allow DNS resolution so Promtail can resolve loki service address
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

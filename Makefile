@@ -10,6 +10,7 @@ ORDER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/order-service
 KAFKA_OVERLAY := platform/kubernetes/overlays/poc/kafka
 OTEL_COLLECTOR_OVERLAY := platform/kubernetes/overlays/poc/opentelemetry-collector
 PROMETHEUS_OVERLAY := platform/kubernetes/overlays/poc/prometheus
+LOKI_OVERLAY := platform/kubernetes/overlays/poc/loki
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
 API_GATEWAY_IMAGE ?= shopsphere/api-gateway:poc
@@ -37,6 +38,7 @@ SERVICE_DIRS := \
 	validate-kafka kafka-apply kafka-topics kafka-status \
 	validate-opentelemetry-collector otel-collector-apply otel-collector-status \
 	validate-prometheus prometheus-apply prometheus-status \
+	validate-loki loki-apply loki-status \
 	catalogue-event-smoke \
 	customer-integration customer-integration-collect \
 	catalogue-integration catalogue-integration-collect
@@ -69,7 +71,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-api-gateway validate-opentelemetry-collector validate-prometheus ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-api-gateway validate-opentelemetry-collector validate-prometheus validate-loki ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -102,6 +104,17 @@ prometheus-apply: validate-prometheus ## Apply internal Prometheus and kube-stat
 
 prometheus-status: ## Verify Prometheus readiness, storage, internal exposure, targets, and rules
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-prometheus.sh
+
+validate-loki: ## Validate internal Loki and Promtail manifests
+	@./scripts/validate-loki-manifests.sh
+
+loki-apply: validate-loki ## Apply internal Loki and Promtail components
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(LOKI_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status deployment/loki --timeout=300s
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status daemonset/promtail --timeout=300s
+
+loki-status: ## Verify Loki and Promtail readiness and cluster log collection
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-loki.sh
 
 validate-postgresql: ## Validate PostgreSQL manifests without changing the cluster
 	@./scripts/validate-postgresql-manifests.sh
