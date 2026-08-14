@@ -78,9 +78,10 @@ events, and SIEM records.
 The one GCP VM and one kind node would host both workloads and monitoring. A host failure
 can remove the application, local telemetry, and local alerting together. Local monitoring
 cannot independently confirm complete host loss. The single Collector shares that same
-failure domain and has no persistent queue or trace backend. Prometheus, Grafana, Loki,
-Wazuh, durable trace storage, and alert deployment are not currently implemented or
-validated.
+failure domain and has no persistent queue or trace backend. The single Prometheus and
+its local-path TSDB share the same failure domain and are Platform Validated, but have no
+replication or independent alert delivery. Grafana, Loki, Wazuh, durable trace storage,
+and Alertmanager remain not implemented or validated.
 
 ## Production evolution
 

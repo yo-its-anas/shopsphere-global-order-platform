@@ -14,7 +14,15 @@ basic validation summaries to its own container log, and exposes internal health
 self-metrics. It does not export to an external service and is not a durable trace
 backend.
 
-Prometheus, Grafana, durable trace storage, Loki, a log collector, alert rules, and
+An internal Prometheus and kube-state-metrics deployment is implemented under
+`platform/kubernetes/base/prometheus` with a PoC overlay. It uses EndpointSlice discovery,
+scrapes the four deployed FastAPI workloads, Collector self-metrics, its own metrics,
+kube-state-metrics, kubelet and cAdvisor, and evaluates five conservative alert rules.
+Its 8 GiB local-path PVC and seven-day/6 GB retention bounds are PoC persistence, not a
+backup or highly available store. Live evidence is recorded in the
+[Prometheus platform validation](../../docs/evidence/prometheus-platform-validation.md).
+
+Grafana, durable trace storage, Loki, a log collector, Alertmanager/alert delivery, and
 dashboard provisioning remain outside the current deployed monitoring capability.
 
 Existing prerequisites elsewhere in the repository are:
@@ -30,7 +38,8 @@ OpenTelemetry FastAPI/server instrumentation, bounded client spans, W3C `tracepa
 propagation, and JSON-log `trace_id`/`span_id` correlation are implemented and unit
 validated. The PoC application ConfigMaps enable asynchronous OTLP/HTTP export to the
 Collector's internal Kubernetes DNS name. Application probes do not call the Collector.
-Centralized durable storage, dashboard queries, and alert validation remain Planned.
+Centralized durable telemetry storage, dashboard queries, and alert delivery validation
+remain Planned; five local Prometheus rules are configuration and runtime validated.
 Live deployment, internal Service exposure, application-namespace connectivity, and
 accepted application spans are recorded in the
 [Collector platform validation evidence](../../docs/evidence/opentelemetry-collector-validation.md).

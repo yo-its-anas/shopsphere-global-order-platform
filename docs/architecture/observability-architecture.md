@@ -23,9 +23,9 @@ Current repository evidence is limited to:
 - Jenkins execution of Black, Ruff, Bandit, Pytest, frontend checks, builds, and
   infrastructure validation.
 
-Prometheus, Grafana, OpenTelemetry, Loki, Wazuh, Semgrep, Trivy, and OPA remain prescribed
-platform controls but have no deployed or retained runtime execution evidence in the
-repository. Exposing metrics does not mean Prometheus has been deployed.
+The internal OpenTelemetry Collector and Prometheus metrics platform have retained live
+runtime evidence. Grafana, Loki, Wazuh, Semgrep, Trivy, OPA, durable trace storage and
+Alertmanager/alert delivery remain prescribed controls without deployed runtime evidence.
 
 ## Architectural principles
 
@@ -194,8 +194,8 @@ dynamic identifiers and sensitive markers do not appear in exposition output.
 
 `/metrics` is deliberately unauthenticated for Prometheus compatibility but is an
 internal operational endpoint. Kubernetes Services remain `ClusterIP`; NetworkPolicy
-and scrape discovery must allow only the monitoring namespace or collector path. It
-must not be routed through public ingress. Prometheus is not deployed by this change.
+permits the monitoring namespace while no public ingress routes the endpoint. Prometheus
+uses an EndpointSlice service-name allow-list rather than ephemeral pod addresses.
 
 Additional bounded metrics may cover database-pool saturation, dependency latency,
 cache hit/miss/error totals, Kafka publish attempts, outbox pending count and oldest age,
@@ -318,16 +318,16 @@ idempotency or ordering semantics.
 
 ## Prometheus scraping and infrastructure telemetry
 
-Prometheus should use Kubernetes service discovery with explicit allow-list annotations
-or ServiceMonitor resources if a Prometheus Operator is intentionally installed. Metrics
-ports remain ClusterIP/internal and are not exposed through public ingress. Relabeling
-must drop unapproved labels before ingestion.
+The PoC Prometheus uses Kubernetes EndpointSlice discovery with an explicit service-name
+allow-list. Metrics Services remain ClusterIP/internal and are not exposed through public
+ingress. A production Operator deployment may replace this with governed ServiceMonitor
+resources and additional relabel controls.
 
 | Target | Intended telemetry | Current state |
 | --- | --- | --- |
-| Five FastAPI workloads, including API Gateway | Common HTTP/runtime/service metrics and selected bounded dependency/business metrics | `/metrics` is implemented and unit validated; scraping is not configured |
-| Kubernetes API/kubelet | Node, pod, container CPU/memory, restart, and filesystem metrics | Kubernetes reports current state; Prometheus scraping not configured |
-| kube-state-metrics | Desired versus available replicas, pod status, PVC state | Not deployed |
+| Five FastAPI workloads, including API Gateway | Common HTTP/runtime/service metrics and selected bounded dependency/business metrics | Four deployed workloads are scraped and Platform Validated; Analytics is discovery-ready but not deployed |
+| Kubernetes API/kubelet | Node and container CPU/memory/filesystem metrics | kubelet and cAdvisor targets are UP in the kind PoC |
+| kube-state-metrics | Desired versus available replicas, pod restarts, PVC state | Restricted-resource deployment is UP and Platform Validated |
 | node exporter | Ubuntu host CPU, memory, filesystem, network, load | Not deployed |
 | PostgreSQL exporter | Connectivity, connections, locks, transaction rate, storage; no SQL text/credentials | Not deployed |
 | Redis exporter | Availability, memory, evictions, operations, cache behavior | Not deployed |
@@ -335,8 +335,8 @@ must drop unapproved labels before ingestion.
 | OpenTelemetry application instrumentation | FastAPI server spans, bounded HTTP client spans, W3C propagation, log correlation | Implemented and unit validated across five services |
 | OpenTelemetry Collector | Accepted/dropped spans, queue/export failures | Single internal Collector Platform Validated; durable trace backend not deployed |
 
-Scrape intervals and retention must fit the shared 32 GB VM. Metrics storage needs a
-bounded PVC and deletion/retention policy. Exporter credentials, if required, use
+Scrapes run every 15 seconds. The 8 GiB local-path PVC is bounded by seven days and 6 GB;
+it survives pod replacement but not loss of the node or VM. Exporter credentials, if required, use
 least-privilege Kubernetes Secrets and must not appear in labels, configuration examples,
 or Grafana variables.
 

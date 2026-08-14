@@ -46,5 +46,6 @@ still depends on the kind cluster's CNI.
 | Focused API Gateway telemetry tests | 4 passed |
 | Ruff validation for the telemetry health-exclusion change | Passed |
 
-Prometheus, Grafana, Loki, durable trace storage, alert routing, and long-term retention
-were not validated by this activity and remain Pending / Not Verified.
+Prometheus was validated separately after this Collector evidence was captured; see the
+[Prometheus platform validation](prometheus-platform-validation.md). Grafana, Loki,
+durable trace storage, alert routing, and long-term retention remain Pending / Not Verified.

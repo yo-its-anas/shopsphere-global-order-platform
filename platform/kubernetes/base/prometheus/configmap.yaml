@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-configuration
+  namespace: shopsphere-monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      scrape_timeout: 10s
+      evaluation_interval: 15s
+      external_labels:
+        platform: shopsphere
+        environment: poc
+
+    rule_files:
+      - /etc/prometheus/rules/*.yaml
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ["127.0.0.1:9090"]
+
+      - job_name: shopsphere-applications
+        metrics_path: /metrics
+        kubernetes_sd_configs:
+          - role: endpointslice
+            namespaces:
+              names: ["shopsphere-apps"]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name]
+            regex: api-gateway|customer-service|catalogue-service|order-service|analytics-service
+            action: keep
+          - source_labels: [__meta_kubernetes_endpointslice_port_name]
+            regex: http
+            action: keep
+          - source_labels: [__meta_kubernetes_service_name]
+            target_label: service
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+      - job_name: opentelemetry-collector
+        static_configs:
+          - targets: ["opentelemetry-collector.shopsphere-monitoring.svc.cluster.local:8888"]
+
+      - job_name: kube-state-metrics
+        static_configs:
+          - targets: ["kube-state-metrics.shopsphere-monitoring.svc.cluster.local:8080"]
+
+      - job_name: kubernetes-nodes
+        scheme: https
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+          - source_labels: [__address__]
+            regex: (.+?)(?::\d+)?
+            replacement: $1:10250
+            target_label: __address__
+
+      - job_name: kubernetes-cadvisor
+        scheme: https
+        metrics_path: /metrics/cadvisor
+        authorization:
+          credentials_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+          - source_labels: [__address__]
+            regex: (.+?)(?::\d+)?
+            replacement: $1:10250
+            target_label: __address__
+
+  infrastructure-alerts.yaml: |
+    groups:
+      - name: shopsphere-infrastructure
+        rules:
+          - alert: ShopSphereScrapeTargetDown
+            expr: up{job=~"shopsphere-applications|opentelemetry-collector|kube-state-metrics|kubernetes-nodes|kubernetes-cadvisor"} == 0
+            for: 2m
+            labels:
+              severity: critical
+              category: infrastructure
+            annotations:
+              summary: "A required ShopSphere monitoring target is unavailable"
+              description: "The target has failed every 15-second scrape for two minutes."
+
+          - alert: ShopSphereHighHttpServerErrorRatio
+            expr: |
+              (
+                sum by (service) (rate(shopsphere_http_requests_total{status_class="5xx"}[5m]))
+                /
+                sum by (service) (rate(shopsphere_http_requests_total[5m]))
+              ) > 0.05
+              and
+              sum by (service) (rate(shopsphere_http_requests_total[5m])) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+              category: application
+            annotations:
+              summary: "ShopSphere HTTP 5xx ratio exceeds 5%"
+              description: "The service has sustained at least 0.1 requests/second and more than 5% server errors."
+
+          - alert: ShopSphereHighHttpLatency
+            expr: |
+              histogram_quantile(
+                0.95,
+                sum by (service, le) (rate(shopsphere_http_request_duration_seconds_bucket[10m]))
+              ) > 1
+              and
+              sum by (service) (rate(shopsphere_http_request_duration_seconds_count[10m])) > 0.1
+            for: 10m
+            labels:
+              severity: warning
+              category: application
+            annotations:
+              summary: "ShopSphere p95 HTTP latency exceeds one second"
+              description: "The threshold applies only while traffic exceeds 0.1 requests/second."
+
+          - alert: ShopSpherePodRestartingExcessively
+            expr: increase(kube_pod_container_status_restarts_total{namespace=~"shopsphere-(apps|data|platform|monitoring)"}[15m]) > 2
+            for: 2m
+            labels:
+              severity: warning
+              category: infrastructure
+            annotations:
+              summary: "A ShopSphere container restarted more than twice in 15 minutes"
+              description: "Inspect termination reason, probes, resource pressure and recent rollout changes."
+
+          - alert: ShopSphereCriticalWorkloadNotReady
+            expr: |
+              kube_deployment_spec_replicas{namespace=~"shopsphere-(apps|monitoring|platform)"}
+                - kube_deployment_status_replicas_available{namespace=~"shopsphere-(apps|monitoring|platform)"} > 0
+            for: 2m
+            labels:
+              severity: critical
+              category: readiness
+            annotations:
+              summary: "A ShopSphere Deployment lacks an available replica"
+              description: "This workload-level signal complements, but does not replace, application readiness endpoints."

@@ -68,9 +68,10 @@ orders, simulated order value, and fulfilment status. Analytics-service remains 
 health/info skeleton and the React executive dashboard remains explicitly mock data.
 
 UTC JSON logs, correlation IDs, health/readiness endpoints, Kubernetes probes, resource
-limits, domain audit, and transactional-outbox evidence exist. Prometheus, Grafana,
-OpenTelemetry, Loki, Wazuh, live analytics, telemetry dashboards, and alert rules are not
-deployed or validated. If implemented locally, they will share the only VM/node and its
-resource/failure domain. A complete VM failure could remove both applications and their
-local monitoring; independent detection requires an external heartbeat or monitoring
-location.
+limits, domain audit, transactional-outbox evidence, an internal OpenTelemetry Collector,
+and an internal Prometheus/kube-state-metrics deployment exist. The Collector and
+Prometheus targets/rules are Platform Validated. Grafana, Loki, Wazuh, live analytics,
+telemetry dashboards, durable trace storage and alert delivery are not deployed or
+validated. Local telemetry shares the only VM/node and its failure domain. A complete VM
+failure could remove both applications and monitoring; independent detection requires an
+external heartbeat or monitoring location.

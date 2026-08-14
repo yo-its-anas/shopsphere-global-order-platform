@@ -9,6 +9,7 @@ API_GATEWAY_OVERLAY := platform/kubernetes/overlays/poc/api-gateway
 ORDER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/order-service
 KAFKA_OVERLAY := platform/kubernetes/overlays/poc/kafka
 OTEL_COLLECTOR_OVERLAY := platform/kubernetes/overlays/poc/opentelemetry-collector
+PROMETHEUS_OVERLAY := platform/kubernetes/overlays/poc/prometheus
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
 API_GATEWAY_IMAGE ?= shopsphere/api-gateway:poc
@@ -35,6 +36,7 @@ SERVICE_DIRS := \
 	order-service-load order-service-apply order-service-status order-service-smoke order-e2e \
 	validate-kafka kafka-apply kafka-topics kafka-status \
 	validate-opentelemetry-collector otel-collector-apply otel-collector-status \
+	validate-prometheus prometheus-apply prometheus-status \
 	catalogue-event-smoke \
 	customer-integration customer-integration-collect \
 	catalogue-integration catalogue-integration-collect
@@ -67,7 +69,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-api-gateway validate-opentelemetry-collector ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-api-gateway validate-opentelemetry-collector validate-prometheus ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -89,6 +91,17 @@ otel-collector-apply: validate-opentelemetry-collector ## Apply the internal PoC
 
 otel-collector-status: ## Verify Collector readiness, exposure, connectivity, and received spans
 	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-opentelemetry-collector.sh
+
+validate-prometheus: ## Validate internal Prometheus, discovery, storage, and alert manifests
+	@./scripts/validate-prometheus-manifests.sh
+
+prometheus-apply: validate-prometheus ## Apply internal Prometheus and kube-state-metrics
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(PROMETHEUS_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status deployment/kube-state-metrics --timeout=300s
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status deployment/prometheus --timeout=300s
+
+prometheus-status: ## Verify Prometheus readiness, storage, internal exposure, targets, and rules
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-prometheus.sh
 
 validate-postgresql: ## Validate PostgreSQL manifests without changing the cluster
 	@./scripts/validate-postgresql-manifests.sh
