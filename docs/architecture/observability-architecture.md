@@ -267,10 +267,10 @@ distributed propagation. `X-Request-ID` remains a user-visible diagnostic correl
 identifier; it is not used as a trace ID.
 
 Application tracing is implemented in API Gateway, Customer, Catalogue, Order, and
-Analytics services using the OpenTelemetry SDK and FastAPI instrumentation. It is
-disabled by default, and no Collector or trace-storage backend is deployed. Enabling
-export without an explicit Collector endpoint is rejected during application startup;
-this prevents an implicit local endpoint from becoming an undocumented dependency.
+Analytics services using the OpenTelemetry SDK and FastAPI instrumentation. Library
+defaults remain disabled; the Kubernetes PoC ConfigMaps explicitly enable the four
+currently deployed Python workloads and set the internal Collector endpoint. Enabling
+export without an explicit endpoint is rejected during application startup.
 
 1. The browser may create or propagate a sampled trace for API requests without adding
    identity or business data to baggage.
@@ -282,8 +282,9 @@ this prevents an implicit local endpoint from becoming an undocumented dependenc
 4. Order-to-Catalogue quote/reserve/release calls propagate trace and correlation headers.
 5. High-value internal spans identify checkout orchestration, inventory reservation, and
    dashboard summary aggregation. They deliberately omit entity identifiers.
-6. A future OpenTelemetry Collector will receive OTLP/HTTP traffic on an internal endpoint
-   and provide batching, policy enforcement, and forwarding to a chosen trace backend.
+6. The PoC OpenTelemetry Collector receives OTLP/HTTP or OTLP/gRPC on internal ClusterIP
+   endpoints, applies memory limiting and batching, and writes basic trace batch summaries
+   to its own stdout. No external or durable trace backend is configured.
 
 Span attributes use bounded HTTP route templates, service names, HTTP methods/statuses,
 and dependency names. Request/response header capture is not enabled. JWT subjects,
@@ -332,7 +333,7 @@ must drop unapproved labels before ingestion.
 | Redis exporter | Availability, memory, evictions, operations, cache behavior | Not deployed |
 | Kafka exporter/JMX | Broker health, topic/partition state, produce errors, storage, consumer lag when consumers exist | Not deployed |
 | OpenTelemetry application instrumentation | FastAPI server spans, bounded HTTP client spans, W3C propagation, log correlation | Implemented and unit validated across five services |
-| OpenTelemetry Collector | Accepted/dropped spans, queue/export failures | Not deployed |
+| OpenTelemetry Collector | Accepted/dropped spans, queue/export failures | Single internal Collector Platform Validated; durable trace backend not deployed |
 
 Scrape intervals and retention must fit the shared 32 GB VM. Metrics storage needs a
 bounded PVC and deletion/retention policy. Exporter credentials, if required, use

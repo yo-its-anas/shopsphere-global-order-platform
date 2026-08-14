@@ -7,9 +7,15 @@ and [ADR-012](../../docs/adr/ADR-012-layered-observability-source-owned-kpis.md)
 
 ## Current implementation state
 
-No Prometheus, Grafana, OpenTelemetry Collector, trace backend, Loki, log collector,
-exporter, alert rule, or dashboard provisioning resource is currently committed here.
-The directory is an architecture responsibility boundary, not deployment evidence.
+The PoC OpenTelemetry Collector is implemented under
+`platform/kubernetes/base/opentelemetry-collector` with a PoC overlay. It accepts
+internal OTLP/gRPC and OTLP/HTTP traces, applies memory limiting and batching, emits
+basic validation summaries to its own container log, and exposes internal health and
+self-metrics. It does not export to an external service and is not a durable trace
+backend.
+
+Prometheus, Grafana, durable trace storage, Loki, a log collector, alert rules, and
+dashboard provisioning remain outside the current deployed monitoring capability.
 
 Existing prerequisites elsewhere in the repository are:
 
@@ -21,10 +27,29 @@ Existing prerequisites elsewhere in the repository are:
 
 Application `/metrics` endpoints are implemented for the five FastAPI workloads.
 OpenTelemetry FastAPI/server instrumentation, bounded client spans, W3C `traceparent`
-propagation, and JSON-log `trace_id`/`span_id` correlation are also implemented and
-unit validated. Export is disabled by default and requires an explicit environment-set
-OTLP/HTTP Collector endpoint. Centralized collection/storage, dashboard queries, and
-alert validation remain Planned.
+propagation, and JSON-log `trace_id`/`span_id` correlation are implemented and unit
+validated. The PoC application ConfigMaps enable asynchronous OTLP/HTTP export to the
+Collector's internal Kubernetes DNS name. Application probes do not call the Collector.
+Centralized durable storage, dashboard queries, and alert validation remain Planned.
+Live deployment, internal Service exposure, application-namespace connectivity, and
+accepted application spans are recorded in the
+[Collector platform validation evidence](../../docs/evidence/opentelemetry-collector-validation.md).
+
+## Buffering, retry, and loss boundary
+
+- Each Python process uses a bounded 512-span in-memory queue, exports at most 128 spans
+  per batch every two seconds, and limits an export attempt to five seconds.
+- OTLP transient failures are handled by the exporter without blocking business request
+  completion. If the in-memory queue fills, new trace data may be dropped.
+- The Collector memory limiter rejects telemetry before it exceeds its 512 MiB container
+  limit; clients may retry retryable responses. Its batch processor holds at most a small
+  in-memory working set before writing validation summaries to stdout.
+- There is no persistent Collector queue or trace store. Collector/application restart,
+  prolonged unavailability, full queues, or container-log rotation can lose telemetry.
+  Transactional state, audit ledgers, and outboxes remain authoritative.
+- No exporter has a network destination, and the Collector NetworkPolicy declares empty
+  egress. This limits accidental external export, subject to the documented kind CNI
+  enforcement limitation.
 
 ## Intended contents
 

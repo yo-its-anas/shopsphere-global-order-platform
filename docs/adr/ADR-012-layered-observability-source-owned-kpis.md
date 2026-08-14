@@ -5,7 +5,8 @@
 Accepted and partially implemented. Structured JSON logging, correlation IDs, health
 endpoints, Prometheus application metrics, OpenTelemetry FastAPI/client instrumentation,
 W3C trace propagation, trace/log correlation, domain audit, and the analytics aggregation
-API exist. Collector-based trace export, Prometheus scraping, central log aggregation,
+API exist. The PoC includes one internal Collector with a memory-bounded trace pipeline
+and local debug sink. Prometheus scraping, durable trace storage, central log aggregation,
 Grafana dashboards, alerts, and Wazuh integration remain Planned and are not deployment
 evidence.
 
@@ -76,10 +77,10 @@ events, and SIEM records.
 
 The one GCP VM and one kind node would host both workloads and monitoring. A host failure
 can remove the application, local telemetry, and local alerting together. Local monitoring
-cannot independently confirm complete host loss. No Prometheus, Grafana, OpenTelemetry
-Collector/trace backend, Loki, Wazuh, or alert deployment is currently implemented or
-validated. Application metrics and tracing do not provide durable telemetry without an
-external collector and storage.
+cannot independently confirm complete host loss. The single Collector shares that same
+failure domain and has no persistent queue or trace backend. Prometheus, Grafana, Loki,
+Wazuh, durable trace storage, and alert deployment are not currently implemented or
+validated.
 
 ## Production evolution
 
