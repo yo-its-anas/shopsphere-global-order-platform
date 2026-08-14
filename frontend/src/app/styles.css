@@ -1402,6 +1402,8 @@ select:focus-visible {
 }
 .button--danger {
   background: var(--critical);
+  border-color: var(--critical);
+  color: #fff;
 }
 
 .result-success .status__dot {

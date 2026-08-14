@@ -213,6 +213,8 @@ describe("order customer experience", () => {
     expect(screen.getByRole("heading", { name: "Status timeline" })).toBeInTheDocument();
     expect(screen.getByText("customer:self")).toBeInTheDocument();
     expect(screen.getByText("$13.00")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel order" })).toBeInTheDocument();
+    expect(screen.getByText(/releases its active inventory reservations/i)).toBeInTheDocument();
   });
 
   it("shows an unavailable state without exposing request internals", async () => {

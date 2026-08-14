@@ -27,7 +27,9 @@ reject another; inventory must never become negative.
 - `/orders/{orderId}` displays the checkout-time SKU, name, quantity, unit price, line
   total, current status and status timeline. Later Catalogue changes do not rewrite it.
 - An eligible CONFIRMED or PROCESSING order can be cancelled. Cancellation is idempotent
-  and completes only after active inventory reservations are released.
+  and completes only after active inventory reservations are released. On an eligible
+  order detail page, the red **Cancel order** button performs this action after explicit
+  confirmation. It does not perform a payment refund because payments are outside scope.
 
 A customer cannot retrieve another customer's cart or order by changing an identifier;
 the service returns restricted/not-found behavior. Frontend navigation is only a UX
@@ -37,5 +39,7 @@ control—the backend remains authoritative.
 
 React order component tests pass. The retained API-driven E2E suite passed cart,
 checkout, confirmation, history, audit, IDOR, inventory race, cancellation, Kafka recovery
-and Redis fallback scenarios through the deployed Gateway. A retained browser-driven
-execution is **Pending / Not Verified**.
+and Redis fallback scenarios through the deployed Gateway. The Firefox happy path was
+manually validated on 2026-08-14 with synthetic SKU `ORDER-DEMO-HAPPY-001`, quantity 2,
+and confirmed order number `SS-20260814-1EA297D4F967`. The other manual demonstration
+scenarios remain separate evidence and must not be inferred from that browser run.

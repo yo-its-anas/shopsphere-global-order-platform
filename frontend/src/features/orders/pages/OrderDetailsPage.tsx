@@ -141,6 +141,12 @@ export function OrderDetailsPage({ operational = false }: { operational?: boolea
         actions={actions}
       />
       {error !== null && <OrderError error={error} />}
+      {cancellable && (
+        <p className="role-notice">
+          The red <strong>Cancel order</strong> action cancels this order and releases its active
+          inventory reservations. Payment refunds are not part of this capability.
+        </p>
+      )}
       {!canManage && operational && (
         <p className="role-notice">
           Operational read access does not grant order modification permission.

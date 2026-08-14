@@ -10,6 +10,17 @@ The accompanying non-live validation review records 46 passing order-service tes
 The live JUnit/JSON evidence contains 10 passed checks (prerequisites plus scenarios A–I),
 zero failures and zero skips.
 
+## Manual browser evidence
+
+On 2026-08-14, the customer happy path was also manually exercised in Firefox through
+the deployed React application and API Gateway. Customer quantity `2` of synthetic SKU
+`ORDER-DEMO-HAPPY-001` produced confirmed order number
+`SS-20260814-1EA297D4F967`. The customer navigated Catalogue → Product → Cart → Checkout
+→ Confirmation → My Orders → Order Detail → Status Timeline. Authoritative available
+inventory decreased by two through the reservation model. This is retained manual UI
+evidence for the happy path only; it does not substitute for manual execution of the
+separate stock-safety, price-change, IDOR, or duplicate-checkout demonstrations.
+
 | Scenario | Result | Classification | Evidence |
 | --- | --- | --- | --- |
 | Prerequisites | **PASSED** | Platform Validated | Keycloak, PostgreSQL, customer, catalogue, order, Gateway, Redis and Kafka checks passed; three temporary identities authenticated. |
@@ -26,8 +37,10 @@ zero failures and zero skips.
 ## Classification
 
 Passed live scenarios are **End-to-End Validated** through API Gateway. Failed or skipped
-scenarios are **Pending / Not Verified**; unit results are not substituted. This run was
-API-driven and did not automate Firefox or another browser.
+scenarios are **Pending / Not Verified**; unit results are not substituted. The automated
+run was API-driven and did not automate Firefox or another browser. The separate manual
+record above validates the browser happy path without changing the scope of the automated
+evidence.
 
 ## Examination requirement coverage
 
