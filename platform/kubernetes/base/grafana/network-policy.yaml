@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: grafana-network-policy
+  namespace: shopsphere-monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+      app.kubernetes.io/component: dashboard
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow port-forwarding (usually comes from outside the network policy namespace constraints, but we can allow from all internal namespaces)
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    # Allow all egress so Grafana can reach Prometheus, Loki, external plugins (if any), and DNS.
+    - to: []
