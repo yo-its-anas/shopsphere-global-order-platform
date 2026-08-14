@@ -19,9 +19,12 @@ Existing prerequisites elsewhere in the repository are:
 - Kubernetes resource requests/limits;
 - domain audit and transactional-outbox operational evidence.
 
-Application `/metrics` endpoints are implemented for the five FastAPI workloads. W3C
-trace propagation, service/environment/trace log fields, centralized collection,
-dashboard queries, and alert validation remain Planned.
+Application `/metrics` endpoints are implemented for the five FastAPI workloads.
+OpenTelemetry FastAPI/server instrumentation, bounded client spans, W3C `traceparent`
+propagation, and JSON-log `trace_id`/`span_id` correlation are also implemented and
+unit validated. Export is disabled by default and requires an explicit environment-set
+OTLP/HTTP Collector endpoint. Centralized collection/storage, dashboard queries, and
+alert validation remain Planned.
 
 ## Intended contents
 

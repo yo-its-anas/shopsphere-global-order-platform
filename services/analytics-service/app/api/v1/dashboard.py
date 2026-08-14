@@ -32,7 +32,10 @@ def _correlation_id(request: Request) -> str:
 async def summary(
     request: Request, actor: OperationsActor, dashboard: Dashboard
 ) -> ExecutiveSummaryResponse:
-    return await dashboard.summary(actor.access_token, _correlation_id(request))
+    with request.app.state.telemetry.operation_span(
+        "analytics.dashboard.summary", "dashboard_aggregation"
+    ):
+        return await dashboard.summary(actor.access_token, _correlation_id(request))
 
 
 @router.get("/orders", response_model=OrderKpiResponse)

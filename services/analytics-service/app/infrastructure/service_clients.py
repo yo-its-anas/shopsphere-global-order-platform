@@ -12,6 +12,7 @@ import httpx2
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.config import Settings
+from app.core.telemetry import Telemetry
 from app.domain.models import CustomerKpis, DependencyState, InventoryKpis, OrderKpis, SourceResult
 
 _PAGE_SIZE = 100
@@ -94,6 +95,8 @@ class ReadOnlyServiceClient:
         timeout_seconds: float,
         *,
         transport: httpx2.AsyncBaseTransport | None = None,
+        telemetry: Telemetry | None = None,
+        upstream_service: str = "domain-service",
     ) -> None:
         self._client = httpx2.AsyncClient(
             base_url=base_url,
@@ -101,6 +104,8 @@ class ReadOnlyServiceClient:
             follow_redirects=False,
             transport=transport,
         )
+        self._telemetry = telemetry or Telemetry(None, "analytics-service")
+        self._upstream_service = upstream_service
 
     async def get_json(
         self,
@@ -114,7 +119,14 @@ class ReadOnlyServiceClient:
         if access_token is not None:
             headers["Authorization"] = f"Bearer {access_token}"
         try:
-            response = await self._client.get(path, headers=headers, params=params)
+            with self._telemetry.client_span(
+                f"{self._upstream_service} GET",
+                upstream_service=self._upstream_service,
+                method="GET",
+            ) as span:
+                self._telemetry.inject(headers)
+                response = await self._client.get(path, headers=headers, params=params)
+                self._telemetry.set_http_status(span, response.status_code)
         except httpx2.TimeoutException as exc:
             raise SourceTimeoutError from exc
         except (httpx2.ConnectError, httpx2.NetworkError, httpx2.HTTPError) as exc:
@@ -155,15 +167,27 @@ class HttpDashboardSources:
         customer_client: ReadOnlyServiceClient | None = None,
         catalogue_client: ReadOnlyServiceClient | None = None,
         order_client: ReadOnlyServiceClient | None = None,
+        telemetry: Telemetry | None = None,
     ) -> None:
         timeout = settings.upstream_timeout_seconds
         self._customer = customer_client or ReadOnlyServiceClient(
-            settings.customer_service_url, timeout
+            settings.customer_service_url,
+            timeout,
+            telemetry=telemetry,
+            upstream_service="customer-service",
         )
         self._catalogue = catalogue_client or ReadOnlyServiceClient(
-            settings.catalogue_service_url, timeout
+            settings.catalogue_service_url,
+            timeout,
+            telemetry=telemetry,
+            upstream_service="catalogue-service",
         )
-        self._order = order_client or ReadOnlyServiceClient(settings.order_service_url, timeout)
+        self._order = order_client or ReadOnlyServiceClient(
+            settings.order_service_url,
+            timeout,
+            telemetry=telemetry,
+            upstream_service="order-service",
+        )
         self._maximum_records = settings.maximum_aggregate_records
 
     async def customers(self, access_token: str, correlation_id: str) -> CustomerKpis:

@@ -44,11 +44,15 @@ Inventory logs and movement reasons must not contain bearer tokens, credentials,
 
 ## PoC limitations
 
-One-host clock behavior does not prove multi-region clock discipline. Loki and OpenTelemetry are not configured, and no automated log-schema enforcement currently exists.
+One-host clock behavior does not prove multi-region clock discipline. Application traces
+and log trace correlation are implemented, but no OpenTelemetry Collector, trace backend,
+Loki pipeline, or automated log-schema enforcement is deployed.
 
 ## Production evolution
 
-Enforce synchronized clocks, centralized schema validation, OpenTelemetry context propagation, protected and durable log storage, retention tiers, alerting, audit immutability where required, and regional compliance controls.
+Enforce synchronized clocks, centralized schema validation, protected and durable trace
+and log storage, retention tiers, alerting, audit immutability where required, and
+regional compliance controls.
 
 The target log, trace, label, and Loki-index conventions are defined in
 [ADR-012](ADR-012-layered-observability-source-owned-kpis.md) and the

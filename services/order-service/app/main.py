@@ -21,6 +21,7 @@ from app.core.logging import configure_logging
 from app.core.metrics import ServiceMetrics
 from app.core.middleware import CorrelationIdMiddleware
 from app.core.security import KeycloakTokenVerifier, TokenVerifier
+from app.core.telemetry import Telemetry, configure_telemetry
 from app.domain.repositories import CatalogueProductProvider, UnitOfWork
 from app.infrastructure.catalogue_client import CatalogueHttpClient, KeycloakServiceTokenProvider
 from app.infrastructure.database import (
@@ -61,6 +62,7 @@ OPENAPI_TAGS = [
 def create_app(
     settings: Settings | None = None,
     *,
+    telemetry: Telemetry | None = None,
     database_engine: AsyncEngine | None = None,
     token_verifier: TokenVerifier | None = None,
     catalogue_client: CatalogueProductProvider | None = None,
@@ -71,6 +73,12 @@ def create_app(
 
     resolved_settings = settings or Settings.from_environment()
     configure_logging(resolved_settings.log_level)
+    owns_telemetry = telemetry is None
+    resolved_telemetry = telemetry or configure_telemetry(
+        resolved_settings.service_name,
+        resolved_settings.service_version,
+        resolved_settings.environment,
+    )
     metrics = ServiceMetrics(
         resolved_settings.service_name,
         resolved_settings.service_version,
@@ -103,6 +111,7 @@ def create_app(
             resolved_settings.catalogue_service_url,
             resolved_settings.catalogue_timeout_seconds,
             service_token_provider=service_token_provider,
+            telemetry=resolved_telemetry,
         )
     session_factory = create_session_factory(resolved_engine) if resolved_engine else None
     outbox_relay: Any | None = None
@@ -138,6 +147,8 @@ def create_app(
         if resolved_engine is not None:
             await resolved_engine.dispose()
         logger.info("service_stopped", extra={"event": "service_stopped"})
+        if owns_telemetry:
+            resolved_telemetry.shutdown()
 
     application = FastAPI(
         title="ShopSphere Order Service",
@@ -152,6 +163,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.state.telemetry = resolved_telemetry
     application.state.metrics = metrics
     application.state.database_engine = resolved_engine
     application.state.token_verifier = resolved_verifier
@@ -169,6 +181,7 @@ def create_app(
     application.state.metric_route_patterns = tuple(
         (path, compile_path(path)[0]) for path in metric_paths
     )
+    resolved_telemetry.instrument_app(application)
     return application
 
 

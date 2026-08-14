@@ -14,6 +14,12 @@ All ShopSphere FastAPI services follow these platform-foundation conventions:
 - use an application factory plus a module-level ASGI entry point;
 - accept or generate `X-Request-ID`, return it on responses, and include it as
   `correlation_id` in JSON logs;
+- use OpenTelemetry FastAPI server spans and W3C Trace Context for distributed
+  propagation while retaining `X-Request-ID` as a separate diagnostic identifier;
+- add nullable `trace_id` and `span_id` fields to structured logs and create only
+  bounded, non-sensitive HTTP client and high-value operation spans;
+- keep trace export disabled by default and require an explicit environment-configured
+  OTLP/HTTP Collector endpoint when enabled;
 - use framework route templates for metrics and request logs rather than raw paths;
 - prohibit customer, user, order, cart, product, email, JWT subject, correlation ID,
   token, credential, and raw path values from Prometheus labels;
@@ -28,7 +34,7 @@ traffic. Optional Redis caching and asynchronous Kafka outbox delivery do not ov
 authoritative PostgreSQL health semantics. Metrics exposure is not a readiness
 dependency and telemetry failure must not corrupt business transactions.
 
-The exact metric contract, scrape security boundary, and cardinality rules are defined
+The exact metric/trace contract, export security boundary, and cardinality rules are defined
 in [Executive Operations and Observability Architecture](../docs/architecture/observability-architecture.md).
 
 Shared code must earn its place through stable cross-service need. Domain models, database models, service configuration, and business rules must not be centralized here merely to reduce duplication.

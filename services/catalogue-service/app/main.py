@@ -23,6 +23,7 @@ from app.core.logging import configure_logging
 from app.core.metrics import ServiceMetrics
 from app.core.middleware import CorrelationIdMiddleware
 from app.core.security import KeycloakTokenVerifier, TokenVerifier
+from app.core.telemetry import Telemetry, configure_telemetry
 from app.infrastructure.cache import RedisJsonCache
 from app.infrastructure.database import (
     create_database_engine,
@@ -76,6 +77,7 @@ OPENAPI_TAGS = [
 def create_app(
     settings: Settings | None = None,
     *,
+    telemetry: Telemetry | None = None,
     database_engine: AsyncEngine | None = None,
     token_verifier: TokenVerifier | None = None,
     unit_of_work_factory: UnitOfWorkFactory | None = None,
@@ -86,6 +88,12 @@ def create_app(
 
     resolved_settings = settings or Settings.from_environment()
     configure_logging(resolved_settings.log_level)
+    owns_telemetry = telemetry is None
+    resolved_telemetry = telemetry or configure_telemetry(
+        resolved_settings.service_name,
+        resolved_settings.service_version,
+        resolved_settings.environment,
+    )
     metrics = ServiceMetrics(
         resolved_settings.service_name,
         resolved_settings.service_version,
@@ -151,6 +159,8 @@ def create_app(
             await resolved_engine.dispose()
         await resolved_cache.close()
         logger.info("service_stopped", extra={"event": "service_stopped"})
+        if owns_telemetry:
+            resolved_telemetry.shutdown()
 
     application = FastAPI(
         title="ShopSphere Catalogue Service",
@@ -165,6 +175,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.state.telemetry = resolved_telemetry
     application.state.metrics = metrics
     application.state.database_engine = resolved_engine
     application.state.database_readiness_checker = database_readiness_checker
@@ -183,6 +194,7 @@ def create_app(
     application.state.metric_route_patterns = tuple(
         (path, compile_path(path)[0]) for path in metric_paths
     )
+    resolved_telemetry.instrument_app(application)
     return application
 
 

@@ -21,6 +21,7 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.metrics import ServiceMetrics
 from app.core.middleware import CorrelationIdMiddleware
+from app.core.telemetry import Telemetry, configure_telemetry
 from app.infrastructure.http_client import ConfiguredHttpClient, UpstreamHttpClient
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ OPENAPI_TAGS = [
 def create_app(
     settings: Settings | None = None,
     *,
+    telemetry: Telemetry | None = None,
     customer_service_client: UpstreamHttpClient | None = None,
     catalogue_service_client: UpstreamHttpClient | None = None,
     order_service_client: UpstreamHttpClient | None = None,
@@ -69,6 +71,12 @@ def create_app(
 
     resolved_settings = settings or Settings.from_environment()
     configure_logging(resolved_settings.log_level)
+    owns_telemetry = telemetry is None
+    resolved_telemetry = telemetry or configure_telemetry(
+        resolved_settings.service_name,
+        resolved_settings.service_version,
+        resolved_settings.environment,
+    )
     metrics = ServiceMetrics(
         resolved_settings.service_name,
         resolved_settings.service_version,
@@ -78,18 +86,24 @@ def create_app(
     resolved_customer_client = customer_service_client or ConfiguredHttpClient(
         resolved_settings.customer_service_url,
         resolved_settings.customer_service_timeout_seconds,
+        resolved_telemetry,
+        "customer-service",
     )
     customer_service_proxy = CustomerServiceProxy(resolved_customer_client, metrics)
     owns_catalogue_client = catalogue_service_client is None
     resolved_catalogue_client = catalogue_service_client or ConfiguredHttpClient(
         resolved_settings.catalogue_service_url,
         resolved_settings.catalogue_service_timeout_seconds,
+        resolved_telemetry,
+        "catalogue-service",
     )
     catalogue_service_proxy = CatalogueServiceProxy(resolved_catalogue_client, metrics)
     owns_order_client = order_service_client is None
     resolved_order_client = order_service_client or ConfiguredHttpClient(
         resolved_settings.order_service_url,
         resolved_settings.order_service_timeout_seconds,
+        resolved_telemetry,
+        "order-service",
     )
     order_service_proxy = OrderServiceProxy(resolved_order_client, metrics)
 
@@ -104,6 +118,8 @@ def create_app(
         if owns_order_client:
             await resolved_order_client.aclose()
         logger.info("service_stopped", extra={"event": "service_stopped"})
+        if owns_telemetry:
+            resolved_telemetry.shutdown()
 
     application = FastAPI(
         title="ShopSphere API Gateway",
@@ -118,6 +134,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.state.telemetry = resolved_telemetry
     application.state.metrics = metrics
     application.state.customer_service_proxy = customer_service_proxy
     application.state.catalogue_service_proxy = catalogue_service_proxy
@@ -145,6 +162,7 @@ def create_app(
     application.state.metric_route_patterns = tuple(
         (path, compile_path(path)[0]) for path in metric_paths
     )
+    resolved_telemetry.instrument_app(application)
     return application
 
 

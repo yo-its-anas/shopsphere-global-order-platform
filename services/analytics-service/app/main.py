@@ -19,6 +19,7 @@ from app.core.logging import configure_logging
 from app.core.metrics import AnalyticsMetrics
 from app.core.middleware import CorrelationIdMiddleware
 from app.core.security import KeycloakTokenVerifier, TokenVerifier
+from app.core.telemetry import Telemetry, configure_telemetry
 from app.infrastructure.service_clients import DashboardSources, HttpDashboardSources
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ OPENAPI_TAGS = [
 def create_app(
     settings: Settings | None = None,
     *,
+    telemetry: Telemetry | None = None,
     token_verifier: TokenVerifier | None = None,
     dashboard_sources: DashboardSources | None = None,
 ) -> FastAPI:
@@ -60,12 +62,20 @@ def create_app(
         resolved_settings.service_version,
         resolved_settings.environment,
     )
+    owns_telemetry = telemetry is None
+    resolved_telemetry = telemetry or configure_telemetry(
+        resolved_settings.service_name,
+        resolved_settings.service_version,
+        resolved_settings.environment,
+    )
     metrics = AnalyticsMetrics(
         resolved_settings.service_name,
         resolved_settings.service_version,
         resolved_settings.environment,
     )
-    resolved_sources = dashboard_sources or HttpDashboardSources(resolved_settings)
+    resolved_sources = dashboard_sources or HttpDashboardSources(
+        resolved_settings, telemetry=resolved_telemetry
+    )
     resolved_verifier = token_verifier
     if resolved_verifier is None and resolved_settings.keycloak_issuer:
         resolved_verifier = KeycloakTokenVerifier(resolved_settings)
@@ -76,6 +86,8 @@ def create_app(
         yield
         await resolved_sources.aclose()
         logger.info("service_stopped", extra={"event": "service_stopped"})
+        if owns_telemetry:
+            resolved_telemetry.shutdown()
 
     application = FastAPI(
         title="ShopSphere Analytics Service",
@@ -89,6 +101,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.state.telemetry = resolved_telemetry
     application.state.metrics = metrics
     application.state.token_verifier = resolved_verifier
     application.state.dashboard_sources = resolved_sources
@@ -102,6 +115,7 @@ def create_app(
     application.state.metric_route_patterns = tuple(
         (path, compile_path(path)[0]) for path in metric_paths
     )
+    resolved_telemetry.instrument_app(application)
     return application
 
 

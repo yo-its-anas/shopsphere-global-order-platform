@@ -7,8 +7,12 @@ from datetime import datetime, timezone
 
 import httpx2
 import pytest
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from app.core.config import Settings
+from app.core.telemetry import Telemetry
 from app.infrastructure.service_clients import (
     HttpDashboardSources,
     InvalidSourceResponseError,
@@ -145,3 +149,37 @@ async def test_invalid_inventory_response_is_rejected() -> None:
             await sources.inventory("safe-token", "correlation")
     finally:
         await sources.aclose()
+
+
+@pytest.mark.anyio
+async def test_read_only_client_propagates_trace_context_without_recording_token() -> None:
+    captured: list[httpx2.Request] = []
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    telemetry = Telemetry(provider, "analytics-service")
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        captured.append(request)
+        return _response({"status": "ready"})
+
+    client = ReadOnlyServiceClient(
+        "http://order-service:8000",
+        1,
+        transport=httpx2.MockTransport(handler),
+        telemetry=telemetry,
+        upstream_service="order-service",
+    )
+    token = "-".join(("synthetic", "token"))
+    try:
+        with telemetry.tracer.start_as_current_span("analytics.dashboard.summary"):
+            await client.get_json(
+                "/health/ready",
+                "safe-correlation",
+                access_token=token,
+            )
+    finally:
+        await client.aclose()
+
+    assert "traceparent" in captured[0].headers
+    assert token not in repr(exporter.get_finished_spans())

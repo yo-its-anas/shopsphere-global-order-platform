@@ -266,22 +266,50 @@ ShopSphere adopts W3C Trace Context (`traceparent` and, where governed, `tracest
 distributed propagation. `X-Request-ID` remains a user-visible diagnostic correlation
 identifier; it is not used as a trace ID.
 
+Application tracing is implemented in API Gateway, Customer, Catalogue, Order, and
+Analytics services using the OpenTelemetry SDK and FastAPI instrumentation. It is
+disabled by default, and no Collector or trace-storage backend is deployed. Enabling
+export without an explicit Collector endpoint is rejected during application startup;
+this prevents an implicit local endpoint from becoming an undocumented dependency.
+
 1. The browser may create or propagate a sampled trace for API requests without adding
    identity or business data to baggage.
 2. API Gateway accepts valid trace context or creates a new root span, then forwards it
    through fixed upstream clients.
-3. Customer, Catalogue, Order, and future Analytics services create server spans and
-   child spans around database, Redis, Kafka/outbox, and governed HTTP operations.
+3. Customer, Catalogue, Order, and Analytics services create server spans. Bounded
+   `httpx2` adapters create client spans and inject W3C context for Gateway-to-service,
+   Order-to-Catalogue, Analytics-to-domain-service, and Customer-to-Keycloak calls.
 4. Order-to-Catalogue quote/reserve/release calls propagate trace and correlation headers.
-5. The OpenTelemetry Collector receives OTLP traffic on internal endpoints, performs
-   batching/sampling/export, and prevents application credentials from reaching a trace
-   backend.
+5. High-value internal spans identify checkout orchestration, inventory reservation, and
+   dashboard summary aggregation. They deliberately omit entity identifiers.
+6. A future OpenTelemetry Collector will receive OTLP/HTTP traffic on an internal endpoint
+   and provide batching, policy enforcement, and forwarding to a chosen trace backend.
 
-Span attributes use bounded HTTP route templates, service names, status classes, and
-dependency names. JWT subjects, emails, customer/order/product IDs, token content, SQL
-parameters, request bodies, and high-cardinality baggage are prohibited. Error traces
-record safe exception type/status, not credentials or PII. Sampling is configurable and
-must retain enough errors/slow traces for diagnosis while bounding PoC resources.
+Span attributes use bounded HTTP route templates, service names, HTTP methods/statuses,
+and dependency names. Request/response header capture is not enabled. JWT subjects,
+emails, customer/order/product IDs, token content, SQL parameters, request bodies, and
+high-cardinality baggage are prohibited. Manual spans mark failures without recording
+exception messages or request data. Only W3C Trace Context is propagated; arbitrary
+incoming baggage is not forwarded.
+
+Structured JSON logs include nullable fixed-width `trace_id` and `span_id` fields
+alongside `correlation_id`. A log emitted inside a valid span can therefore be joined to
+its trace without using those identifiers as Loki index labels.
+
+### Runtime configuration
+
+| Variable | Purpose | Safe behavior |
+| --- | --- | --- |
+| `TELEMETRY_ENABLED` | ShopSphere instrumentation/export switch | Defaults to `false` |
+| `OTEL_SDK_DISABLED` | Standard OpenTelemetry SDK shutdown switch | `true` overrides the ShopSphere enable switch |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Explicit OTLP/HTTP traces receiver URL | Preferred signal-specific setting |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Generic OTLP/HTTP Collector base URL | Accepted alternative |
+| Other `OTEL_EXPORTER_OTLP_*` settings | Timeout, TLS, headers, and compression | Standard SDK environment handling; credential-bearing headers belong in Secrets |
+
+One of the two endpoint variables is required when telemetry is enabled. The application
+sets resource attributes from its non-secret service name, version, and environment and
+does not hard-code a vendor or trace backend. Sampling policy must be defined and
+validated with the future Collector/runtime configuration before production.
 
 Kafka event `correlation_id` supports cross-boundary investigation; a future governed
 trace-context field may link producer and consumer spans. It must not change event
@@ -303,6 +331,7 @@ must drop unapproved labels before ingestion.
 | PostgreSQL exporter | Connectivity, connections, locks, transaction rate, storage; no SQL text/credentials | Not deployed |
 | Redis exporter | Availability, memory, evictions, operations, cache behavior | Not deployed |
 | Kafka exporter/JMX | Broker health, topic/partition state, produce errors, storage, consumer lag when consumers exist | Not deployed |
+| OpenTelemetry application instrumentation | FastAPI server spans, bounded HTTP client spans, W3C propagation, log correlation | Implemented and unit validated across five services |
 | OpenTelemetry Collector | Accepted/dropped spans, queue/export failures | Not deployed |
 
 Scrape intervals and retention must fit the shared 32 GB VM. Metrics storage needs a

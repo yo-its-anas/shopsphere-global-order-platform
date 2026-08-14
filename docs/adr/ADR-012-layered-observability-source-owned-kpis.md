@@ -2,10 +2,12 @@
 
 ## Status
 
-Accepted as an architecture decision. Structured JSON logging, correlation IDs, health
-endpoints, domain audit, and a mock-data dashboard exist. Metrics, distributed tracing,
-central log aggregation, live analytics, dashboards, alerts, and Wazuh integration remain
-Planned and are not deployment evidence.
+Accepted and partially implemented. Structured JSON logging, correlation IDs, health
+endpoints, Prometheus application metrics, OpenTelemetry FastAPI/client instrumentation,
+W3C trace propagation, trace/log correlation, domain audit, and the analytics aggregation
+API exist. Collector-based trace export, Prometheus scraping, central log aggregation,
+Grafana dashboards, alerts, and Wazuh integration remain Planned and are not deployment
+evidence.
 
 ## Context
 
@@ -74,8 +76,10 @@ events, and SIEM records.
 
 The one GCP VM and one kind node would host both workloads and monitoring. A host failure
 can remove the application, local telemetry, and local alerting together. Local monitoring
-cannot independently confirm complete host loss. No Prometheus, Grafana, OpenTelemetry,
-Loki, Wazuh, live analytics, or alert deployment is currently implemented or validated.
+cannot independently confirm complete host loss. No Prometheus, Grafana, OpenTelemetry
+Collector/trace backend, Loki, Wazuh, or alert deployment is currently implemented or
+validated. Application metrics and tracing do not provide durable telemetry without an
+external collector and storage.
 
 ## Production evolution
 

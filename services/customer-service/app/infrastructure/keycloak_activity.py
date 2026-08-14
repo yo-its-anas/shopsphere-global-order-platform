@@ -11,6 +11,7 @@ import httpx2
 
 from app.core.config import Settings
 from app.core.errors import DependencyUnavailableError
+from app.core.telemetry import Telemetry
 from app.domain.models import (
     ActivityCategory,
     ActivityResult,
@@ -51,7 +52,7 @@ _ADMIN_OPERATIONS = frozenset({"CREATE", "UPDATE", "DELETE", "ACTION"})
 class KeycloakIdentityActivityProvider:
     """Fetch and normalize selected events without exposing raw Admin API documents."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, telemetry: Telemetry | None = None) -> None:
         if not (
             settings.keycloak_issuer
             and settings.keycloak_admin_url
@@ -69,6 +70,7 @@ class KeycloakIdentityActivityProvider:
         self._client_id = settings.keycloak_activity_client_id
         self._client_secret = settings.keycloak_activity_client_secret
         self._timeout = settings.keycloak_activity_timeout_seconds
+        self._telemetry = telemetry or Telemetry(None, "customer-service")
 
     async def list_activity(
         self, identity_provider_subject: str, offset: int, limit: int
@@ -81,22 +83,29 @@ class KeycloakIdentityActivityProvider:
             async with httpx2.AsyncClient(timeout=self._timeout) as client:
                 access_token = await self._obtain_access_token(client)
                 headers = {"Authorization": f"Bearer {access_token}"}
+                self._telemetry.inject(headers)
                 fetch_limit = offset + limit
-                user_response = await client.get(
-                    self._events_url,
-                    headers=headers,
-                    params={"user": identity_provider_subject, "first": 0, "max": fetch_limit},
-                )
-                admin_response = await client.get(
-                    self._admin_events_url,
-                    headers=headers,
-                    params={
-                        "resourcePath": f"users/{identity_provider_subject}",
-                        "resourceTypes": "USER",
-                        "first": 0,
-                        "max": fetch_limit,
-                    },
-                )
+                with self._telemetry.client_span(
+                    "keycloak activity query",
+                    upstream_service="keycloak",
+                    method="GET",
+                ) as span:
+                    user_response = await client.get(
+                        self._events_url,
+                        headers=headers,
+                        params={"user": identity_provider_subject, "first": 0, "max": fetch_limit},
+                    )
+                    admin_response = await client.get(
+                        self._admin_events_url,
+                        headers=headers,
+                        params={
+                            "resourcePath": f"users/{identity_provider_subject}",
+                            "resourceTypes": "USER",
+                            "first": 0,
+                            "max": fetch_limit,
+                        },
+                    )
+                    self._telemetry.set_http_status(span, admin_response.status_code)
                 user_response.raise_for_status()
                 admin_response.raise_for_status()
                 user_document = user_response.json()
@@ -112,14 +121,23 @@ class KeycloakIdentityActivityProvider:
         return events[offset : offset + limit]
 
     async def _obtain_access_token(self, client: httpx2.AsyncClient) -> str:
-        response = await client.post(
-            self._token_url,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": self._client_id,
-                "client_secret": self._client_secret,
-            },
-        )
+        headers: dict[str, str] = {}
+        with self._telemetry.client_span(
+            "keycloak service token",
+            upstream_service="keycloak",
+            method="POST",
+        ) as span:
+            self._telemetry.inject(headers)
+            response = await client.post(
+                self._token_url,
+                headers=headers,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": self._client_id,
+                    "client_secret": self._client_secret,
+                },
+            )
+            self._telemetry.set_http_status(span, response.status_code)
         response.raise_for_status()
         document = response.json()
         token = document.get("access_token") if isinstance(document, dict) else None

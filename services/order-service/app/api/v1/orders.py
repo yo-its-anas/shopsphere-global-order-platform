@@ -159,12 +159,13 @@ async def checkout(
 ) -> OrderConfirmationResponse:
     request.app.state.metrics.checkout_started()
     try:
-        order, items = await service.checkout(
-            actor.principal.subject,
-            actor.access_token,
-            idempotency_key,
-            str(request.state.correlation_id),
-        )
+        with request.app.state.telemetry.operation_span("order.checkout", "checkout_orchestration"):
+            order, items = await service.checkout(
+                actor.principal.subject,
+                actor.access_token,
+                idempotency_key,
+                str(request.state.correlation_id),
+            )
     except Exception:
         request.app.state.metrics.observe_checkout("failure")
         raise

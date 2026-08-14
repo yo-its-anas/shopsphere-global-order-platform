@@ -148,14 +148,17 @@ async def reserve_inventory(
 ) -> InventoryReservationMutationResponse:
     request.app.state.metrics.reservation_started()
     try:
-        reservation, item, movement = await service.reserve(
-            actor,
-            payload.product_id,
-            payload.quantity,
-            payload.external_reference,
-            _request_id(request),
-            payload.expires_at,
-        )
+        with request.app.state.telemetry.operation_span(
+            "inventory.reserve", "inventory_reservation"
+        ):
+            reservation, item, movement = await service.reserve(
+                actor,
+                payload.product_id,
+                payload.quantity,
+                payload.external_reference,
+                _request_id(request),
+                payload.expires_at,
+            )
     except Exception:
         request.app.state.metrics.observe_reservation("failure")
         raise
