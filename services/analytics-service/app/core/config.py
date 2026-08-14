@@ -41,6 +41,7 @@ class Settings:
     customer_service_url: str = "http://customer-service:8000"
     catalogue_service_url: str = "http://catalogue-service:8000"
     order_service_url: str = "http://order-service:8000"
+    prometheus_url: str = "http://prometheus.shopsphere-monitoring.svc.cluster.local:9090"
     upstream_timeout_seconds: float = 5.0
     maximum_aggregate_records: int = 10_000
     keycloak_issuer: str | None = None
@@ -64,6 +65,9 @@ class Settings:
             "CATALOGUE_SERVICE_URL", "http://catalogue-service:8000"
         ).strip()
         order_service_url = os.getenv("ORDER_SERVICE_URL", "http://order-service:8000").strip()
+        prometheus_url = os.getenv(
+            "PROMETHEUS_URL", "http://prometheus.shopsphere-monitoring.svc.cluster.local:9090"
+        ).strip()
         keycloak_issuer = os.getenv("KEYCLOAK_ISSUER", "").strip().rstrip("/") or None
         keycloak_audience = os.getenv("KEYCLOAK_AUDIENCE", "shopsphere-api").strip()
         keycloak_role_client_id = os.getenv("KEYCLOAK_ROLE_CLIENT_ID", "shopsphere-api").strip()
@@ -101,6 +105,7 @@ class Settings:
             customer_service_url=_validate_origin("CUSTOMER_SERVICE_URL", customer_service_url),
             catalogue_service_url=_validate_origin("CATALOGUE_SERVICE_URL", catalogue_service_url),
             order_service_url=_validate_origin("ORDER_SERVICE_URL", order_service_url),
+            prometheus_url=_validate_origin("PROMETHEUS_URL", prometheus_url),
             upstream_timeout_seconds=upstream_timeout_seconds,
             maximum_aggregate_records=maximum_aggregate_records,
             keycloak_issuer=keycloak_issuer,
