@@ -8,6 +8,7 @@ CATALOGUE_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/catalogue-service
 API_GATEWAY_OVERLAY := platform/kubernetes/overlays/poc/api-gateway
 ORDER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/order-service
 KAFKA_OVERLAY := platform/kubernetes/overlays/poc/kafka
+OTEL_COLLECTOR_OVERLAY := platform/kubernetes/overlays/poc/opentelemetry-collector
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
 API_GATEWAY_IMAGE ?= shopsphere/api-gateway:poc
@@ -33,6 +34,7 @@ SERVICE_DIRS := \
 	validate-order-service order-service-identity order-service-build \
 	order-service-load order-service-apply order-service-status order-service-smoke order-e2e \
 	validate-kafka kafka-apply kafka-topics kafka-status \
+	validate-opentelemetry-collector otel-collector-apply otel-collector-status \
 	catalogue-event-smoke \
 	customer-integration customer-integration-collect \
 	catalogue-integration catalogue-integration-collect
@@ -65,7 +67,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-api-gateway ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-api-gateway validate-opentelemetry-collector ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -77,6 +79,16 @@ validate-kubernetes: ## Validate the kind shape and render the PoC Kustomize ove
 	@test "$$(grep -c '^[[:space:]]*- role:' platform/kind/cluster-config.yaml)" -eq 1
 	@grep -q '^[[:space:]]*- role: control-plane$$' platform/kind/cluster-config.yaml
 	@kubectl kustomize platform/kubernetes/overlays/poc >/dev/null
+
+validate-opentelemetry-collector: ## Validate Collector and application telemetry manifests
+	@./scripts/validate-opentelemetry-collector-manifests.sh
+
+otel-collector-apply: validate-opentelemetry-collector ## Apply the internal PoC Collector
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(OTEL_COLLECTOR_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status deployment/opentelemetry-collector --timeout=300s
+
+otel-collector-status: ## Verify Collector readiness, exposure, connectivity, and received spans
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-opentelemetry-collector.sh
 
 validate-postgresql: ## Validate PostgreSQL manifests without changing the cluster
 	@./scripts/validate-postgresql-manifests.sh

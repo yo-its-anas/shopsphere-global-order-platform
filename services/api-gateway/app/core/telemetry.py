@@ -19,7 +19,7 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 _FALSE_VALUES = frozenset({"0", "false", "no", "off", ""})
-_EXCLUDED_SERVER_URLS = r"^/health/live$,^/health/ready$,^/metrics$"
+_EXCLUDED_SERVER_URLS = r".*/health/live$,.*/health/ready$,.*/metrics$"
 
 
 class Telemetry:

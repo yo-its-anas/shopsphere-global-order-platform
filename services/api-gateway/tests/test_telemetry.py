@@ -61,6 +61,25 @@ def test_server_extracts_w3c_context_without_capturing_sensitive_headers() -> No
     assert "dynamic-value" not in server_span.name
 
 
+def test_health_probe_is_excluded_from_tracing() -> None:
+    telemetry, exporter = _telemetry()
+    application = FastAPI()
+
+    @application.get("/health/ready")
+    async def ready() -> dict[str, str]:
+        return {"status": "ready"}
+
+    telemetry.instrument_app(application)
+
+    async def request() -> httpx2.Response:
+        transport = httpx2.ASGITransport(app=application)
+        async with httpx2.AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get("/health/ready")
+
+    assert asyncio.run(request()).status_code == 200
+    assert exporter.get_finished_spans() == ()
+
+
 def test_bounded_client_injects_traceparent_and_correlates_json_log() -> None:
     telemetry, exporter = _telemetry()
     captured: list[httpx2.Request] = []

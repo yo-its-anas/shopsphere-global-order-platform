@@ -57,6 +57,14 @@ class ConfiguredHttpClient:
         content: bytes | None = None,
     ) -> httpx2.Response:
         propagated_headers = dict(headers or {})
+        if path in {"/health/live", "/health/ready"}:
+            return await self._client.request(
+                method,
+                path,
+                headers=propagated_headers,
+                params=params,
+                content=content,
+            )
         with self._telemetry.client_span(
             f"{self._upstream_service} {method.upper()}",
             upstream_service=self._upstream_service,
