@@ -26,6 +26,8 @@ class Settings:
     catalogue_service_timeout_seconds: float = 5.0
     order_service_url: str = "http://order-service:8000"
     order_service_timeout_seconds: float = 10.0
+    analytics_service_url: str = "http://analytics-service:8000"
+    analytics_service_timeout_seconds: float = 5.0
     cors_allowed_origins: tuple[str, ...] = _DEFAULT_CORS_ORIGINS
 
     @classmethod
@@ -45,6 +47,9 @@ class Settings:
         order_service_url = (
             os.getenv("ORDER_SERVICE_URL", "http://order-service:8000").strip().rstrip("/")
         )
+        analytics_service_url = (
+            os.getenv("ANALYTICS_SERVICE_URL", "http://analytics-service:8000").strip().rstrip("/")
+        )
         cors_allowed_origins = tuple(
             origin.strip().rstrip("/")
             for origin in os.getenv("CORS_ALLOWED_ORIGINS", ",".join(_DEFAULT_CORS_ORIGINS)).split(
@@ -60,6 +65,7 @@ class Settings:
                 os.getenv("CATALOGUE_SERVICE_TIMEOUT_SECONDS", "5")
             )
             order_service_timeout_seconds = float(os.getenv("ORDER_SERVICE_TIMEOUT_SECONDS", "10"))
+            analytics_service_timeout_seconds = float(os.getenv("ANALYTICS_SERVICE_TIMEOUT_SECONDS", "5"))
         except ValueError as exc:
             raise ValueError("Upstream timeout values must be numeric") from exc
 
@@ -152,5 +158,7 @@ class Settings:
             catalogue_service_timeout_seconds=catalogue_service_timeout_seconds,
             order_service_url=order_service_url,
             order_service_timeout_seconds=order_service_timeout_seconds,
+            analytics_service_url=analytics_service_url,
+            analytics_service_timeout_seconds=analytics_service_timeout_seconds,
             cors_allowed_origins=cors_allowed_origins,
         )

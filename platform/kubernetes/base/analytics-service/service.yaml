@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: shopsphere-apps
+  labels:
+    app.kubernetes.io/name: analytics-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: http
+      name: http
+  selector:
+    app.kubernetes.io/name: analytics-service
+    app.kubernetes.io/component: analytics

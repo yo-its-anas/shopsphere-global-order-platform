@@ -13,6 +13,7 @@ from starlette.routing import compile_path
 from app.api.health import router as health_router
 from app.api.metrics import router as metrics_router
 from app.api.v1.router import api_v1_router
+from app.application.analytics_proxy import AnalyticsServiceProxy
 from app.application.catalogue_proxy import CatalogueServiceProxy
 from app.application.customer_proxy import CustomerServiceProxy
 from app.application.order_proxy import OrderServiceProxy
@@ -66,6 +67,7 @@ def create_app(
     customer_service_client: UpstreamHttpClient | None = None,
     catalogue_service_client: UpstreamHttpClient | None = None,
     order_service_client: UpstreamHttpClient | None = None,
+    analytics_service_client: UpstreamHttpClient | None = None,
 ) -> FastAPI:
     """Create an independently configurable FastAPI application."""
 
@@ -106,6 +108,14 @@ def create_app(
         "order-service",
     )
     order_service_proxy = OrderServiceProxy(resolved_order_client, metrics)
+    owns_analytics_client = analytics_service_client is None
+    resolved_analytics_client = analytics_service_client or ConfiguredHttpClient(
+        resolved_settings.analytics_service_url,
+        resolved_settings.analytics_service_timeout_seconds,
+        resolved_telemetry,
+        "analytics-service",
+    )
+    analytics_service_proxy = AnalyticsServiceProxy(resolved_analytics_client, metrics)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -117,6 +127,8 @@ def create_app(
             await resolved_catalogue_client.aclose()
         if owns_order_client:
             await resolved_order_client.aclose()
+        if owns_analytics_client:
+            await resolved_analytics_client.aclose()
         logger.info("service_stopped", extra={"event": "service_stopped"})
         if owns_telemetry:
             resolved_telemetry.shutdown()
@@ -139,6 +151,7 @@ def create_app(
     application.state.customer_service_proxy = customer_service_proxy
     application.state.catalogue_service_proxy = catalogue_service_proxy
     application.state.order_service_proxy = order_service_proxy
+    application.state.analytics_service_proxy = analytics_service_proxy
     application.add_middleware(CorrelationIdMiddleware)
     application.add_middleware(
         CORSMiddleware,

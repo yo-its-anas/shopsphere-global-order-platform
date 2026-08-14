@@ -1,21 +1,20 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: api-gateway
+  name: analytics-service-ingress
   namespace: shopsphere-apps
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: api-gateway
-      app.kubernetes.io/component: api-entry-point
+      app.kubernetes.io/name: analytics-service
   policyTypes:
     - Ingress
     - Egress
   ingress:
     - from:
-        - namespaceSelector:
+        - podSelector:
             matchLabels:
-              shopsphere.io/ingress-access: allowed
+              app.kubernetes.io/name: api-gateway
       ports:
         - protocol: TCP
           port: 8000
@@ -23,37 +22,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               shopsphere.io/tier: monitoring
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: prometheus
       ports:
         - protocol: TCP
           port: 8000
   egress:
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              shopsphere.io/tier: monitoring
-          podSelector:
-            matchLabels:
-              app.kubernetes.io/name: opentelemetry-collector
-      ports:
-        - protocol: TCP
-          port: 4317
-        - protocol: TCP
-          port: 4318
-    - to:
-        - namespaceSelector:
-            matchLabels:
-              kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
-      ports:
-        - protocol: UDP
-          port: 53
-        - protocol: TCP
-          port: 53
     - to:
         - podSelector:
             matchLabels:
@@ -76,9 +48,25 @@ spec:
         - protocol: TCP
           port: 8000
     - to:
-        - podSelector:
+        - namespaceSelector:
             matchLabels:
-              app.kubernetes.io/name: analytics-service
+              shopsphere.io/tier: monitoring
       ports:
         - protocol: TCP
-          port: 8000
+          port: 4318
+        - protocol: TCP
+          port: 9090
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              shopsphere.io/tier: platform
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53

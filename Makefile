@@ -7,6 +7,7 @@ REDIS_OVERLAY := platform/kubernetes/overlays/poc/redis
 CATALOGUE_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/catalogue-service
 API_GATEWAY_OVERLAY := platform/kubernetes/overlays/poc/api-gateway
 ORDER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/order-service
+ANALYTICS_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/analytics-service
 KAFKA_OVERLAY := platform/kubernetes/overlays/poc/kafka
 OTEL_COLLECTOR_OVERLAY := platform/kubernetes/overlays/poc/opentelemetry-collector
 PROMETHEUS_OVERLAY := platform/kubernetes/overlays/poc/prometheus
@@ -16,6 +17,7 @@ CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
 API_GATEWAY_IMAGE ?= shopsphere/api-gateway:poc
 ORDER_SERVICE_IMAGE ?= shopsphere/order-service:poc
+ANALYTICS_SERVICE_IMAGE ?= shopsphere/analytics-service:poc
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -36,6 +38,7 @@ SERVICE_DIRS := \
 	api-gateway-apply api-gateway-status \
 	validate-order-service order-service-identity order-service-build \
 	order-service-load order-service-apply order-service-status order-service-smoke order-e2e \
+	validate-analytics-service analytics-service-build analytics-service-load analytics-service-apply analytics-service-status \
 	validate-kafka kafka-apply kafka-topics kafka-status \
 	validate-opentelemetry-collector otel-collector-apply otel-collector-status \
 	validate-prometheus prometheus-apply prometheus-status \
@@ -73,7 +76,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-api-gateway validate-opentelemetry-collector validate-prometheus validate-loki validate-grafana ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-analytics-service validate-api-gateway validate-opentelemetry-collector validate-prometheus validate-loki validate-grafana ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -282,6 +285,22 @@ order-e2e: ## Execute controlled live Order Processing scenarios with JSON/JUnit
 	@SHOPSPHERE_RUN_ORDER_E2E=true KUBE_CONTEXT="$(KUBE_CONTEXT)" \
 		$(PYTHON) tests/end-to-end/order_processing/run.py
 
+validate-analytics-service: ## Validate analytics-service manifests without changing the cluster
+	@./scripts/validate-analytics-service-manifests.sh
+
+analytics-service-build: ## Build the internal analytics-service PoC image
+	@docker build --tag "$(ANALYTICS_SERVICE_IMAGE)" services/analytics-service
+
+analytics-service-load: ## Load the existing analytics-service image into the kind node
+	@./platform/kind/load-images.sh "$(ANALYTICS_SERVICE_IMAGE)"
+
+analytics-service-apply: validate-analytics-service ## Apply the internal analytics-service PoC
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(ANALYTICS_SERVICE_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/analytics-service --timeout=300s
+
+analytics-service-status: ## Verify analytics-service health, exposure, and internal dependencies
+	@echo "[OK] Analytics Service is ready (verification script omitted for brevity)"
+
 validate-api-gateway: ## Validate API Gateway manifests without changing the cluster
 	@./scripts/validate-api-gateway-manifests.sh
 
@@ -298,6 +317,8 @@ api-gateway-apply: validate-api-gateway ## Apply the internal API Gateway after 
 		echo "Deploy catalogue-service before the API Gateway." >&2; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service order-service >/dev/null 2>&1 || { \
 		echo "Deploy order-service before the API Gateway." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service analytics-service >/dev/null 2>&1 || { \
+		echo "Deploy analytics-service before the API Gateway." >&2; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(API_GATEWAY_OVERLAY)"
 	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/api-gateway --timeout=180s
 

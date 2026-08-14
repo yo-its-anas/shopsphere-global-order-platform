@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: analytics-service-environment
+  namespace: shopsphere-apps
+data:
+  SERVICE_NAME: "analytics-service"
+  SERVICE_VERSION: "0.1.0"
+  APP_ENV: "poc"
+  LOG_LEVEL: "INFO"
+  CUSTOMER_SERVICE_URL: "http://customer-service:8000"
+  CATALOGUE_SERVICE_URL: "http://catalogue-service:8000"
+  ORDER_SERVICE_URL: "http://order-service:8000"
+  PROMETHEUS_URL: "http://prometheus.shopsphere-monitoring.svc.cluster.local:9090"
+  UPSTREAM_TIMEOUT_SECONDS: "5.0"
+  MAXIMUM_AGGREGATE_RECORDS: "10000"
+  KEYCLOAK_ISSUER: "http://keycloak.shopsphere-platform.svc.cluster.local:8080/realms/shopsphere"
+  KEYCLOAK_AUDIENCE: "shopsphere-api"
+  KEYCLOAK_ROLE_CLIENT_ID: "shopsphere-api"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://opentelemetry-collector.shopsphere-monitoring.svc.cluster.local:4318"
