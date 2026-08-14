@@ -26,6 +26,14 @@ updates catalogue or inventory tables directly. Checkout implements the governed
 reservation Saga in [ADR-011](ADR-011-reservation-based-order-saga.md), detailed by the
 [Enterprise Order Processing domain design](../architecture/order-processing-domain-design.md).
 
+`analytics-service` is a read-only composition boundary for executive business
+operations. Customer-service owns registration/profile aggregates, Catalogue/Inventory
+owns product and stock aggregates, and Order owns order, simulated-value, and fulfilment
+aggregates. Analytics-service must use governed owner APIs for current views or
+rebuildable idempotent event projections for historical scale; it must not query or write
+another service's database. Operational metrics, logs, traces, and Wazuh security events
+remain separate from business KPI authority as defined by [ADR-012](ADR-012-layered-observability-source-owned-kpis.md).
+
 ## Alternatives considered
 
 - A single layered monolith: simpler deployment, but weaker demonstration of service ownership and independent evolution.

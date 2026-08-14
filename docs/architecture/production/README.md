@@ -38,3 +38,25 @@ availability, recovery and data-residency requirements justify its consistency a
 operational complexity. Payment, tax, fraud, fulfilment, and notification remain
 separately governed capabilities rather than fields casually added to the Order
 aggregate. These are recommendations, not implemented capabilities.
+
+## Executive operations and observability evolution
+
+The production direction follows the
+[Executive Operations and Observability Architecture](../observability-architecture.md)
+and [ADR-012](../../adr/ADR-012-layered-observability-source-owned-kpis.md). Preserve
+source-owned business KPI definitions while scaling analytics with governed,
+idempotent event-derived read models and reconciliation. Keep the executive application
+surface distinct from the engineering Grafana surface.
+
+Run services on multi-zone GKE with horizontally scaled dedicated OpenTelemetry
+collectors and node agents. Export to managed/external metrics, durable object-backed log
+and trace stores, protected Grafana, and alert routing outside the application failure
+domain. Define SLIs/SLOs, multi-window burn-rate alerts, long-term retention, tested
+telemetry recovery, and stable autoscaling signals. Use a centralized SIEM for governed
+Wazuh, identity, cloud, and Kubernetes security telemetry.
+
+Production monitoring requires access isolation, encryption, workload identity/mTLS
+where appropriate, external secret management, capacity/cardinality governance,
+multi-zone availability, disaster recovery, and on-call/runbook ownership. A
+multi-region telemetry and analytics strategy should be introduced only for explicit
+availability, recovery, latency, or residency requirements.

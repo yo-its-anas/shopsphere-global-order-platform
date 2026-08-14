@@ -2,7 +2,11 @@
 
 ## Status
 
-Proposed — only the Jenkins responsibility directory exists; no Jenkinsfile, controller, agent, credential, or pipeline run exists.
+Accepted — a declarative root Jenkinsfile and pipeline documentation exist. The pipeline
+implements quality, unit-test, build, infrastructure-validation, Bandit, report archival,
+and explicit environment-dependent integration gates. A retained Jenkins controller run
+and Semgrep, Trivy, dependency-scanning, OPA, Wazuh, publication, or deployment evidence
+do not exist.
 
 ## Context
 
@@ -10,7 +14,13 @@ The project requires repeatable quality, security, build, infrastructure validat
 
 ## Decision
 
-Use pipeline-as-code in Jenkins to orchestrate formatting, linting, automated tests, SAST, dependency and image scanning, Terraform and Kubernetes validation, policy checks, image builds, and controlled PoC deployment. Fail closed on agreed critical gates and retain concise evidence.
+Use pipeline-as-code in Jenkins to orchestrate formatting, linting, automated tests,
+security scanning, Terraform and Kubernetes validation, policy checks, image builds, and
+eventually approval-controlled PoC deployment. Fail closed on agreed critical gates and
+retain concise machine-readable evidence. Ruff and Black provide Python quality;
+Pytest provides behavioral evidence; Bandit provides Python security scanning; Semgrep,
+Trivy, and OPA are separate planned gates. Wazuh is runtime host/security monitoring and
+is not treated as a source-code pipeline stage.
 
 ## Alternatives considered
 
@@ -28,7 +38,11 @@ Use least-privilege ephemeral agents where possible, pinned plugins and tools, p
 
 ## PoC limitations
 
-The likely single-host controller and agent will not be highly available and may share trust boundaries with workloads. A foundation pipeline exists, but no retained Jenkins controller run or security-scan evidence is present.
+The likely single-host controller and agent will not be highly available and may share
+trust boundaries with workloads. The pipeline exists, and Bandit JSON generation is
+configured, but no retained Jenkins controller run is present. Semgrep, Trivy, dependency
+scanning, OPA enforcement, Wazuh integration, artifact promotion, and deployment remain
+Pending / Not Verified.
 
 ## Production evolution
 
