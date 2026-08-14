@@ -28,7 +28,14 @@ except urllib.error.HTTPError as error:
     assert error.code == 401
 else:
     raise AssertionError('Unauthenticated catalogue request was not rejected by the authoritative backend')"
-    printf '[OK] API Gateway is Ready and ClusterIP-only; its catalogue route reached backend authorization and returned the expected HTTP 401 without a token.\n'
+    kubectl --context "$KUBE_CONTEXT" -n "$NAMESPACE" exec "$pod_name" -- python -c "import urllib.error, urllib.request; request = urllib.request.Request('http://127.0.0.1:8000/api/v1/carts/me');
+try:
+    urllib.request.urlopen(request, timeout=6)
+except urllib.error.HTTPError as error:
+    assert error.code == 401
+else:
+    raise AssertionError('Unauthenticated order request was not rejected by the authoritative backend')"
+    printf '[OK] API Gateway is Ready and ClusterIP-only; Catalogue and Order routes reached authoritative backend authorization and returned HTTP 401 without tokens.\n'
 }
 
 main "$@"

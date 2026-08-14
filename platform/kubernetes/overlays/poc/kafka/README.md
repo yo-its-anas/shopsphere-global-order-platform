@@ -19,5 +19,8 @@ The governed topics use a domain, fact, and contract-version convention:
 - `inventory.adjusted.v1`
 - `inventory.low.v1`
 - `inventory.out-of-stock.v1`
+- `inventory.reserved.v1`
+- `inventory.reservation_released.v1`
+- `inventory.reservation_consumed.v1`
 
 All topics have one partition and replication factor one in this PoC. This preserves per-topic append order but cannot provide cross-topic ordering or broker redundancy.

@@ -16,6 +16,12 @@ Keep operational logs, domain audit records, and identity-provider authenticatio
 
 Catalogue lifecycle and price changes record verified actor, correlation, and UTC effective/occurrence times. InventoryMovement is an immutable business fact with a UTC `occurred_at` instant and resulting balances; it is not an application log. Price validity uses UTC instants while currency and any future market/business-zone context remain explicit domain fields.
 
+The target Order Processing context applies the same distinction: OrderStatusHistory and
+OrderAuditEvent are append-only domain records, OrderOutboxEvent is publication intent,
+and structured logs are operational telemetry. Order times, reservation expiry, Saga
+state changes, and event occurrence use UTC; a customer's display timezone remains a
+presentation concern.
+
 ## Alternatives considered
 
 - Store local time: appears user-friendly but creates daylight-saving and cross-region ambiguity.

@@ -1,6 +1,6 @@
 # ShopSphere API Documentation
 
-FastAPI remains the executable OpenAPI source. Clients use API Gateway paths beneath `/api/v1`; the gateway forwards only registered method/path combinations to the internal ClusterIP-only customer-service and catalogue-service. The gateway propagates bearer tokens but does not currently validate them. Each downstream service remains authoritative for JWT validation, role enforcement, visibility, ownership, and domain invariants.
+FastAPI remains the executable OpenAPI source. Clients use API Gateway paths beneath `/api/v1`; the gateway forwards only registered method/path combinations to the internal ClusterIP-only customer-service, catalogue-service, and order-service origins. The gateway propagates bearer tokens but does not currently validate them. Each downstream service remains authoritative for JWT validation, role enforcement, visibility, ownership, and domain invariants.
 
 Interactive OpenAPI is available from a locally reachable service at `/docs`; the machine-readable document is `/openapi.json`. Do not expose the internal customer-service documentation endpoint publicly.
 
@@ -78,12 +78,26 @@ Catalogue-service implements `/api/v1` category, product, search, lifecycle, eff
 | `GET` | `/api/v1/inventory[?state=...]` | `support`, `operations_admin` | List tracked balances and filter by derived availability state. |
 | `GET` | `/api/v1/inventory/statistics` | `support`, `operations_admin` | Calculate stock counts and unit totals from persisted balances. |
 
-Catalogue-service independently validates the same Keycloak issuer/audience/role assumptions as customer-service. Customers see active/searchable products, current prices, and safe derived availability only; support is read-only; operations administrators own mutations. API responses contain domain schemas rather than SQLAlchemy records. Inventory reservation/release/fulfilment commands remain unavailable until Order Processing integration is implemented.
+Catalogue-service independently validates Keycloak issuer/audience and allow-listed roles. Customers see active/searchable products, current prices, and safe derived availability only; support is read-only; operations administrators own catalogue/stock mutations. API responses contain domain schemas rather than SQLAlchemy records.
+
+Internal reservation routes are intentionally absent from the public API Gateway
+allow-list. They are deployed for order-service-to-Catalogue use and were live-validated
+through checkout, cancellation and concurrent-final-unit E2E scenarios:
+
+| Method | Internal path | Roles | Behavior |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/inventory/reservations` | `order_service`, `operations_admin` | Atomically reserve current PostgreSQL availability using a unique external workflow reference. |
+| `GET` | `/api/v1/inventory/reservations/{reservation_id}` | `order_service`, `operations_admin` | Retrieve reservation state for retry/reconciliation. |
+| `POST` | `/api/v1/inventory/reservations/{reservation_id}/release` | `order_service`, `operations_admin` | Idempotently release an active reservation. |
+| `POST` | `/api/v1/inventory/reservations/{reservation_id}/consume` | `order_service`, `operations_admin` | Finalize allocation accounting without asserting shipment. |
+
+Customers and support cannot mutate reservations. PostgreSQL row locking and balance constraints prevent final-unit overselling. Redis is invalidated only after commit, and reservation events enter the transactional outbox so Kafka failure does not reverse the authoritative database change.
 
 ## Evidence boundary
 
 Catalogue route implementations, OpenAPI metadata, fixed Gateway mappings, schemas and
-automated tests exist. The catalogue-service suite passed 48 tests; the focused React
+automated tests exist. The catalogue-service suite passed 60 tests, including isolated
+reservation behavior; the focused React
 catalogue/inventory suite passed 6 tests; Gateway proxy tests cover the allow-listed
 transport. Current platform checks observed Ready internal Gateway and catalogue-service
 workloads, and an unauthenticated live route reached backend JWT enforcement.
@@ -98,3 +112,57 @@ PostgreSQL is authoritative for catalogue, pricing and inventory data. Redis cac
 bounded read responses only and may be unavailable without invalidating PostgreSQL.
 Kafka carries asynchronous versioned facts produced through the transactional outbox;
 it is not part of the synchronous commit decision.
+
+## Order-service API through API Gateway
+
+Order-service implements the following `/api/v1` routes and the API Gateway now registers
+the same external paths against its fixed `ORDER_SERVICE_URL`. Order-service is deployed
+as a ClusterIP workload; the retained E2E suite exercised these external paths through
+the deployed Gateway. The suite was API-driven rather than browser-driven.
+
+| Method | Internal path | Role | Behavior |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/carts/me` | `customer` | Create if absent and retrieve the caller's active cart. |
+| `POST` | `/api/v1/carts/me/items` | `customer` | Validate the product through Catalogue and add/increment a line. |
+| `PATCH` | `/api/v1/carts/me/items/{item_id}` | `customer` | Replace an owned item quantity. |
+| `DELETE` | `/api/v1/carts/me/items/{item_id}` | `customer` | Remove an owned item. |
+| `DELETE` | `/api/v1/carts/me/items` | `customer` | Clear the caller's active cart. |
+| `POST` | `/api/v1/orders/checkout` | `customer` | Revalidate and reserve the caller's cart; requires `Idempotency-Key`. |
+| `GET` | `/api/v1/orders/me` | `customer` | Paginated own-order list with status filter and created-date sort. |
+| `GET` | `/api/v1/orders/me/{order_id}` | `customer` | Own historical order-item snapshots and current status. |
+| `GET` | `/api/v1/orders/me/{order_id}/history` | `customer` | Own append-only status history. |
+| `GET` | `/api/v1/orders/me/{order_id}/audit` | `customer` | Own paginated safe audit activity. |
+| `POST` | `/api/v1/orders/me/{order_id}/cancellation` | `customer` | Cancel an eligible own order and release reservations. |
+| `GET` | `/api/v1/orders/admin[/{order_id}]` | `support`, `operations_admin` | Governed operational list/detail access. |
+| `GET` | `/api/v1/orders/admin/{order_id}/{history\|audit}` | `support`, `operations_admin` | Operational history/audit access. |
+| `POST` | `/api/v1/orders/admin/{order_id}/status` | `operations_admin` | Explicit PROCESSING or FULFILLED command. |
+| `POST` | `/api/v1/orders/admin/{order_id}/cancellation` | `operations_admin` | Cancel an eligible order; no refund semantics. |
+
+The Gateway forwards `Authorization`, the validated/generated `X-Request-ID`, request
+query/body semantics, and a client-supplied checkout `Idempotency-Key`. It does not create
+an idempotency key when one is absent, and it preserves downstream `401`, `403`, `404`,
+`409`, and `422` responses. Transport timeout, unavailable, and protocol failures are
+normalized as safe `504`, `503`, and `502` responses. Tokens, idempotency keys, cookies,
+and other sensitive request headers are excluded from structured logs.
+
+The validated token subject is the ownership key; clients do not submit a customer ID.
+Non-owned item identifiers receive `404`. Add-item calls a fixed internal Catalogue
+origin and propagates the bearer token solely for downstream validation without logging
+it. Cart price, availability and subtotal fields are display snapshots and explicitly
+non-authoritative. Checkout accepts no price/total/availability fields, obtains current
+Catalogue data, reserves Inventory through a confidential service identity, calculates
+Decimal totals, and returns the committed immutable confirmation. Partial failures are
+compensated and unresolved releases retain reconciliation evidence.
+
+Forty-six order-service tests pass, including cart behavior/security,
+fixed-origin Catalogue client, checkout success/failure/idempotency/Saga evidence,
+order retrieval/IDOR, role policy, lifecycle, cancellation, audit and events.
+Gateway route behavior is unit validated with fixed-path, propagation, failure, status
+preservation, and log-safety tests. The live PostgreSQL migrations, dedicated service
+identity, Catalogue reservation/release, Kubernetes workload, Gateway checkout and Kafka
+outbox publication were platform-validated with simulated data. The explicitly enabled
+E2E runner passed prerequisites and scenarios A–I: successful order, insufficient stock,
+authoritative repricing, idempotent retry, IDOR, final-unit concurrency, cancellation,
+Kafka recovery and Redis fallback. React cart, checkout, confirmation, history/detail,
+status timeline and role-aware management screens are implemented and component-tested;
+a retained browser-driven execution is Pending / Not Verified.

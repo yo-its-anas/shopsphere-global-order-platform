@@ -24,6 +24,8 @@ class Settings:
     customer_service_timeout_seconds: float = 5.0
     catalogue_service_url: str = "http://catalogue-service:8000"
     catalogue_service_timeout_seconds: float = 5.0
+    order_service_url: str = "http://order-service:8000"
+    order_service_timeout_seconds: float = 10.0
     cors_allowed_origins: tuple[str, ...] = _DEFAULT_CORS_ORIGINS
 
     @classmethod
@@ -40,6 +42,9 @@ class Settings:
         catalogue_service_url = (
             os.getenv("CATALOGUE_SERVICE_URL", "http://catalogue-service:8000").strip().rstrip("/")
         )
+        order_service_url = (
+            os.getenv("ORDER_SERVICE_URL", "http://order-service:8000").strip().rstrip("/")
+        )
         cors_allowed_origins = tuple(
             origin.strip().rstrip("/")
             for origin in os.getenv("CORS_ALLOWED_ORIGINS", ",".join(_DEFAULT_CORS_ORIGINS)).split(
@@ -54,6 +59,7 @@ class Settings:
             catalogue_service_timeout_seconds = float(
                 os.getenv("CATALOGUE_SERVICE_TIMEOUT_SECONDS", "5")
             )
+            order_service_timeout_seconds = float(os.getenv("ORDER_SERVICE_TIMEOUT_SECONDS", "10"))
         except ValueError as exc:
             raise ValueError("Upstream timeout values must be numeric") from exc
 
@@ -99,6 +105,23 @@ class Settings:
             raise ValueError("CATALOGUE_SERVICE_URL contains an invalid port") from exc
         if catalogue_service_timeout_seconds <= 0 or catalogue_service_timeout_seconds > 30:
             raise ValueError("CATALOGUE_SERVICE_TIMEOUT_SECONDS must be between 0 and 30")
+        parsed_order_url = urlsplit(order_service_url)
+        if (
+            parsed_order_url.scheme not in {"http", "https"}
+            or not parsed_order_url.hostname
+            or parsed_order_url.username
+            or parsed_order_url.password
+            or parsed_order_url.query
+            or parsed_order_url.fragment
+            or parsed_order_url.path not in {"", "/"}
+        ):
+            raise ValueError("ORDER_SERVICE_URL must be an HTTP(S) origin without credentials")
+        try:
+            _ = parsed_order_url.port
+        except ValueError as exc:
+            raise ValueError("ORDER_SERVICE_URL contains an invalid port") from exc
+        if order_service_timeout_seconds <= 0 or order_service_timeout_seconds > 30:
+            raise ValueError("ORDER_SERVICE_TIMEOUT_SECONDS must be between 0 and 30")
         if not cors_allowed_origins:
             raise ValueError("CORS_ALLOWED_ORIGINS must contain at least one explicit origin")
         for origin in cors_allowed_origins:
@@ -127,5 +150,7 @@ class Settings:
             customer_service_timeout_seconds=customer_service_timeout_seconds,
             catalogue_service_url=catalogue_service_url,
             catalogue_service_timeout_seconds=catalogue_service_timeout_seconds,
+            order_service_url=order_service_url,
+            order_service_timeout_seconds=order_service_timeout_seconds,
             cors_allowed_origins=cors_allowed_origins,
         )

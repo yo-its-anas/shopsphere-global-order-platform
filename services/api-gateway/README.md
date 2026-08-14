@@ -1,6 +1,6 @@
 # API Gateway
 
-FastAPI transport and policy boundary for ShopSphere APIs. It forwards the implemented customer and Catalogue/Inventory capabilities to fixed internal services and contains no customer, catalogue, inventory, order, or analytics domain logic.
+FastAPI transport and policy boundary for ShopSphere APIs. It forwards the implemented customer, Catalogue/Inventory, and Order capabilities to fixed internal services and contains no customer, catalogue, inventory, order, or analytics domain logic.
 
 ## Customer route mapping
 
@@ -38,15 +38,36 @@ External and internal paths currently match beneath `/api/v1`; they use separate
 | `/api/v1/inventory/products/{product_id}/settings` | `PATCH` | Same path |
 | `/api/v1/inventory/products/{product_id}/movements` | `GET` | Same path |
 
+## Cart and Order route mapping
+
+External and internal paths match beneath `/api/v1`; only the following method/path combinations are registered.
+
+| External gateway path | Methods | Internal order-service path |
+| --- | --- | --- |
+| `/api/v1/carts/me` | `GET` | Same path |
+| `/api/v1/carts/me/items` | `POST`, `DELETE` | Same path |
+| `/api/v1/carts/me/items/{item_id}` | `PATCH`, `DELETE` | Same path |
+| `/api/v1/orders/checkout` | `POST` | Same path |
+| `/api/v1/orders/me` | `GET` | Same path |
+| `/api/v1/orders/me/{order_id}` | `GET` | Same path |
+| `/api/v1/orders/me/{order_id}/{history\|audit}` | `GET` | Corresponding path |
+| `/api/v1/orders/me/{order_id}/cancellation` | `POST` | Same path |
+| `/api/v1/orders/admin` | `GET` | Same path |
+| `/api/v1/orders/admin/{order_id}` | `GET` | Same path |
+| `/api/v1/orders/admin/{order_id}/{history\|audit}` | `GET` | Corresponding path |
+| `/api/v1/orders/admin/{order_id}/{status\|cancellation}` | `POST` | Corresponding path |
+
+The gateway passes a client-supplied `Idempotency-Key` unchanged on checkout and does not manufacture one. Order-service validates that required key and remains authoritative for retry identity, cart ownership, RBAC, lifecycle transitions, compensation, and domain conflicts. Its `401`, `403`, `404`, `409`, and `422` responses are relayed without remapping.
+
 UUID and currency path parameters are structurally validated before forwarding. Search, filter, sorting, repeated query parameters, and pagination values are forwarded unchanged for catalogue-service validation. No catch-all route exists, so request headers or paths cannot select an arbitrary upstream.
 
-The gateway propagates `Authorization`, `Accept`, `Content-Type`, query parameters, request bodies, and the validated `X-Request-ID`. It never logs or returns bearer-token values. Customer-service and catalogue-service remain authoritative for JWT signature, issuer, audience, role, ownership, visibility, and mutation authorization; gateway JWT/RBAC enforcement is not claimed as implemented.
+The gateway propagates `Authorization`, `Accept`, `Content-Type`, query parameters, request bodies, and the validated `X-Request-ID`; order requests may additionally propagate `Idempotency-Key`. It never logs or returns bearer-token, idempotency-key, cookie, or other sensitive-header values. Customer-service, catalogue-service, and order-service remain authoritative for JWT signature, issuer, audience, role, ownership, visibility, and mutation authorization; gateway JWT/RBAC enforcement is not claimed as implemented.
 
-The upstream origins are fixed when the application starts from `CUSTOMER_SERVICE_URL` and `CATALOGUE_SERVICE_URL`. Validation permits only HTTP(S) origins without credentials, query, fragment, or path. Each capability has a bounded independent timeout, and redirect following is disabled.
+The upstream origins are fixed when the application starts from `CUSTOMER_SERVICE_URL`, `CATALOGUE_SERVICE_URL`, and `ORDER_SERVICE_URL`. Validation permits only HTTP(S) origins without credentials, query, fragment, or path. Each capability has a bounded independent timeout, and redirect following is disabled.
 
 Timeouts return a standardized `504`; connection failures return `503`; other transport failures return `502`. Responses omit internal server headers and failure details. Structured gateway logs contain correlation, route outcome, service identifier, status, and duration, but no authorization headers.
 
-`/health/live` remains dependency-free. `/health/ready` checks both customer-service and catalogue-service readiness and returns a non-sensitive `503 not_ready` response when either required synchronous dependency is unavailable or not ready. It does not expose which private address failed.
+`/health/live` remains dependency-free. `/health/ready` checks customer-service, catalogue-service, and order-service readiness and returns a non-sensitive `503 not_ready` response when a required synchronous dependency is unavailable or not ready. It does not expose which private address failed.
 
 ## Configuration
 
@@ -54,6 +75,8 @@ Timeouts return a standardized `504`; connection failures return `503`; other tr
 - `CUSTOMER_SERVICE_TIMEOUT_SECONDS` — bounded request timeout from greater than zero through 30 seconds;
 - `CATALOGUE_SERVICE_URL` — fixed internal catalogue-service origin;
 - `CATALOGUE_SERVICE_TIMEOUT_SECONDS` — bounded catalogue request timeout from greater than zero through 30 seconds;
+- `ORDER_SERVICE_URL` — fixed internal order-service origin;
+- `ORDER_SERVICE_TIMEOUT_SECONDS` — bounded order request timeout from greater than zero through 30 seconds (default `10` for checkout orchestration);
 - `CORS_ALLOWED_ORIGINS` — comma-separated explicit browser origins; wildcards and origins containing credentials, paths, queries, or fragments are rejected;
 - `APP_ENV`, `LOG_LEVEL`, `SERVICE_NAME`, and `SERVICE_VERSION` — non-secret runtime metadata.
 
@@ -69,4 +92,4 @@ python3 -m venv .venv
 .venv/bin/uvicorn app.main:app --reload
 ```
 
-The generated OpenAPI document describes the fixed customer and catalogue/inventory transport routes and normalized `502`, `503`, and `504` responses. A hardened, ClusterIP-only Kubernetes PoC workload is defined under `platform/kubernetes`; public ingress is not configured. Order and analytics routing, gateway-side JWT defence in depth, rate limits, workload-to-workload identity, and circuit breaking remain planned.
+The generated OpenAPI document describes the fixed customer, catalogue/inventory, and cart/order transport routes and normalized `502`, `503`, and `504` responses. A hardened, ClusterIP-only Kubernetes PoC workload is defined under `platform/kubernetes`; public ingress is not configured. Analytics routing, gateway-side JWT defence in depth, rate limits, workload-to-workload identity, and circuit breaking remain planned.

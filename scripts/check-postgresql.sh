@@ -40,7 +40,7 @@ main() {
     [[ "$pvc_phase" == "Bound" ]] || fail "PostgreSQL PVC phase is '${pvc_phase}', expected Bound."
 
     databases="$(kubectl --context "$KUBE_CONTEXT" -n "$NAMESPACE" exec "$POD_NAME" -- \
-        sh -ec 'psql --tuples-only --no-align --username "$POSTGRES_USER" --dbname postgres --command="SELECT datname || '\''|'\'' || pg_get_userbyid(datdba) FROM pg_database WHERE datname IN ('\''customer_db'\'', '\''keycloak_db'\'', '\''catalogue_db'\'') ORDER BY datname;"')"
+        sh -ec 'psql --tuples-only --no-align --username "$POSTGRES_USER" --dbname postgres --command="SELECT datname || '\''|'\'' || pg_get_userbyid(datdba) FROM pg_database WHERE datname IN ('\''customer_db'\'', '\''keycloak_db'\'', '\''catalogue_db'\'', '\''order_db'\'') ORDER BY datname;"')"
 
     grep -Fxq 'customer_db|customer_app' <<<"$databases" || \
         fail "Logical database 'customer_db' with owner 'customer_app' was not found."
@@ -48,11 +48,13 @@ main() {
         fail "Logical database 'keycloak_db' with owner 'keycloak_app' was not found."
     grep -Fxq 'catalogue_db|catalogue_app' <<<"$databases" || \
         fail "Logical database 'catalogue_db' with owner 'catalogue_app' was not found."
+    grep -Fxq 'order_db|order_app' <<<"$databases" || \
+        fail "Logical database 'order_db' with owner 'order_app' was not found."
 
     printf '[OK] StatefulSet is Ready.\n'
     printf '[OK] Service is ClusterIP-only at %s.\n' "$cluster_ip"
     printf '[OK] PVC postgresql-data-postgresql-0 is Bound.\n'
-    printf '[OK] Required logical databases and distinct owners exist: customer_db/customer_app, keycloak_db/keycloak_app, catalogue_db/catalogue_app.\n'
+    printf '[OK] Required logical databases and distinct owners exist: customer_db/customer_app, keycloak_db/keycloak_app, catalogue_db/catalogue_app, order_db/order_app.\n'
     printf '[INFO] No credentials or secret values were read or displayed.\n'
 }
 

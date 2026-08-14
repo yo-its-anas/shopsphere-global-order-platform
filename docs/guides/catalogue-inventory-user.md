@@ -52,6 +52,8 @@ registration permission, category/price commands, inventory/movement/statistics
 presentation, adjustment confirmation, API errors and unauthorized routes. The
 production frontend build passed.
 
-The live catalogue integration report contains 11 skips. These instructions describe
-implemented user flows, but no authenticated browser → Keycloak → API Gateway →
-catalogue-service journey is **End-to-End Validated** yet.
+The explicitly enabled live catalogue integration report contains 11 passes with zero
+skips, failures, or errors. The principal authenticated browser → Keycloak → API Gateway
+→ catalogue-service product search/detail/price/availability journey also passed. The
+inventory-statistics browser page remains **Pending / Not Verified** even though its
+authenticated Gateway integration test passed.

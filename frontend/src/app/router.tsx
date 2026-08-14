@@ -16,6 +16,12 @@ import { PricingPage } from "../features/catalogue/pages/PricingPage";
 import { ProductDetailsPage } from "../features/catalogue/pages/ProductDetailsPage";
 import { ProductFormPage } from "../features/catalogue/pages/ProductFormPage";
 import { ProductsPage } from "../features/catalogue/pages/ProductsPage";
+import { CheckoutPage } from "../features/orders/pages/CheckoutPage";
+import { MyOrdersPage } from "../features/orders/pages/MyOrdersPage";
+import { OrderConfirmationPage } from "../features/orders/pages/OrderConfirmationPage";
+import { OrderDetailsPage } from "../features/orders/pages/OrderDetailsPage";
+import { OrderManagementPage } from "../features/orders/pages/OrderManagementPage";
+import { ShoppingCartPage } from "../features/orders/pages/ShoppingCartPage";
 import { AccountActivityPage } from "../pages/AccountActivityPage";
 import { AddressesPage } from "../pages/AddressesPage";
 import { CustomerAdministrationPage } from "../pages/CustomerAdministrationPage";
@@ -162,12 +168,59 @@ export const appRoutes: RouteObject[] = [
         ),
       },
       {
+        path: "cart",
+        element: (
+          <RoleRoute roles={["customer"]}>
+            <ShoppingCartPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "checkout",
+        element: (
+          <RoleRoute roles={["customer"]}>
+            <CheckoutPage />
+          </RoleRoute>
+        ),
+      },
+      {
         path: "orders",
         element: (
-          <PlaceholderPage
-            title="Orders"
-            description="Enterprise order workflow presentation will be integrated later."
-          />
+          <RoleRoute roles={["customer"]}>
+            <MyOrdersPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "orders/confirmation/:orderId",
+        element: (
+          <RoleRoute roles={["customer"]}>
+            <OrderConfirmationPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "orders/:orderId",
+        element: (
+          <RoleRoute roles={["customer"]}>
+            <OrderDetailsPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "order-management",
+        element: (
+          <RoleRoute roles={["support", "operations_admin"]}>
+            <OrderManagementPage />
+          </RoleRoute>
+        ),
+      },
+      {
+        path: "order-management/:orderId",
+        element: (
+          <RoleRoute roles={["support", "operations_admin"]}>
+            <OrderDetailsPage operational />
+          </RoleRoute>
         ),
       },
       {

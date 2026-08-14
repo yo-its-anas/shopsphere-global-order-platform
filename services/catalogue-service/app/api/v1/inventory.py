@@ -7,11 +7,23 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
 
-from app.api.dependencies import get_cache, get_inventory_service, require_roles
+from app.api.dependencies import (
+    get_cache,
+    get_inventory_reservation_service,
+    get_inventory_service,
+    require_roles,
+)
 from app.application.cache import CacheBackend, cache_scope, get_cached_model, set_cached_model
 from app.application.inventory import DEFAULT_LOCATION, InventoryService
+from app.application.reservations import InventoryReservationService
 from app.core.security import Principal, Role
-from app.domain.models import AvailabilityState, InventoryItem, InventoryMovement, utc_now
+from app.domain.models import (
+    AvailabilityState,
+    InventoryItem,
+    InventoryMovement,
+    InventoryReservation,
+    utc_now,
+)
 from app.schemas.inventory import (
     AvailabilityResponse,
     InventoryAdjustment,
@@ -21,6 +33,9 @@ from app.schemas.inventory import (
     InventoryMovementListResponse,
     InventoryMovementResponse,
     InventoryMutationResponse,
+    InventoryReservationCreate,
+    InventoryReservationMutationResponse,
+    InventoryReservationResponse,
     InventorySettingsUpdate,
     InventoryStatisticsResponse,
 )
@@ -29,10 +44,15 @@ router = APIRouter(prefix="/inventory")
 availability_reader = require_roles(Role.CUSTOMER, Role.SUPPORT, Role.OPERATIONS_ADMIN)
 inventory_reader = require_roles(Role.SUPPORT, Role.OPERATIONS_ADMIN)
 inventory_writer = require_roles(Role.OPERATIONS_ADMIN)
+reservation_operator = require_roles(Role.ORDER_SERVICE, Role.OPERATIONS_ADMIN)
 AvailabilityReader = Annotated[Principal, Depends(availability_reader)]
 InventoryReader = Annotated[Principal, Depends(inventory_reader)]
 InventoryWriter = Annotated[Principal, Depends(inventory_writer)]
+ReservationOperator = Annotated[Principal, Depends(reservation_operator)]
 InventoryApplication = Annotated[InventoryService, Depends(get_inventory_service)]
+ReservationApplication = Annotated[
+    InventoryReservationService, Depends(get_inventory_reservation_service)
+]
 Cache = Annotated[CacheBackend, Depends(get_cache)]
 
 
@@ -77,6 +97,31 @@ def _movement_response(movement: InventoryMovement) -> InventoryMovementResponse
     )
 
 
+def _reservation_response(reservation: InventoryReservation) -> InventoryReservationResponse:
+    return InventoryReservationResponse(
+        reservation_id=reservation.id,
+        product_id=reservation.product_id,
+        quantity=reservation.quantity,
+        external_reference=reservation.external_reference,
+        status=reservation.status,
+        expires_at=reservation.expires_at,
+        created_at=reservation.created_at,
+        updated_at=reservation.updated_at,
+    )
+
+
+def _reservation_mutation_response(
+    reservation: InventoryReservation,
+    item: InventoryItem,
+    movement: InventoryMovement,
+) -> InventoryReservationMutationResponse:
+    return InventoryReservationMutationResponse(
+        reservation=_reservation_response(reservation),
+        inventory=_item_response(item),
+        movement=_movement_response(movement),
+    )
+
+
 async def _invalidate_inventory_reads(
     request: Request, cache: CacheBackend, product_id: UUID
 ) -> None:
@@ -85,6 +130,82 @@ async def _invalidate_inventory_reads(
     await cache.delete(keys.inventory_item(product_id), family="inventory-item")
     await cache.delete_prefix(keys.family_prefix("inventory-list"), family="inventory-list")
     await cache.delete(keys.inventory_statistics, family="inventory-statistics")
+
+
+@router.post(
+    "/reservations",
+    response_model=InventoryReservationMutationResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Internal inventory reservations"],
+    summary="Atomically reserve available inventory",
+)
+async def reserve_inventory(
+    payload: InventoryReservationCreate,
+    request: Request,
+    actor: ReservationOperator,
+    service: ReservationApplication,
+    cache: Cache,
+) -> InventoryReservationMutationResponse:
+    reservation, item, movement = await service.reserve(
+        actor,
+        payload.product_id,
+        payload.quantity,
+        payload.external_reference,
+        _request_id(request),
+        payload.expires_at,
+    )
+    await _invalidate_inventory_reads(request, cache, payload.product_id)
+    return _reservation_mutation_response(reservation, item, movement)
+
+
+@router.get(
+    "/reservations/{reservation_id}",
+    response_model=InventoryReservationResponse,
+    tags=["Internal inventory reservations"],
+    summary="Retrieve a reservation for retry or reconciliation",
+)
+async def get_inventory_reservation(
+    reservation_id: UUID,
+    _: ReservationOperator,
+    service: ReservationApplication,
+) -> InventoryReservationResponse:
+    return _reservation_response(await service.get(reservation_id))
+
+
+@router.post(
+    "/reservations/{reservation_id}/release",
+    response_model=InventoryReservationMutationResponse,
+    tags=["Internal inventory reservations"],
+    summary="Idempotently release an active reservation",
+)
+async def release_inventory_reservation(
+    reservation_id: UUID,
+    request: Request,
+    actor: ReservationOperator,
+    service: ReservationApplication,
+    cache: Cache,
+) -> InventoryReservationMutationResponse:
+    reservation, item, movement = await service.release(actor, reservation_id, _request_id(request))
+    await _invalidate_inventory_reads(request, cache, reservation.product_id)
+    return _reservation_mutation_response(reservation, item, movement)
+
+
+@router.post(
+    "/reservations/{reservation_id}/consume",
+    response_model=InventoryReservationMutationResponse,
+    tags=["Internal inventory reservations"],
+    summary="Consume reserved allocation without claiming warehouse shipment",
+)
+async def consume_inventory_reservation(
+    reservation_id: UUID,
+    request: Request,
+    actor: ReservationOperator,
+    service: ReservationApplication,
+    cache: Cache,
+) -> InventoryReservationMutationResponse:
+    reservation, item, movement = await service.consume(actor, reservation_id, _request_id(request))
+    await _invalidate_inventory_reads(request, cache, reservation.product_id)
+    return _reservation_mutation_response(reservation, item, movement)
 
 
 @router.get(

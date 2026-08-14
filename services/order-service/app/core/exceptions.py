@@ -9,6 +9,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
+
+from app.core.errors import ApplicationError
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +38,48 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     """Return safe request-validation details."""
 
+    safe_errors = [
+        {
+            "location": error.get("loc", ()),
+            "message": error.get("msg", "Invalid value"),
+            "type": error.get("type", "validation_error"),
+        }
+        for error in exc.errors()
+    ]
     return JSONResponse(
         status_code=422,
         content=jsonable_encoder(
             {
-                "error": {"code": "validation_error", "details": exc.errors()},
+                "error": {"code": "validation_error", "details": safe_errors},
                 "correlation_id": _request_id(request),
             }
         ),
+    )
+
+
+async def application_exception_handler(request: Request, exc: ApplicationError) -> JSONResponse:
+    headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {"code": exc.code, "message": exc.message},
+            "correlation_id": _request_id(request),
+        },
+        headers=headers,
+    )
+
+
+async def integrity_exception_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    logger.warning("database_integrity_conflict", extra={"event": "database_conflict"})
+    return JSONResponse(
+        status_code=409,
+        content={
+            "error": {
+                "code": "conflict",
+                "message": "The request conflicts with the current resource state.",
+            },
+            "correlation_id": _request_id(request),
+        },
     )
 
 
@@ -70,6 +107,8 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Register the service-wide exception policy."""
 
     handlers: tuple[tuple[type[Exception], Any], ...] = (
+        (ApplicationError, application_exception_handler),
+        (IntegrityError, integrity_exception_handler),
         (HTTPException, http_exception_handler),
         (RequestValidationError, validation_exception_handler),
         (Exception, unexpected_exception_handler),

@@ -23,6 +23,7 @@ from app.domain.models import (
     AvailabilityState,
     InventoryItem,
     InventoryMovement,
+    InventoryReservation,
     Product,
     ProductCategory,
     ProductPrice,
@@ -321,6 +322,7 @@ class InMemoryInventoryStore:
     def __init__(self) -> None:
         self.items: dict[UUID, InventoryItem] = {}
         self.movements: dict[UUID, InventoryMovement] = {}
+        self.reservations: dict[UUID, InventoryReservation] = {}
         self.locks: dict[tuple[UUID, str], asyncio.Lock] = {}
 
 
@@ -428,6 +430,31 @@ class InMemoryInventoryRepository:
             "reserved_units": sum(item.quantity_reserved for item in items),
             "available_units": sum(item.quantity_available for item in items),
         }
+
+    def add_reservation(self, reservation: InventoryReservation) -> None:
+        self._store.reservations[reservation.id] = reservation
+
+    async def get_reservation(
+        self, reservation_id: UUID, *, for_update: bool = False
+    ) -> InventoryReservation | None:
+        del for_update
+        return self._store.reservations.get(reservation_id)
+
+    async def get_reservation_by_external_reference(
+        self, external_reference: str, *, for_update: bool = False
+    ) -> InventoryReservation | None:
+        del for_update
+        return next(
+            (
+                reservation
+                for reservation in self._store.reservations.values()
+                if reservation.external_reference == external_reference
+            ),
+            None,
+        )
+
+    async def update_reservation(self, reservation: InventoryReservation) -> None:
+        self._store.reservations[reservation.id] = reservation
 
 
 class InMemoryUnitOfWork:

@@ -8,7 +8,14 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from app.domain.models import InventoryItem, InventoryMovement, Product, ProductPrice, utc_now
+from app.domain.models import (
+    InventoryItem,
+    InventoryMovement,
+    InventoryReservation,
+    Product,
+    ProductPrice,
+    utc_now,
+)
 
 PRODUCT_CREATED = "catalogue.product.created.v1"
 PRODUCT_UPDATED = "catalogue.product.updated.v1"
@@ -16,6 +23,9 @@ PRICE_CHANGED = "catalogue.price.changed.v1"
 INVENTORY_ADJUSTED = "inventory.adjusted.v1"
 INVENTORY_LOW = "inventory.low.v1"
 INVENTORY_OUT_OF_STOCK = "inventory.out-of-stock.v1"
+INVENTORY_RESERVED = "inventory.reserved.v1"
+INVENTORY_RESERVATION_RELEASED = "inventory.reservation_released.v1"
+INVENTORY_RESERVATION_CONSUMED = "inventory.reservation_consumed.v1"
 EVENT_VERSION = 1
 PRODUCER = "catalogue-service"
 
@@ -148,5 +158,41 @@ def inventory_threshold_event(item: InventoryItem, correlation_id: str) -> Domai
             "quantity_available": item.quantity_available,
             "reorder_threshold": item.reorder_threshold,
             "location_code": item.location_code,
+        },
+    )
+
+
+def inventory_reservation_event(
+    event_type: str,
+    item: InventoryItem,
+    reservation: InventoryReservation,
+    movement: InventoryMovement,
+    correlation_id: str,
+) -> DomainEvent:
+    """Build a safe reservation lifecycle event without workflow payload leakage."""
+
+    if event_type not in {
+        INVENTORY_RESERVED,
+        INVENTORY_RESERVATION_RELEASED,
+        INVENTORY_RESERVATION_CONSUMED,
+    }:
+        raise ValueError("Unsupported inventory reservation event type")
+    return DomainEvent(
+        event_type=event_type,
+        aggregate_type="inventory_reservation",
+        aggregate_id=reservation.id,
+        correlation_id=correlation_id,
+        payload={
+            "reservation_id": str(reservation.id),
+            "inventory_item_id": str(item.id),
+            "product_id": str(item.product_id),
+            "movement_id": str(movement.id),
+            "quantity": reservation.quantity,
+            "status": reservation.status.value,
+            "quantity_on_hand": item.quantity_on_hand,
+            "quantity_reserved": item.quantity_reserved,
+            "quantity_available": item.quantity_available,
+            "location_code": item.location_code,
+            "version": item.version,
         },
     )

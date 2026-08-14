@@ -6,6 +6,7 @@ from app.infrastructure.orm_models import (
     DomainEventOutboxRecord,
     InventoryItemRecord,
     InventoryMovementRecord,
+    InventoryReservationRecord,
     ProductCategoryRecord,
     ProductPriceRecord,
     ProductRecord,
@@ -47,6 +48,18 @@ def test_inventory_database_contract_enforces_balance_and_history_constraints() 
     assert "uq_inventory_movements_idempotency_key" in movement_constraints
     assert "ck_inventory_movements_type" in movement_constraints
     assert "ck_movements_result_reserved_within_on_hand" in movement_constraints
+
+
+def test_reservation_database_contract_enforces_identity_quantity_and_lifecycle() -> None:
+    constraints = {
+        constraint.name for constraint in InventoryReservationRecord.__table__.constraints
+    }
+    indexes = {index.name for index in InventoryReservationRecord.__table__.indexes}
+
+    assert "uq_inventory_reservations_external_ref" in constraints
+    assert "ck_inventory_reservations_quantity_positive" in constraints
+    assert "ck_inventory_reservations_status" in constraints
+    assert "ix_inventory_reservations_product_status" in indexes
 
 
 def test_outbox_contract_has_stable_identity_and_dispatch_indexes() -> None:

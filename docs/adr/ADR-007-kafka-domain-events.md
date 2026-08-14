@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted — the PoC has a single KRaft broker, governed versioned topics, a catalogue/inventory event envelope, a PostgreSQL transactional outbox, an asynchronous producer relay, and automated producer/retry tests. No event consumers are implemented.
+Accepted — the PoC has a single KRaft broker, governed versioned topics, shared event
+envelope conventions, Catalogue and Order PostgreSQL transactional outboxes,
+asynchronous producer relays, and producer/retry/recovery evidence. No event consumers
+are implemented.
 
 ## Context
 
@@ -15,6 +18,13 @@ Catalogue and Inventory changes also produce useful business facts for search pr
 Use Kafka for asynchronous domain-event publication and consumption. Events use versioned schemas, stable identifiers, UTC timestamps, correlation and causation identifiers, and documented ownership. Producers use a transactional outbox where reliable database-to-event publication is required; consumers must be idempotent.
 
 Implemented catalogue/inventory facts are `catalogue.product.created.v1`, `catalogue.product.updated.v1`, `catalogue.price.changed.v1`, `inventory.adjusted.v1`, `inventory.low.v1`, and `inventory.out-of-stock.v1`. Low/out-of-stock events are emitted on state transitions rather than every read. Events contain the minimum non-sensitive projection and never authorize or replace the synchronous inventory transaction. A future order reservation requires an authoritative success/failure response; events distribute committed facts afterward.
+
+Order Processing publishes `order.created.v1`, `order.confirmed.v1`,
+`order.status_changed.v1`, and `order.cancelled.v1` through an order-owned transactional
+outbox. Checkout and reservation remain synchronous commands because an event alone
+cannot provide the immediate authoritative availability decision. The E2E Kafka outage
+scenario proved the committed order remained correct and pending events published after
+broker restoration.
 
 ## Alternatives considered
 
@@ -32,7 +42,7 @@ Restrict topic access per workload, encrypt transport, authenticate clients, pro
 
 ## PoC limitations
 
-A single combined broker/controller, one PVC, one kind node, and one VM cannot demonstrate broker redundancy, zone survival, or production throughput. The PoC internal listener is plaintext and unauthenticated, with access limited by internal Services and a declarative NetworkPolicy whose enforcement depends on the CNI. Schema-registry governance, automatic outbox archival, broker/relay monitoring, and all consumers remain unimplemented.
+A single combined broker/controller, one PVC, one kind node, and one VM cannot demonstrate broker redundancy, zone survival, or production throughput. The PoC internal listener is plaintext and unauthenticated, with access limited by internal Services and a declarative NetworkPolicy whose enforcement depends on the CNI. Schema-registry governance, automatic outbox archival, full broker/relay monitoring and all event consumers remain unimplemented. Producer delivery is at least once, so duplicate delivery remains possible and future consumers must deduplicate by `event_id`.
 
 ## Production evolution
 

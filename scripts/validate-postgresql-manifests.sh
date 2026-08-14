@@ -47,6 +47,9 @@ main() {
     require_text "$rendered" "keycloak_db"
     require_text "$rendered" "catalogue_db"
     require_text "$rendered" "key: catalogue-password"
+    require_text "$rendered" "order_db"
+    require_text "$rendered" "order_app"
+    require_text "$rendered" "key: order-password"
     require_text "$rendered" "requests:"
     require_text "$rendered" "limits:"
 

@@ -18,6 +18,12 @@ spec:
           podSelector:
             matchLabels:
               app.kubernetes.io/name: catalogue-service
+        - namespaceSelector:
+            matchLabels:
+              shopsphere.io/tier: applications
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: order-service
       ports:
         - protocol: TCP
           port: 9092

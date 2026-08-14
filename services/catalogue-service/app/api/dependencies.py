@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.application.cache import CacheBackend
 from app.application.catalogue import CatalogueService
 from app.application.inventory import InventoryService
+from app.application.reservations import InventoryReservationService
 from app.core.errors import AuthenticationError, AuthorizationError, DependencyUnavailableError
 from app.core.security import Principal, Role
 
@@ -52,6 +53,13 @@ async def get_inventory_service(request: Request) -> InventoryService:
     if factory is None:
         raise DependencyUnavailableError
     return InventoryService(factory)
+
+
+async def get_inventory_reservation_service(request: Request) -> InventoryReservationService:
+    factory = request.app.state.unit_of_work_factory
+    if factory is None:
+        raise DependencyUnavailableError
+    return InventoryReservationService(factory)
 
 
 async def get_cache(request: Request) -> CacheBackend:

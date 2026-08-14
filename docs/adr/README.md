@@ -16,3 +16,4 @@ Architecture Decision Records (ADRs) capture significant choices, their context,
 | [ADR-008](ADR-008-monorepo-capstone.md) | Monorepo for the enterprise capstone | Accepted |
 | [ADR-009](ADR-009-jenkins-cicd-devsecops.md) | Jenkins for CI/CD and DevSecOps orchestration | Proposed |
 | [ADR-010](ADR-010-utc-timestamps-json-logs.md) | UTC timestamps and structured JSON logs | Accepted |
+| [ADR-011](ADR-011-reservation-based-order-saga.md) | Reservation-based Saga for order checkout | Accepted and implemented for the PoC |
