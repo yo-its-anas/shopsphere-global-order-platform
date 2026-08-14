@@ -18,6 +18,14 @@ _REQUEST_ID_HEADER = "X-Request-ID"
 logger = logging.getLogger(__name__)
 
 
+def _route_template(request: Request) -> str:
+    """Resolve a bounded route label without recording user-controlled paths."""
+    for template, pattern in request.app.state.metric_route_patterns:
+        if pattern.fullmatch(request.url.path):
+            return str(template)
+    return "unmatched"
+
+
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     """Attach a safe correlation ID to request context, logs, and responses."""
 
@@ -31,31 +39,40 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         request.state.correlation_id = request_id
         token = correlation_id.set(request_id)
         started_at = perf_counter()
+        route = _route_template(request)
+        request.app.state.metrics.request_started()
 
         try:
             response = await call_next(request)
             response.headers[_REQUEST_ID_HEADER] = request_id
+            duration_seconds = perf_counter() - started_at
+            request.app.state.metrics.observe_request(
+                request.method, route, response.status_code, duration_seconds
+            )
             logger.info(
                 "request_completed",
                 extra={
                     "event": "request_completed",
                     "http_method": request.method,
-                    "http_path": request.url.path,
+                    "http_route": route,
                     "http_status": response.status_code,
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+                    "duration_ms": round(duration_seconds * 1000, 3),
                 },
             )
             return response
         except Exception:
+            duration_seconds = perf_counter() - started_at
+            request.app.state.metrics.observe_request(request.method, route, 500, duration_seconds)
             logger.exception(
                 "request_failed",
                 extra={
                     "event": "request_failed",
                     "http_method": request.method,
-                    "http_path": request.url.path,
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+                    "http_route": route,
+                    "duration_ms": round(duration_seconds * 1000, 3),
                 },
             )
             raise
         finally:
+            request.app.state.metrics.request_finished()
             correlation_id.reset(token)

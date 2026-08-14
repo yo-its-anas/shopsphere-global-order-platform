@@ -26,7 +26,11 @@ async def live(request: Request) -> HealthResponse:
 
 @router.get("/ready", response_model=HealthResponse, summary="Check service readiness")
 async def ready(request: Request) -> HealthResponse:
-    """Report readiness; no external dependencies are configured in this foundation."""
+    """Report readiness to return complete or explicitly partial aggregate responses.
+
+    Domain dependencies are represented by dashboard response metadata. They do not make
+    this stateless process unready and thereby hide the supported partial-data behavior.
+    """
 
     settings = _settings(request)
     return HealthResponse(
