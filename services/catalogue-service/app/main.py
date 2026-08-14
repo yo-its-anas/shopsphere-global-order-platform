@@ -9,15 +9,18 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
+from starlette.routing import compile_path
 
 from app.api.health import router as health_router
+from app.api.metrics import router as metrics_router
 from app.api.v1.router import api_v1_router
-from app.application.cache import CacheBackend, CacheKeys, NullCache
+from app.application.cache import CacheBackend, CacheKeys, InstrumentedCache, NullCache
 from app.application.catalogue import UnitOfWorkFactory
 from app.application.outbox import KafkaEventPublisher, OutboxRelay
 from app.core.config import Settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
+from app.core.metrics import ServiceMetrics
 from app.core.middleware import CorrelationIdMiddleware
 from app.core.security import KeycloakTokenVerifier, TokenVerifier
 from app.infrastructure.cache import RedisJsonCache
@@ -83,6 +86,11 @@ def create_app(
 
     resolved_settings = settings or Settings.from_environment()
     configure_logging(resolved_settings.log_level)
+    metrics = ServiceMetrics(
+        resolved_settings.service_name,
+        resolved_settings.service_version,
+        resolved_settings.environment,
+    )
     resolved_engine = database_engine
     if resolved_engine is None and resolved_settings.database_url:
         resolved_engine = create_database_engine(
@@ -103,6 +111,7 @@ def create_app(
         )
     if resolved_cache is None:
         resolved_cache = NullCache()
+    resolved_cache = InstrumentedCache(resolved_cache, metrics)
     if resolved_unit_of_work_factory is None and resolved_engine is not None:
         resolved_session_factory = create_session_factory(resolved_engine)
 
@@ -122,6 +131,7 @@ def create_app(
                 poll_interval_seconds=resolved_settings.outbox_poll_interval_seconds,
                 retry_base_seconds=resolved_settings.outbox_retry_base_seconds,
                 lease_seconds=resolved_settings.outbox_lease_seconds,
+                metrics=metrics,
             )
 
     @asynccontextmanager
@@ -155,6 +165,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.state.metrics = metrics
     application.state.database_engine = resolved_engine
     application.state.database_readiness_checker = database_readiness_checker
     application.state.token_verifier = resolved_verifier
@@ -166,7 +177,12 @@ def create_app(
     application.add_middleware(CorrelationIdMiddleware)
     register_exception_handlers(application)
     application.include_router(health_router)
+    application.include_router(metrics_router)
     application.include_router(api_v1_router)
+    metric_paths = ("/metrics", *application.openapi()["paths"])
+    application.state.metric_route_patterns = tuple(
+        (path, compile_path(path)[0]) for path in metric_paths
+    )
     return application
 
 

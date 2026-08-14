@@ -30,6 +30,10 @@ class EventPublisher(Protocol):
     async def close(self) -> None: ...
 
 
+class OutboxMetrics(Protocol):
+    def observe_outbox(self, result: str) -> None: ...
+
+
 class KafkaEventPublisher:
     """Lazy producer: broker startup failures never prevent catalogue startup."""
 
@@ -82,6 +86,7 @@ class OutboxRelay:
         poll_interval_seconds: float,
         retry_base_seconds: float,
         lease_seconds: int,
+        metrics: OutboxMetrics | None = None,
     ) -> None:
         self._store = store
         self._publisher = publisher
@@ -89,6 +94,7 @@ class OutboxRelay:
         self._poll_interval_seconds = poll_interval_seconds
         self._retry_base_seconds = retry_base_seconds
         self._lease_seconds = lease_seconds
+        self._metrics = metrics
 
     async def dispatch_once(self) -> int:
         events = await self._store.claim(self._batch_size, self._lease_seconds)
@@ -97,6 +103,8 @@ class OutboxRelay:
             try:
                 await self._publisher.publish(event)
                 await self._store.mark_published(event.event_id)
+                if self._metrics is not None:
+                    self._metrics.observe_outbox("published")
                 published += 1
                 logger.info(
                     "domain_event_published",
@@ -111,6 +119,8 @@ class OutboxRelay:
             except asyncio.CancelledError:
                 raise
             except Exception:
+                if self._metrics is not None:
+                    self._metrics.observe_outbox("deferred")
                 delay = min(self._retry_base_seconds * 2, 60.0)
                 await self._store.release_for_retry(event.event_id, delay, "kafka_publish_failed")
                 logger.warning(

@@ -98,8 +98,9 @@ def create_app(
     application.include_router(health_router)
     application.include_router(metrics_router)
     application.include_router(api_v1_router)
+    metric_paths = ("/metrics", *application.openapi()["paths"])
     application.state.metric_route_patterns = tuple(
-        (path, compile_path(path)[0]) for path in application.openapi()["paths"]
+        (path, compile_path(path)[0]) for path in metric_paths
     )
     return application
 

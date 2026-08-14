@@ -165,3 +165,17 @@ def test_prometheus_metrics_use_bounded_routes(dashboard_client: ApiClient) -> N
     assert 'route="/api/v1/dashboard/summary"' in metrics.text
     assert "subject-operations-token" not in metrics.text
     assert "dashboard-test" not in metrics.text
+    assert "process_resident_memory_bytes" in metrics.text
+
+
+def test_partial_dashboard_aggregation_is_counted(
+    dashboard_client: ApiClient, sources: FakeSources
+) -> None:
+    sources.customer_error = SourceTimeoutError()
+    dashboard_client.get("/api/v1/dashboard/summary", headers=OPS)
+
+    metrics = dashboard_client.get("/metrics").text
+
+    assert "shopsphere_dashboard_aggregations_total" in metrics
+    assert 'endpoint="summary"' in metrics
+    assert 'data_status="partial"' in metrics

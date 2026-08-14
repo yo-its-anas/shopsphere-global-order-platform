@@ -146,14 +146,20 @@ async def reserve_inventory(
     service: ReservationApplication,
     cache: Cache,
 ) -> InventoryReservationMutationResponse:
-    reservation, item, movement = await service.reserve(
-        actor,
-        payload.product_id,
-        payload.quantity,
-        payload.external_reference,
-        _request_id(request),
-        payload.expires_at,
-    )
+    request.app.state.metrics.reservation_started()
+    try:
+        reservation, item, movement = await service.reserve(
+            actor,
+            payload.product_id,
+            payload.quantity,
+            payload.external_reference,
+            _request_id(request),
+            payload.expires_at,
+        )
+    except Exception:
+        request.app.state.metrics.observe_reservation("failure")
+        raise
+    request.app.state.metrics.observe_reservation("success")
     await _invalidate_inventory_reads(request, cache, payload.product_id)
     return _reservation_mutation_response(reservation, item, movement)
 

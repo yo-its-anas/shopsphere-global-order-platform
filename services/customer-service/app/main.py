@@ -8,12 +8,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
+from starlette.routing import compile_path
 
 from app.api.health import router as health_router
+from app.api.metrics import router as metrics_router
 from app.api.v1.router import api_v1_router
 from app.core.config import Settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
+from app.core.metrics import ServiceMetrics
 from app.core.middleware import CorrelationIdMiddleware
 from app.core.security import KeycloakTokenVerifier, TokenVerifier
 from app.domain.repositories import IdentityActivityProvider
@@ -54,6 +57,11 @@ def create_app(
 
     resolved_settings = settings or Settings.from_environment()
     configure_logging(resolved_settings.log_level)
+    metrics = ServiceMetrics(
+        resolved_settings.service_name,
+        resolved_settings.service_version,
+        resolved_settings.environment,
+    )
     resolved_engine = database_engine
     if resolved_engine is None and resolved_settings.database_url:
         resolved_engine = create_database_engine(
@@ -95,6 +103,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.state.metrics = metrics
     application.state.database_engine = resolved_engine
     application.state.token_verifier = resolved_verifier
     application.state.identity_activity_provider = resolved_activity_provider
@@ -106,7 +115,12 @@ def create_app(
     application.add_middleware(CorrelationIdMiddleware)
     register_exception_handlers(application)
     application.include_router(health_router)
+    application.include_router(metrics_router)
     application.include_router(api_v1_router)
+    metric_paths = ("/metrics", *application.openapi()["paths"])
+    application.state.metric_route_patterns = tuple(
+        (path, compile_path(path)[0]) for path in metric_paths
+    )
     return application
 
 

@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
-from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
+from prometheus_client import (
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    GCCollector,
+    Histogram,
+    PlatformCollector,
+    ProcessCollector,
+)
 
 
 class AnalyticsMetrics:
@@ -10,6 +18,9 @@ class AnalyticsMetrics:
 
     def __init__(self, service: str, version: str, environment: str) -> None:
         self.registry = CollectorRegistry(auto_describe=True)
+        ProcessCollector(registry=self.registry)
+        PlatformCollector(registry=self.registry)
+        GCCollector(registry=self.registry)
         common = (service, environment)
         self._service = service
         self._environment = environment

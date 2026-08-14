@@ -8,7 +8,10 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
+from prometheus_client import generate_latest
+
 from app.application.outbox import OutboxRelay
+from app.core.metrics import ServiceMetrics
 from app.domain.events import (
     INVENTORY_ADJUSTED,
     INVENTORY_LOW,
@@ -204,6 +207,34 @@ def test_retry_can_duplicate_an_event_and_preserves_the_same_event_id() -> None:
     assert asyncio.run(relay.dispatch_once()) == 1
     assert [item.event_id for item in publisher.published] == [event.event_id, event.event_id]
     assert store.retries[0][2] == "kafka_publish_failed"
+
+
+def test_outbox_publication_results_are_instrumented() -> None:
+    event = DomainEvent(
+        event_type=PRODUCT_CREATED,
+        aggregate_type="product",
+        aggregate_id=uuid4(),
+        correlation_id="metrics-outbox",
+        payload={"sku": "METRICS-001"},
+    )
+    store = RetryStore(event)
+    publisher = FakePublisher()
+    metrics = ServiceMetrics("catalogue-service", "0.1.0", "test")
+    relay = OutboxRelay(
+        store,
+        publisher,
+        batch_size=10,
+        poll_interval_seconds=1,
+        retry_base_seconds=1,
+        lease_seconds=30,
+        metrics=metrics,
+    )
+
+    assert asyncio.run(relay.dispatch_once()) == 0
+    assert asyncio.run(relay.dispatch_once()) == 1
+    output = generate_latest(metrics.registry).decode()
+    assert 'shopsphere_outbox_publications_total{environment="test",result="deferred"' in output
+    assert 'shopsphere_outbox_publications_total{environment="test",result="published"' in output
 
 
 class UnavailablePublisher(FakePublisher):

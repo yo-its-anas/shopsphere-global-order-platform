@@ -19,8 +19,9 @@ Existing prerequisites elsewhere in the repository are:
 - Kubernetes resource requests/limits;
 - domain audit and transactional-outbox operational evidence.
 
-Application `/metrics` endpoints, W3C trace propagation, service/environment/trace log
-fields, centralized collection, dashboard queries, and alert validation remain Planned.
+Application `/metrics` endpoints are implemented for the five FastAPI workloads. W3C
+trace propagation, service/environment/trace log fields, centralized collection,
+dashboard queries, and alert validation remain Planned.
 
 ## Intended contents
 

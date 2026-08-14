@@ -8,8 +8,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.routing import compile_path
 
 from app.api.health import router as health_router
+from app.api.metrics import router as metrics_router
 from app.api.v1.router import api_v1_router
 from app.application.catalogue_proxy import CatalogueServiceProxy
 from app.application.customer_proxy import CustomerServiceProxy
@@ -17,6 +19,7 @@ from app.application.order_proxy import OrderServiceProxy
 from app.core.config import Settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
+from app.core.metrics import ServiceMetrics
 from app.core.middleware import CorrelationIdMiddleware
 from app.infrastructure.http_client import ConfiguredHttpClient, UpstreamHttpClient
 
@@ -66,24 +69,29 @@ def create_app(
 
     resolved_settings = settings or Settings.from_environment()
     configure_logging(resolved_settings.log_level)
+    metrics = ServiceMetrics(
+        resolved_settings.service_name,
+        resolved_settings.service_version,
+        resolved_settings.environment,
+    )
     owns_customer_client = customer_service_client is None
     resolved_customer_client = customer_service_client or ConfiguredHttpClient(
         resolved_settings.customer_service_url,
         resolved_settings.customer_service_timeout_seconds,
     )
-    customer_service_proxy = CustomerServiceProxy(resolved_customer_client)
+    customer_service_proxy = CustomerServiceProxy(resolved_customer_client, metrics)
     owns_catalogue_client = catalogue_service_client is None
     resolved_catalogue_client = catalogue_service_client or ConfiguredHttpClient(
         resolved_settings.catalogue_service_url,
         resolved_settings.catalogue_service_timeout_seconds,
     )
-    catalogue_service_proxy = CatalogueServiceProxy(resolved_catalogue_client)
+    catalogue_service_proxy = CatalogueServiceProxy(resolved_catalogue_client, metrics)
     owns_order_client = order_service_client is None
     resolved_order_client = order_service_client or ConfiguredHttpClient(
         resolved_settings.order_service_url,
         resolved_settings.order_service_timeout_seconds,
     )
-    order_service_proxy = OrderServiceProxy(resolved_order_client)
+    order_service_proxy = OrderServiceProxy(resolved_order_client, metrics)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -110,6 +118,7 @@ def create_app(
         lifespan=lifespan,
     )
     application.state.settings = resolved_settings
+    application.state.metrics = metrics
     application.state.customer_service_proxy = customer_service_proxy
     application.state.catalogue_service_proxy = catalogue_service_proxy
     application.state.order_service_proxy = order_service_proxy
@@ -130,7 +139,12 @@ def create_app(
     )
     register_exception_handlers(application)
     application.include_router(health_router)
+    application.include_router(metrics_router)
     application.include_router(api_v1_router)
+    metric_paths = ("/metrics", *application.openapi()["paths"])
+    application.state.metric_route_patterns = tuple(
+        (path, compile_path(path)[0]) for path in metric_paths
+    )
     return application
 
 

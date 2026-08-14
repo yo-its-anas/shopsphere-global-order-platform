@@ -2,24 +2,30 @@
 
 ## Status and evidence boundary
 
-This document defines the target architecture for ShopSphere business analytics,
-application observability, infrastructure monitoring, and security monitoring. It does
-not implement application behavior or monitoring workloads.
+This document defines the architecture for ShopSphere business analytics, application
+observability, infrastructure monitoring, and security monitoring. Application metrics
+instrumentation exists; monitoring workloads remain a separate platform concern.
 
 Current repository evidence is limited to:
 
 - structured JSON application logs with UTC timestamps and correlation IDs;
 - bounded `X-Request-ID` validation and propagation through Gateway/service calls;
 - `/health/live` and `/health/ready` endpoints;
+- internal Prometheus-compatible `/metrics` endpoints on API Gateway, customer-service,
+  catalogue-service, order-service, and analytics-service;
+- bounded HTTP, process/runtime, Gateway dependency, checkout, reservation, cache,
+  outbox-publication, and analytics-aggregation metrics;
 - Kubernetes probes and resource requests/limits for deployed workloads;
 - domain audit records, status history, inventory movements, and transactional outboxes;
 - a React executive dashboard driven by explicitly labelled mock data;
-- an analytics-service skeleton exposing only health and service-information endpoints;
+- analytics-service read-only executive aggregation APIs with explicit partial-source
+  status and Prometheus instrumentation;
 - Jenkins execution of Black, Ruff, Bandit, Pytest, frontend checks, builds, and
   infrastructure validation.
 
-Prometheus, Grafana, OpenTelemetry, Loki, Wazuh, Semgrep, Trivy, and OPA are prescribed
-target controls but have no deployed or retained execution evidence in the repository.
+Prometheus, Grafana, OpenTelemetry, Loki, Wazuh, Semgrep, Trivy, and OPA remain prescribed
+platform controls but have no deployed or retained runtime execution evidence in the
+repository. Exposing metrics does not mean Prometheus has been deployed.
 
 ## Architectural principles
 
@@ -159,19 +165,37 @@ eventual consistency. Raw transactional tables are not copied indiscriminately.
 
 ### Common FastAPI metric contract
 
-Every FastAPI service and API Gateway should expose an internal `/metrics` endpoint with
-a shared naming and label policy:
+Every FastAPI service and API Gateway exposes an internal `/metrics` endpoint with a
+shared naming and label policy:
 
 - `shopsphere_http_requests_total{service,environment,method,route,status_class}`;
 - `shopsphere_http_request_duration_seconds{service,environment,method,route}` histogram;
 - `shopsphere_http_requests_in_progress{service,environment}` gauge;
-- `shopsphere_application_exceptions_total{service,environment,exception_family}`;
 - `shopsphere_service_info{service,version,environment}` fixed-value gauge.
 
+The Prometheus Python client also exports standard `process_*`, `python_info`, and
+`python_gc_*` runtime series from each process. Service-specific bounded metrics are:
+
+- Gateway: `shopsphere_gateway_upstream_requests_total` and
+  `shopsphere_gateway_upstream_request_duration_seconds`;
+- Order: `shopsphere_order_checkout_attempts_total`,
+  `shopsphere_order_checkout_results_total`, and `shopsphere_order_transitions_total`;
+- Catalogue: `shopsphere_inventory_reservation_attempts_total`,
+  `shopsphere_inventory_reservation_results_total`,
+  `shopsphere_catalogue_cache_requests_total`, and
+  `shopsphere_outbox_publications_total`;
+- Analytics: `shopsphere_dashboard_aggregations_total` and
+  `shopsphere_analytics_dependency_requests_total`.
+
 `route` is the framework route template such as `/api/v1/orders/me/{order_id}`, never
-the raw URL. `exception_family` comes from a short allow-list such as validation,
-authorization, dependency, conflict, and unexpected. Query strings are excluded. Status
-may be recorded as a bounded class (`2xx`, `4xx`, `5xx`) rather than every value.
+the raw URL. Unmatched requests use the literal `unmatched`. Query strings are excluded
+and status is recorded as a bounded class (`2xx`, `4xx`, `5xx`). Metric tests verify that
+dynamic identifiers and sensitive markers do not appear in exposition output.
+
+`/metrics` is deliberately unauthenticated for Prometheus compatibility but is an
+internal operational endpoint. Kubernetes Services remain `ClusterIP`; NetworkPolicy
+and scrape discovery must allow only the monitoring namespace or collector path. It
+must not be routed through public ingress. Prometheus is not deployed by this change.
 
 Additional bounded metrics may cover database-pool saturation, dependency latency,
 cache hit/miss/error totals, Kafka publish attempts, outbox pending count and oldest age,
@@ -272,7 +296,7 @@ must drop unapproved labels before ingestion.
 
 | Target | Intended telemetry | Current state |
 | --- | --- | --- |
-| API Gateway and five FastAPI services | Common HTTP/exception/service metrics and selected bounded dependency metrics | Health/logging exist; `/metrics` instrumentation is not implemented |
+| Five FastAPI workloads, including API Gateway | Common HTTP/runtime/service metrics and selected bounded dependency/business metrics | `/metrics` is implemented and unit validated; scraping is not configured |
 | Kubernetes API/kubelet | Node, pod, container CPU/memory, restart, and filesystem metrics | Kubernetes reports current state; Prometheus scraping not configured |
 | kube-state-metrics | Desired versus available replicas, pod status, PVC state | Not deployed |
 | node exporter | Ubuntu host CPU, memory, filesystem, network, load | Not deployed |

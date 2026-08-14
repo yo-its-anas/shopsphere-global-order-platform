@@ -15,6 +15,7 @@ from app.core.request_context import correlation_id
 
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _REQUEST_ID_HEADER = "X-Request-ID"
+_HTTP_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"})
 logger = logging.getLogger(__name__)
 
 
@@ -40,6 +41,7 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
         token = correlation_id.set(request_id)
         started_at = perf_counter()
         route = _route_template(request)
+        method = request.method if request.method in _HTTP_METHODS else "OTHER"
         request.app.state.metrics.request_started()
 
         try:
@@ -47,13 +49,13 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             response.headers[_REQUEST_ID_HEADER] = request_id
             duration_seconds = perf_counter() - started_at
             request.app.state.metrics.observe_request(
-                request.method, route, response.status_code, duration_seconds
+                method, route, response.status_code, duration_seconds
             )
             logger.info(
                 "request_completed",
                 extra={
                     "event": "request_completed",
-                    "http_method": request.method,
+                    "http_method": method,
                     "http_route": route,
                     "http_status": response.status_code,
                     "duration_ms": round(duration_seconds * 1000, 3),
@@ -62,12 +64,12 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             return response
         except Exception:
             duration_seconds = perf_counter() - started_at
-            request.app.state.metrics.observe_request(request.method, route, 500, duration_seconds)
+            request.app.state.metrics.observe_request(method, route, 500, duration_seconds)
             logger.exception(
                 "request_failed",
                 extra={
                     "event": "request_failed",
-                    "http_method": request.method,
+                    "http_method": method,
                     "http_route": route,
                     "duration_ms": round(duration_seconds * 1000, 3),
                 },
