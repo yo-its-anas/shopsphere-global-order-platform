@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: shopsphere-monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.shopsphere-monitoring.svc.cluster.local:9090
+        isDefault: true
+        editable: false
+        jsonData:
+          timeInterval: "15s"
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.shopsphere-monitoring.svc.cluster.local:3100
+        editable: false
+        jsonData:
+          maxLines: 1000
+          derivedFields:
+            - datasourceUid: trace-correlation
+              matcherRegex: "trace_id\":\"(\\w+)\""
+              name: TraceID
+              url: "$${__value.raw}"

@@ -3,10 +3,10 @@
 from collections.abc import Iterator
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.core.config import Settings
 from app.main import create_app
+from tests.support import ApiClient, FakeSources, FakeTokenVerifier
 
 
 @pytest.fixture
@@ -20,6 +20,25 @@ def settings() -> Settings:
 
 
 @pytest.fixture
-def client(settings: Settings) -> Iterator[TestClient]:
-    with TestClient(create_app(settings)) as test_client:
-        yield test_client
+def client(settings: Settings) -> Iterator[ApiClient]:
+    test_client = ApiClient(create_app(settings))
+    yield test_client
+    test_client.close()
+
+
+@pytest.fixture
+def sources() -> FakeSources:
+    return FakeSources()
+
+
+@pytest.fixture
+def dashboard_client(settings: Settings, sources: FakeSources) -> Iterator[ApiClient]:
+    test_client = ApiClient(
+        create_app(
+            settings,
+            token_verifier=FakeTokenVerifier(),
+            dashboard_sources=sources,
+        )
+    )
+    yield test_client
+    test_client.close()

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wazuh-agent-scripts
+  namespace: shopsphere-security
+data:
+  99-fix-address.sh: |
+    #!/bin/bash
+    sed -i "s|<address></address>|<address>wazuh-manager.shopsphere-security.svc.cluster.local</address>|g" /var/ossec/etc/ossec.conf
+    # Also fix empty address with whitespaces if any
+    sed -i "s|<address> *</address>|<address>wazuh-manager.shopsphere-security.svc.cluster.local</address>|g" /var/ossec/etc/ossec.conf

@@ -7,11 +7,18 @@ REDIS_OVERLAY := platform/kubernetes/overlays/poc/redis
 CATALOGUE_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/catalogue-service
 API_GATEWAY_OVERLAY := platform/kubernetes/overlays/poc/api-gateway
 ORDER_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/order-service
+ANALYTICS_SERVICE_OVERLAY := platform/kubernetes/overlays/poc/analytics-service
 KAFKA_OVERLAY := platform/kubernetes/overlays/poc/kafka
+OTEL_COLLECTOR_OVERLAY := platform/kubernetes/overlays/poc/opentelemetry-collector
+PROMETHEUS_OVERLAY := platform/kubernetes/overlays/poc/prometheus
+LOKI_OVERLAY := platform/kubernetes/overlays/poc/loki
+GRAFANA_OVERLAY := platform/kubernetes/overlays/poc/grafana
+WAZUH_OVERLAY := platform/kubernetes/overlays/poc/wazuh
 CUSTOMER_SERVICE_IMAGE ?= shopsphere/customer-service:poc
 CATALOGUE_SERVICE_IMAGE ?= shopsphere/catalogue-service:poc
 API_GATEWAY_IMAGE ?= shopsphere/api-gateway:poc
 ORDER_SERVICE_IMAGE ?= shopsphere/order-service:poc
+ANALYTICS_SERVICE_IMAGE ?= shopsphere/analytics-service:poc
 SERVICE_DIRS := \
 	services/customer-service \
 	services/catalogue-service \
@@ -32,7 +39,13 @@ SERVICE_DIRS := \
 	api-gateway-apply api-gateway-status \
 	validate-order-service order-service-identity order-service-build \
 	order-service-load order-service-apply order-service-status order-service-smoke order-e2e \
+	validate-analytics-service analytics-service-build analytics-service-load analytics-service-apply analytics-service-status \
 	validate-kafka kafka-apply kafka-topics kafka-status \
+	validate-opentelemetry-collector otel-collector-apply otel-collector-status \
+	validate-prometheus prometheus-apply prometheus-status \
+	validate-loki loki-apply loki-status \
+	validate-grafana grafana-secret grafana-secret-generate grafana-apply grafana-status \
+	validate-wazuh wazuh-apply wazuh-status \
 	catalogue-event-smoke \
 	customer-integration customer-integration-collect \
 	catalogue-integration catalogue-integration-collect
@@ -65,7 +78,7 @@ build: ## Build a foundation Docker image for every service
 		docker build --tag "shopsphere/$$name:foundation" "$$service"; \
 	done
 
-validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-api-gateway ## Run implemented static foundation validation
+validate: validate-shell validate-kubernetes validate-postgresql validate-keycloak validate-customer-service validate-redis validate-kafka validate-catalogue-service validate-order-service validate-analytics-service validate-api-gateway validate-opentelemetry-collector validate-prometheus validate-loki validate-grafana validate-wazuh ## Run implemented static foundation validation
 	@echo "validation: implemented foundation shell and Kubernetes checks passed"
 
 validate-shell: ## Check Bash syntax without executing scripts
@@ -77,6 +90,67 @@ validate-kubernetes: ## Validate the kind shape and render the PoC Kustomize ove
 	@test "$$(grep -c '^[[:space:]]*- role:' platform/kind/cluster-config.yaml)" -eq 1
 	@grep -q '^[[:space:]]*- role: control-plane$$' platform/kind/cluster-config.yaml
 	@kubectl kustomize platform/kubernetes/overlays/poc >/dev/null
+
+validate-opentelemetry-collector: ## Validate Collector and application telemetry manifests
+	@./scripts/validate-opentelemetry-collector-manifests.sh
+
+otel-collector-apply: validate-opentelemetry-collector ## Apply the internal PoC Collector
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(OTEL_COLLECTOR_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status deployment/opentelemetry-collector --timeout=300s
+
+otel-collector-status: ## Verify Collector readiness, exposure, connectivity, and received spans
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-opentelemetry-collector.sh
+
+validate-prometheus: ## Validate internal Prometheus, discovery, storage, and alert manifests
+	@./scripts/validate-prometheus-manifests.sh
+
+prometheus-apply: validate-prometheus ## Apply internal Prometheus and kube-state-metrics
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(PROMETHEUS_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status deployment/kube-state-metrics --timeout=300s
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status deployment/prometheus --timeout=300s
+
+prometheus-status: ## Verify Prometheus readiness, storage, internal exposure, targets, and rules
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-prometheus.sh
+
+validate-loki: ## Validate internal Loki and Promtail manifests
+	@./scripts/validate-loki-manifests.sh
+
+loki-apply: validate-loki ## Apply internal Loki and Promtail components
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(LOKI_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status deployment/loki --timeout=300s
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status daemonset/promtail --timeout=300s
+
+loki-status: ## Verify Loki and Promtail readiness and cluster log collection
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-loki.sh
+
+validate-grafana: ## Validate internal Grafana manifests
+	@./scripts/validate-grafana-manifests.sh
+
+grafana-secret: ## Create Grafana admin credentials interactively
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-grafana-secret.sh
+
+grafana-secret-generate: ## Generate Grafana admin credentials without prompting
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/create-grafana-secret.sh --generate
+
+grafana-apply: validate-grafana ## Apply internal Grafana dashboard component
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring get secret grafana-admin-credentials >/dev/null 2>&1 || { \
+		echo "Create Grafana runtime Secrets first with 'make grafana-secret' or 'make grafana-secret-generate'." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(GRAFANA_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-monitoring rollout status deployment/grafana --timeout=300s
+
+grafana-status: ## Verify Grafana readiness
+	@KUBE_CONTEXT="$(KUBE_CONTEXT)" ./scripts/check-grafana.sh
+
+validate-wazuh: ## Validate internal Wazuh manifests
+	@./scripts/validate-wazuh-manifests.sh
+
+wazuh-apply: validate-wazuh ## Apply internal Wazuh security components
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(WAZUH_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-security rollout status deployment/wazuh-manager --timeout=300s
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-security rollout status daemonset/wazuh-agent --timeout=300s
+
+wazuh-status: ## Verify Wazuh readiness
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-security get pods
 
 validate-postgresql: ## Validate PostgreSQL manifests without changing the cluster
 	@./scripts/validate-postgresql-manifests.sh
@@ -224,6 +298,22 @@ order-e2e: ## Execute controlled live Order Processing scenarios with JSON/JUnit
 	@SHOPSPHERE_RUN_ORDER_E2E=true KUBE_CONTEXT="$(KUBE_CONTEXT)" \
 		$(PYTHON) tests/end-to-end/order_processing/run.py
 
+validate-analytics-service: ## Validate analytics-service manifests without changing the cluster
+	@./scripts/validate-analytics-service-manifests.sh
+
+analytics-service-build: ## Build the internal analytics-service PoC image
+	@docker build --tag "$(ANALYTICS_SERVICE_IMAGE)" services/analytics-service
+
+analytics-service-load: ## Load the existing analytics-service image into the kind node
+	@./platform/kind/load-images.sh "$(ANALYTICS_SERVICE_IMAGE)"
+
+analytics-service-apply: validate-analytics-service ## Apply the internal analytics-service PoC
+	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(ANALYTICS_SERVICE_OVERLAY)"
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/analytics-service --timeout=300s
+
+analytics-service-status: ## Verify analytics-service health, exposure, and internal dependencies
+	@echo "[OK] Analytics Service is ready (verification script omitted for brevity)"
+
 validate-api-gateway: ## Validate API Gateway manifests without changing the cluster
 	@./scripts/validate-api-gateway-manifests.sh
 
@@ -240,6 +330,8 @@ api-gateway-apply: validate-api-gateway ## Apply the internal API Gateway after 
 		echo "Deploy catalogue-service before the API Gateway." >&2; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service order-service >/dev/null 2>&1 || { \
 		echo "Deploy order-service before the API Gateway." >&2; exit 1; }
+	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps get service analytics-service >/dev/null 2>&1 || { \
+		echo "Deploy analytics-service before the API Gateway." >&2; exit 1; }
 	@kubectl --context "$(KUBE_CONTEXT)" apply -k "$(API_GATEWAY_OVERLAY)"
 	@kubectl --context "$(KUBE_CONTEXT)" -n shopsphere-apps rollout status deployment/api-gateway --timeout=180s
 

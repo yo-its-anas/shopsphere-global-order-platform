@@ -1,10 +1,12 @@
 import { AsyncState } from "../../../components/AsyncState";
-import type { OrderStatus, RecentOrder } from "../../../types/dashboard";
+import type { DashboardOrderStatus, RecentOrder } from "../../../types/dashboard";
 
-const statusTone: Record<OrderStatus, string> = {
+const statusTone: Record<DashboardOrderStatus, string> = {
   Fulfilled: "positive",
   Processing: "warning",
   Exception: "critical",
+  Pending: "neutral",
+  Cancelled: "neutral",
 };
 
 interface RecentOrdersTableProps {
@@ -16,10 +18,8 @@ export function RecentOrdersTable({ orders }: RecentOrdersTableProps) {
     <section className="panel orders-panel" aria-labelledby="recent-orders-title">
       <header className="panel__header">
         <div>
-          <span className="eyebrow">Development fixture</span>
           <h2 id="recent-orders-title">Recent Orders</h2>
         </div>
-        <span className="panel__meta">Mock records</span>
       </header>
 
       {orders.length === 0 ? (

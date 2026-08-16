@@ -157,12 +157,19 @@ async def checkout(
     actor: CustomerActor,
     service: CheckoutApplication,
 ) -> OrderConfirmationResponse:
-    order, items = await service.checkout(
-        actor.principal.subject,
-        actor.access_token,
-        idempotency_key,
-        str(request.state.correlation_id),
-    )
+    request.app.state.metrics.checkout_started()
+    try:
+        with request.app.state.telemetry.operation_span("order.checkout", "checkout_orchestration"):
+            order, items = await service.checkout(
+                actor.principal.subject,
+                actor.access_token,
+                idempotency_key,
+                str(request.state.correlation_id),
+            )
+    except Exception:
+        request.app.state.metrics.observe_checkout("failure")
+        raise
+    request.app.state.metrics.observe_checkout("success")
     return _response(order, list(items))
 
 
@@ -223,12 +230,17 @@ async def get_my_order_audit(
 async def cancel_my_order(
     order_id: UUID, request: Request, actor: CustomerActor, service: OrderApplication
 ) -> OrderSummaryResponse:
-    order = await service.cancel(
-        actor.principal,
-        order_id,
-        str(request.state.correlation_id),
-        administrative=False,
-    )
+    try:
+        order = await service.cancel(
+            actor.principal,
+            order_id,
+            str(request.state.correlation_id),
+            administrative=False,
+        )
+    except Exception:
+        request.app.state.metrics.observe_transition("CANCELLED", "failure")
+        raise
+    request.app.state.metrics.observe_transition("CANCELLED", "success")
     return _summary(order)
 
 
@@ -294,12 +306,18 @@ async def transition_order_status(
     actor: Authenticated,
     service: OrderApplication,
 ) -> OrderSummaryResponse:
-    order = await service.transition(
-        actor.principal,
-        order_id,
-        OrderStatus(payload.target_status),
-        str(request.state.correlation_id),
-    )
+    target = OrderStatus(payload.target_status)
+    try:
+        order = await service.transition(
+            actor.principal,
+            order_id,
+            target,
+            str(request.state.correlation_id),
+        )
+    except Exception:
+        request.app.state.metrics.observe_transition(target.value, "failure")
+        raise
+    request.app.state.metrics.observe_transition(target.value, "success")
     return _summary(order)
 
 
@@ -310,10 +328,15 @@ async def cancel_operational_order(
     actor: Authenticated,
     service: OrderApplication,
 ) -> OrderSummaryResponse:
-    order = await service.cancel(
-        actor.principal,
-        order_id,
-        str(request.state.correlation_id),
-        administrative=True,
-    )
+    try:
+        order = await service.cancel(
+            actor.principal,
+            order_id,
+            str(request.state.correlation_id),
+            administrative=True,
+        )
+    except Exception:
+        request.app.state.metrics.observe_transition("CANCELLED", "failure")
+        raise
+    request.app.state.metrics.observe_transition("CANCELLED", "success")
     return _summary(order)

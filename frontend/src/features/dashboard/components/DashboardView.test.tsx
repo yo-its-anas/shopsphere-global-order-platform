@@ -10,6 +10,6 @@ describe("DashboardView", () => {
     expect(screen.getByText("Demo Orders")).toBeInTheDocument();
     expect(screen.getByText("DEMO-1042")).toBeInTheDocument();
     expect(screen.getByText("API Gateway (simulated)")).toBeInTheDocument();
-    expect(screen.getByText(/not live metrics/i)).toBeInTheDocument();
+    expect(screen.getByText(/Global operations overview/i)).toBeInTheDocument();
   });
 });

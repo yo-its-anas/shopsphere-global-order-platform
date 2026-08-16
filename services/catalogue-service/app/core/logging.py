@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.request_context import correlation_id
+from app.core.telemetry import current_trace_fields
 
 _LOG_RECORD_BUILTINS = frozenset(logging.makeLogRecord({}).__dict__)
 
@@ -22,10 +23,16 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
             "correlation_id": correlation_id.get(),
+            **current_trace_fields(),
         }
 
         for key, value in record.__dict__.items():
-            if key not in _LOG_RECORD_BUILTINS and key not in {"message", "asctime"}:
+            if key not in _LOG_RECORD_BUILTINS and key not in {
+                "message",
+                "asctime",
+                "trace_id",
+                "span_id",
+            }:
                 payload[key] = value
 
         if record.exc_info:

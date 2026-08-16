@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { AsyncState } from "../../../components/AsyncState";
-import { DemoDataBadge } from "../../../components/DemoDataBadge";
 import type { DashboardData } from "../../../types/dashboard";
 import { AlertBanner } from "./AlertBanner";
 import { KpiCard } from "./KpiCard";
@@ -53,9 +52,8 @@ export function DashboardView({ data, state = "ready", onRetry }: DashboardViewP
           </nav>
           <div className="page-heading__title">
             <h1>Executive Dashboard</h1>
-            <DemoDataBadge />
           </div>
-          <p>Operational overview using fictional development fixtures—not live metrics.</p>
+          <p>Global operations overview.</p>
         </div>
         <div className="page-actions" aria-label="Unavailable demonstration actions">
           <button className="button button--secondary" disabled type="button">

@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-configuration
+  namespace: shopsphere-monitoring
+data:
+  promtail.yaml: |
+    server:
+      http_listen_port: 9080
+      grpc_listen_port: 0
+
+    positions:
+      filename: /run/promtail/positions.yaml
+
+    clients:
+      - url: http://loki.shopsphere-monitoring.svc.cluster.local:3100/loki/api/v1/push
+
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        pipeline_stages:
+          - cri: {}
+          # Parse the extracted log message as JSON to get the 'level' field
+          - json:
+              expressions:
+                level: level
+          # If 'level' was successfully parsed, promote it to a Loki label
+          - labels:
+              level:
+        relabel_configs:
+          # Only keep logs from ShopSphere namespaces
+          - source_labels: [__meta_kubernetes_namespace]
+            regex: (shopsphere-apps|shopsphere-data|shopsphere-platform|shopsphere-monitoring)
+            action: keep
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: container
+          # Set 'service' label to container name
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            target_label: service
+          # Set environment label
+          - replacement: poc
+            target_label: environment
+          # Map log path for Promtail to find the container log files
+          - source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+            separator: /
+            target_label: __path__
+            replacement: /var/log/pods/*$1/*.log

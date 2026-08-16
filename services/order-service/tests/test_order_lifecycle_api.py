@@ -111,6 +111,10 @@ def test_admin_valid_transition_appends_history_audit_event_and_consumes_invento
     ]
     assert len(status_events) == 2
     assert status_events[0].correlation_id == "transition-correlation"
+    metrics = client.get("/metrics").text
+    assert 'shopsphere_order_transitions_total{environment="test",result="success"' in metrics
+    assert 'target_status="PROCESSING"' in metrics
+    assert 'target_status="FULFILLED"' in metrics
 
 
 def test_invalid_and_arbitrary_transitions_are_rejected(

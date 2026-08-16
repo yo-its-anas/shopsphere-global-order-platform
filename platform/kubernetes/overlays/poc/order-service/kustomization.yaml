@@ -12,6 +12,14 @@ configMapGenerator:
       - LOG_LEVEL=INFO
       - SERVICE_NAME=order-service
       - SERVICE_VERSION=0.1.0
+      - TELEMETRY_ENABLED=true
+      - OTEL_SDK_DISABLED=false
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://opentelemetry-collector.shopsphere-monitoring.svc.cluster.local:4318/v1/traces
+      - OTEL_EXPORTER_OTLP_TRACES_TIMEOUT=5
+      - OTEL_BSP_MAX_QUEUE_SIZE=512
+      - OTEL_BSP_MAX_EXPORT_BATCH_SIZE=128
+      - OTEL_BSP_SCHEDULE_DELAY=2000
+      - OTEL_BSP_EXPORT_TIMEOUT=5000
       - DATABASE_CONNECT_TIMEOUT_SECONDS=3
       - KEYCLOAK_ISSUER=http://localhost:8080/realms/shopsphere
       - KEYCLOAK_AUDIENCE=shopsphere-api

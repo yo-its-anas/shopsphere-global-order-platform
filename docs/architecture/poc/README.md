@@ -57,3 +57,21 @@ node. Their logical databases share one PostgreSQL server; Kafka is a single bro
 Redis a single instance. Inventory reservation and order creation are separate service
 transactions coordinated by Saga compensation rather than a distributed transaction.
 This topology has no infrastructure-level high availability.
+
+## Executive operations and observability boundary
+
+The [Executive Operations and Observability Architecture](../observability-architecture.md)
+defines four separate concerns: business, application, infrastructure, and security
+observability. Domain services retain KPI authority: Customer owns provisioned-profile
+counts, Catalogue/Inventory owns product and stock aggregates, and Order owns processed
+orders, simulated order value, and fulfilment status. Analytics-service remains a
+health/info skeleton and the React executive dashboard remains explicitly mock data.
+
+UTC JSON logs, correlation IDs, health/readiness endpoints, Kubernetes probes, resource
+limits, domain audit, transactional-outbox evidence, an internal OpenTelemetry Collector,
+and an internal Prometheus/kube-state-metrics deployment exist. The Collector and
+Prometheus targets/rules are Platform Validated. Grafana, Loki, Wazuh, live analytics,
+telemetry dashboards, durable trace storage and alert delivery are not deployed or
+validated. Local telemetry shares the only VM/node and its failure domain. A complete VM
+failure could remove both applications and monitoring; independent detection requires an
+external heartbeat or monitoring location.

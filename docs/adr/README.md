@@ -14,6 +14,7 @@ Architecture Decision Records (ADRs) capture significant choices, their context,
 | [ADR-006](ADR-006-postgresql-redis-data-platform.md) | PostgreSQL for transactions and Redis for caching | Accepted |
 | [ADR-007](ADR-007-kafka-domain-events.md) | Kafka for asynchronous domain events | Accepted |
 | [ADR-008](ADR-008-monorepo-capstone.md) | Monorepo for the enterprise capstone | Accepted |
-| [ADR-009](ADR-009-jenkins-cicd-devsecops.md) | Jenkins for CI/CD and DevSecOps orchestration | Proposed |
+| [ADR-009](ADR-009-jenkins-cicd-devsecops.md) | Jenkins for CI/CD and DevSecOps orchestration | Accepted; pipeline implemented, advanced gates planned |
 | [ADR-010](ADR-010-utc-timestamps-json-logs.md) | UTC timestamps and structured JSON logs | Accepted |
 | [ADR-011](ADR-011-reservation-based-order-saga.md) | Reservation-based Saga for order checkout | Accepted and implemented for the PoC |
+| [ADR-012](ADR-012-layered-observability-source-owned-kpis.md) | Layered observability and source-owned business KPIs | Accepted; telemetry implementation planned |

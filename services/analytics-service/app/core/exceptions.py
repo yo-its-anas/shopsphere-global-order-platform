@@ -10,6 +10,8 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.core.errors import ApplicationError
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,10 +51,29 @@ async def validation_exception_handler(
 async def unexpected_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Log unexpected failures and avoid exposing internal exception details."""
 
+    request.app.state.metrics.observe_exception("unexpected")
     logger.exception(
         "unhandled_exception",
         exc_info=exc,
         extra={"event": "unhandled_exception"},
+    )
+
+
+async def application_exception_handler(request: Request, exc: ApplicationError) -> JSONResponse:
+    """Return stable authentication/authorization/dependency errors."""
+
+    family = "authentication" if exc.status_code == 401 else "authorization"
+    if exc.status_code == 503:
+        family = "dependency"
+    request.app.state.metrics.observe_exception(family)
+    headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {"code": exc.code, "message": exc.message},
+            "correlation_id": _request_id(request),
+        },
+        headers=headers,
     )
     return JSONResponse(
         status_code=500,
@@ -70,6 +91,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     """Register the service-wide exception policy."""
 
     handlers: tuple[tuple[type[Exception], Any], ...] = (
+        (ApplicationError, application_exception_handler),
         (HTTPException, http_exception_handler),
         (RequestValidationError, validation_exception_handler),
         (Exception, unexpected_exception_handler),

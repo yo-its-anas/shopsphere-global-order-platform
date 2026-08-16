@@ -10,6 +10,7 @@ from uuid import UUID
 import httpx2
 
 from app.core.errors import DependencyUnavailableError, ProductUnavailableError
+from app.core.telemetry import Telemetry
 from app.domain.models import CatalogueProductSnapshot, InventoryReservationReceipt
 
 
@@ -60,11 +61,13 @@ class CatalogueHttpClient:
         *,
         transport: httpx2.AsyncBaseTransport | None = None,
         service_token_provider: KeycloakServiceTokenProvider | None = None,
+        telemetry: Telemetry | None = None,
     ) -> None:
         self._base_url = f"{base_url.rstrip('/')}/"
         self._timeout_seconds = timeout_seconds
         self._transport = transport
         self._service_token_provider = service_token_provider
+        self._telemetry = telemetry or Telemetry(None, "order-service")
 
     async def get_product_snapshot(
         self,
@@ -79,24 +82,33 @@ class CatalogueHttpClient:
             "X-Request-ID": correlation_id,
         }
         try:
-            async with httpx2.AsyncClient(
-                base_url=self._base_url,
-                timeout=self._timeout_seconds,
-                transport=self._transport,
-            ) as client:
-                product_response = await client.get(f"products/{product_id}", headers=headers)
-                if product_response.status_code == 404:
-                    raise ProductUnavailableError
-                if product_response.status_code != 200:
-                    raise DependencyUnavailableError
-                price_response = await client.get(f"products/{product_id}/prices", headers=headers)
-                if price_response.status_code == 404:
-                    raise ProductUnavailableError
-                if price_response.status_code != 200:
-                    raise DependencyUnavailableError
-                availability_response = await client.get(
-                    f"inventory/products/{product_id}/availability", headers=headers
-                )
+            with self._telemetry.client_span(
+                "catalogue-service product snapshot",
+                upstream_service="catalogue-service",
+                method="GET",
+            ) as span:
+                self._telemetry.inject(headers)
+                async with httpx2.AsyncClient(
+                    base_url=self._base_url,
+                    timeout=self._timeout_seconds,
+                    transport=self._transport,
+                ) as client:
+                    product_response = await client.get(f"products/{product_id}", headers=headers)
+                    if product_response.status_code == 404:
+                        raise ProductUnavailableError
+                    if product_response.status_code != 200:
+                        raise DependencyUnavailableError
+                    price_response = await client.get(
+                        f"products/{product_id}/prices", headers=headers
+                    )
+                    if price_response.status_code == 404:
+                        raise ProductUnavailableError
+                    if price_response.status_code != 200:
+                        raise DependencyUnavailableError
+                    availability_response = await client.get(
+                        f"inventory/products/{product_id}/availability", headers=headers
+                    )
+                    self._telemetry.set_http_status(span, availability_response.status_code)
         except (httpx2.TimeoutException, httpx2.NetworkError, httpx2.ConnectError) as exc:
             raise DependencyUnavailableError from exc
         except httpx2.HTTPError as exc:
@@ -205,22 +217,26 @@ class CatalogueHttpClient:
         correlation_id: str,
         **kwargs: Any,
     ) -> httpx2.Response:
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "X-Request-ID": correlation_id,
+        }
         try:
-            async with httpx2.AsyncClient(
-                base_url=self._base_url,
-                timeout=self._timeout_seconds,
-                transport=self._transport,
-            ) as client:
-                return await client.request(
-                    method,
-                    path,
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Accept": "application/json",
-                        "X-Request-ID": correlation_id,
-                    },
-                    **kwargs,
-                )
+            with self._telemetry.client_span(
+                f"catalogue-service {method.upper()}",
+                upstream_service="catalogue-service",
+                method=method,
+            ) as span:
+                self._telemetry.inject(headers)
+                async with httpx2.AsyncClient(
+                    base_url=self._base_url,
+                    timeout=self._timeout_seconds,
+                    transport=self._transport,
+                ) as client:
+                    response = await client.request(method, path, headers=headers, **kwargs)
+                    self._telemetry.set_http_status(span, response.status_code)
+                    return response
         except (httpx2.TimeoutException, httpx2.NetworkError, httpx2.ConnectError) as exc:
             raise DependencyUnavailableError from exc
         except httpx2.HTTPError as exc:

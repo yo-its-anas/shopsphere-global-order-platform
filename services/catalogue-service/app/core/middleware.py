@@ -13,7 +13,18 @@ from app.core.request_context import correlation_id
 
 _REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _REQUEST_ID_HEADER = b"x-request-id"
+_HTTP_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"})
 logger = logging.getLogger(__name__)
+
+
+def _route_template(scope: Scope) -> str:
+    application = scope.get("app")
+    patterns = getattr(getattr(application, "state", None), "metric_route_patterns", ())
+    path = str(scope.get("path", ""))
+    for template, pattern in patterns:
+        if pattern.fullmatch(path):
+            return str(template)
+    return "unmatched"
 
 
 class CorrelationIdMiddleware:
@@ -41,6 +52,11 @@ class CorrelationIdMiddleware:
         token = correlation_id.set(request_id)
         started_at = perf_counter()
         response_status = 500
+        route = _route_template(scope)
+        raw_method = str(scope.get("method", ""))
+        method = raw_method if raw_method in _HTTP_METHODS else "OTHER"
+        metrics = scope["app"].state.metrics
+        metrics.request_started()
 
         async def send_with_request_id(message: Message) -> None:
             nonlocal response_status
@@ -57,26 +73,31 @@ class CorrelationIdMiddleware:
 
         try:
             await self.app(scope, receive, send_with_request_id)
+            duration_seconds = perf_counter() - started_at
+            metrics.observe_request(method, route, response_status, duration_seconds)
             logger.info(
                 "request_completed",
                 extra={
                     "event": "request_completed",
-                    "http_method": scope.get("method", ""),
-                    "http_path": scope.get("path", ""),
+                    "http_method": method,
+                    "http_route": route,
                     "http_status": response_status,
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+                    "duration_ms": round(duration_seconds * 1000, 3),
                 },
             )
         except Exception:
+            duration_seconds = perf_counter() - started_at
+            metrics.observe_request(method, route, 500, duration_seconds)
             logger.exception(
                 "request_failed",
                 extra={
                     "event": "request_failed",
-                    "http_method": scope.get("method", ""),
-                    "http_path": scope.get("path", ""),
-                    "duration_ms": round((perf_counter() - started_at) * 1000, 3),
+                    "http_method": method,
+                    "http_route": route,
+                    "duration_ms": round(duration_seconds * 1000, 3),
                 },
             )
             raise
         finally:
+            metrics.request_finished()
             correlation_id.reset(token)

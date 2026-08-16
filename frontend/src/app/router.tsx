@@ -52,7 +52,14 @@ export const appRoutes: RouteObject[] = [
     ),
     children: [
       { index: true, element: <Navigate replace to="/dashboard" /> },
-      { path: "dashboard", element: <DashboardPage /> },
+      {
+        path: "dashboard",
+        element: (
+          <RoleRoute roles={["operations_admin"]}>
+            <DashboardPage />
+          </RoleRoute>
+        ),
+      },
       { path: "customers", element: <CustomerLandingPage /> },
       {
         path: "profile",

@@ -1,0 +1,103 @@
+apiVersion: v1
+data:
+  1-shopsphere-service-overview.json: "{\n  \"title\": \"ShopSphere Service Overview\"\
+    ,\n  \"description\": \"Availability, rate, errors, and latency for core services\"\
+    ,\n  \"uid\": \"service-overview\",\n  \"tags\": [\n    \"shopsphere\",\n    \"\
+    overview\"\n  ],\n  \"schemaVersion\": 38,\n  \"panels\": [\n    {\n      \"type\"\
+    : \"stat\",\n      \"title\": \"Service Up/Down\",\n      \"gridPos\": {\n   \
+    \     \"h\": 4,\n        \"w\": 24,\n        \"x\": 0,\n        \"y\": 0\n   \
+    \   },\n      \"targets\": [\n        {\n          \"expr\": \"up{job=\\\"shopsphere-applications\\\
+    \"}\",\n          \"legendFormat\": \"{{service}}\",\n          \"refId\": \"\
+    A\"\n        }\n      ],\n      \"fieldConfig\": {\n        \"defaults\": {\n\
+    \          \"color\": {\n            \"mode\": \"thresholds\"\n          },\n\
+    \          \"thresholds\": {\n            \"mode\": \"absolute\",\n          \
+    \  \"steps\": [\n              {\n                \"color\": \"red\",\n      \
+    \          \"value\": null\n              },\n              {\n              \
+    \  \"color\": \"green\",\n                \"value\": 1\n              }\n    \
+    \        ]\n          }\n        }\n      }\n    },\n    {\n      \"type\": \"\
+    timeseries\",\n      \"title\": \"Request Rate (rps)\",\n      \"gridPos\": {\n\
+    \        \"h\": 8,\n        \"w\": 12,\n        \"x\": 0,\n        \"y\": 4\n\
+    \      },\n      \"targets\": [\n        {\n          \"expr\": \"sum by (service)\
+    \ (rate(http_requests_total{job=\\\"shopsphere-applications\\\"}[1m]))\",\n  \
+    \        \"legendFormat\": \"{{service}}\",\n          \"refId\": \"A\"\n    \
+    \    }\n      ]\n    },\n    {\n      \"type\": \"timeseries\",\n      \"title\"\
+    : \"Error Rate (HTTP 5xx)\",\n      \"gridPos\": {\n        \"h\": 8,\n      \
+    \  \"w\": 12,\n        \"x\": 12,\n        \"y\": 4\n      },\n      \"targets\"\
+    : [\n        {\n          \"expr\": \"sum by (service) (rate(http_requests_total{job=\\\
+    \"shopsphere-applications\\\", status=~\\\"5..\\\"}[1m]))\",\n          \"legendFormat\"\
+    : \"{{service}}\",\n          \"refId\": \"A\"\n        }\n      ]\n    },\n \
+    \   {\n      \"type\": \"timeseries\",\n      \"title\": \"P95 Latency\",\n  \
+    \    \"gridPos\": {\n        \"h\": 8,\n        \"w\": 12,\n        \"x\": 0,\n\
+    \        \"y\": 12\n      },\n      \"targets\": [\n        {\n          \"expr\"\
+    : \"histogram_quantile(0.95, sum by (le, service) (rate(http_request_duration_seconds_bucket{job=\\\
+    \"shopsphere-applications\\\"}[5m])))\",\n          \"legendFormat\": \"{{service}}\"\
+    ,\n          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n      \"type\"\
+    : \"timeseries\",\n      \"title\": \"Pod Restarts\",\n      \"gridPos\": {\n\
+    \        \"h\": 8,\n        \"w\": 12,\n        \"x\": 12,\n        \"y\": 12\n\
+    \      },\n      \"targets\": [\n        {\n          \"expr\": \"sum by (pod)\
+    \ (kube_pod_container_status_restarts_total{namespace=\\\"shopsphere-apps\\\"\
+    })\",\n          \"legendFormat\": \"{{pod}}\",\n          \"refId\": \"A\"\n\
+    \        }\n      ]\n    }\n  ]\n}"
+  2-api-performance.json: "{\n  \"title\": \"API Performance\",\n  \"description\"\
+    : \"Deep dive into API requests, latency, and status codes\",\n  \"uid\": \"api-performance\"\
+    ,\n  \"tags\": [\n    \"shopsphere\",\n    \"api\",\n    \"performance\"\n  ],\n\
+    \  \"schemaVersion\": 38,\n  \"panels\": [\n    {\n      \"type\": \"timeseries\"\
+    ,\n      \"title\": \"Requests by Status Code\",\n      \"gridPos\": {\n     \
+    \   \"h\": 8,\n        \"w\": 12,\n        \"x\": 0,\n        \"y\": 0\n     \
+    \ },\n      \"targets\": [\n        {\n          \"expr\": \"sum by (status) (rate(http_requests_total{job=\\\
+    \"shopsphere-applications\\\"}[1m]))\",\n          \"legendFormat\": \"{{status}}\"\
+    ,\n          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n      \"type\"\
+    : \"timeseries\",\n      \"title\": \"Slowest Routes (P99)\",\n      \"gridPos\"\
+    : {\n        \"h\": 8,\n        \"w\": 12,\n        \"x\": 12,\n        \"y\"\
+    : 0\n      },\n      \"targets\": [\n        {\n          \"expr\": \"histogram_quantile(0.99,\
+    \ sum by (le, method, route, service) (rate(http_request_duration_seconds_bucket{job=\\\
+    \"shopsphere-applications\\\"}[5m]))) > 0\",\n          \"legendFormat\": \"{{service}}\
+    \ {{method}} {{route}}\",\n          \"refId\": \"A\"\n        }\n      ]\n  \
+    \  }\n  ]\n}"
+  3-order-processing-operations.json: "{\n  \"title\": \"Order Processing Operations\"\
+    ,\n  \"description\": \"Business operations metrics for orders and inventory\"\
+    ,\n  \"uid\": \"order-ops\",\n  \"tags\": [\n    \"shopsphere\",\n    \"business\"\
+    ,\n    \"operations\"\n  ],\n  \"schemaVersion\": 38,\n  \"panels\": [\n    {\n\
+    \      \"type\": \"timeseries\",\n      \"title\": \"Checkout Attempts vs Success\"\
+    ,\n      \"gridPos\": {\n        \"h\": 8,\n        \"w\": 12,\n        \"x\"\
+    : 0,\n        \"y\": 0\n      },\n      \"targets\": [\n        {\n          \"\
+    expr\": \"sum by (status) (rate(shopsphere_checkout_attempts_total[5m]))\",\n\
+    \          \"legendFormat\": \"{{status}} attempts\",\n          \"refId\": \"\
+    A\"\n        }\n      ]\n    },\n    {\n      \"type\": \"timeseries\",\n    \
+    \  \"title\": \"Inventory Reservation Operations\",\n      \"gridPos\": {\n  \
+    \      \"h\": 8,\n        \"w\": 12,\n        \"x\": 12,\n        \"y\": 0\n \
+    \     },\n      \"targets\": [\n        {\n          \"expr\": \"sum by (status)\
+    \ (rate(shopsphere_inventory_reservations_total[5m]))\",\n          \"legendFormat\"\
+    : \"{{status}}\",\n          \"refId\": \"A\"\n        }\n      ]\n    },\n  \
+    \  {\n      \"type\": \"timeseries\",\n      \"title\": \"Outbox Event Publication\"\
+    ,\n      \"gridPos\": {\n        \"h\": 8,\n        \"w\": 24,\n        \"x\"\
+    : 0,\n        \"y\": 8\n      },\n      \"targets\": [\n        {\n          \"\
+    expr\": \"sum by (event_type, service) (rate(shopsphere_outbox_events_published_total[5m]))\"\
+    ,\n          \"legendFormat\": \"{{service}} - {{event_type}}\",\n          \"\
+    refId\": \"A\"\n        }\n      ]\n    }\n  ]\n}"
+  4-platform-health.json: "{\n  \"title\": \"Platform Health\",\n  \"description\"\
+    : \"Infrastructure and dependency health\",\n  \"uid\": \"platform-health\",\n\
+    \  \"tags\": [\n    \"shopsphere\",\n    \"infrastructure\",\n    \"health\"\n\
+    \  ],\n  \"schemaVersion\": 38,\n  \"panels\": [\n    {\n      \"type\": \"stat\"\
+    ,\n      \"title\": \"Nodes Ready\",\n      \"gridPos\": {\n        \"h\": 4,\n\
+    \        \"w\": 6,\n        \"x\": 0,\n        \"y\": 0\n      },\n      \"targets\"\
+    : [\n        {\n          \"expr\": \"sum(kube_node_status_condition{condition=\\\
+    \"Ready\\\", status=\\\"true\\\"})\",\n          \"legendFormat\": \"Nodes\",\n\
+    \          \"refId\": \"A\"\n        }\n      ]\n    },\n    {\n      \"type\"\
+    : \"timeseries\",\n      \"title\": \"CPU Usage by Namespace\",\n      \"gridPos\"\
+    : {\n        \"h\": 8,\n        \"w\": 9,\n        \"x\": 6,\n        \"y\": 0\n\
+    \      },\n      \"targets\": [\n        {\n          \"expr\": \"sum by (namespace)\
+    \ (rate(container_cpu_usage_seconds_total{container!=\\\"POD\\\", container!=\\\
+    \"\\\"}[5m]))\",\n          \"legendFormat\": \"{{namespace}}\",\n          \"\
+    refId\": \"A\"\n        }\n      ]\n    },\n    {\n      \"type\": \"timeseries\"\
+    ,\n      \"title\": \"Memory Usage by Namespace\",\n      \"gridPos\": {\n   \
+    \     \"h\": 8,\n        \"w\": 9,\n        \"x\": 15,\n        \"y\": 0\n   \
+    \   },\n      \"targets\": [\n        {\n          \"expr\": \"sum by (namespace)\
+    \ (container_memory_working_set_bytes{container!=\\\"POD\\\", container!=\\\"\\\
+    \"})\",\n          \"legendFormat\": \"{{namespace}}\",\n          \"refId\":\
+    \ \"A\"\n        }\n      ]\n    }\n  ]\n}"
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-json
+  namespace: shopsphere-monitoring
+

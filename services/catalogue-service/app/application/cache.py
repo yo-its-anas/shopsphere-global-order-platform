@@ -27,6 +27,35 @@ class CacheBackend(Protocol):
     async def close(self) -> None: ...
 
 
+class CacheMetrics(Protocol):
+    def observe_cache(self, family: str, result: str) -> None: ...
+
+
+class InstrumentedCache:
+    """Record bounded cache outcomes while preserving backend fallback behavior."""
+
+    def __init__(self, backend: CacheBackend, metrics: CacheMetrics) -> None:
+        self._backend = backend
+        self._metrics = metrics
+
+    async def get_json(self, key: str, family: str) -> object | None:
+        value = await self._backend.get_json(key, family)
+        self._metrics.observe_cache(family, "hit" if value is not None else "miss")
+        return value
+
+    async def set_json(self, key: str, value: object, ttl: int, family: str) -> None:
+        await self._backend.set_json(key, value, ttl, family)
+
+    async def delete(self, *keys: str, family: str) -> None:
+        await self._backend.delete(*keys, family=family)
+
+    async def delete_prefix(self, prefix: str, family: str) -> None:
+        await self._backend.delete_prefix(prefix, family=family)
+
+    async def close(self) -> None:
+        await self._backend.close()
+
+
 class NullCache:
     """No-op cache used when Redis is intentionally not configured."""
 

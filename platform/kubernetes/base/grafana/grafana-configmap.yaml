@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-configuration
+  namespace: shopsphere-monitoring
+data:
+  grafana.ini: |
+    [server]
+    http_port = 3000
+    [analytics]
+    reporting_enabled = false
+    check_for_updates = false
+    [security]
+    admin_user = ${GF_SECURITY_ADMIN_USER}
+    admin_password = ${GF_SECURITY_ADMIN_PASSWORD}
+    disable_initial_admin_creation = false
+    [auth.anonymous]
+    enabled = false
+    [dashboards]
+    default_home_dashboard_path = /var/lib/grafana/dashboards/1-shopsphere-service-overview.json

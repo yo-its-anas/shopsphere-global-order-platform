@@ -1,126 +1,74 @@
-# Foundation CI Validation Pipeline
+# ShopSphere Complete CI/CD & DevSecOps Jenkins Pipeline
 
-The root `Jenkinsfile` defines the foundation validation pipeline for the ShopSphere monorepo. It establishes initial quality controls; the broader DevSecOps and deployment implementation remains planned.
+This document outlines the architecture, stages, security policies, and credential requirements for the upgraded ShopSphere monorepo Jenkins pipeline.
 
-## Pipeline behavior
+## 1. Upgraded Pipeline Stages
 
-The declarative pipeline uses one Jenkins workspace and executes these stages sequentially with fail-fast shell behavior:
+Our declarative pipeline is fully configured with an automated checkout, environment checks, full static quality gates, automated testing, container image builds, deployment to a local single-node `kind` cluster, integration/E2E tests, and rollbacks on failure.
 
-1. Explicit source checkout.
-2. Non-sensitive host and tool diagnostics.
-3. Required monorepo path and Git whitespace validation.
-4. Customer, catalogue, and order service dependency installation in an isolated Python virtual environment, followed by `pip check`.
-5. Black formatting checks and Ruff linting for all five Python services.
-6. Enforcing Bandit scans of customer-service, catalogue-service, and order-service with JSON evidence reports.
-7. Pytest unit tests for all five services with individual JUnit XML reports.
-8. Locked frontend installation using `npm ci`.
-9. Frontend Prettier and ESLint checks.
-10. Full Vitest execution plus focused catalogue/inventory and order-workflow suites with JUnit XML output, followed by a production frontend build.
-11. Dedicated customer-service, catalogue-service, and order-service Docker builds followed by validation builds for the remaining deployable images.
-12. Terraform formatting validation.
-13. Terraform provider initialization with `-backend=false` and configuration validation.
-14. Offline kind-shape, PoC Kustomize, customer-service, catalogue-service, order-service, API Gateway, Redis, and Kafka manifest validation.
-15. Offline catalogue and order Alembic revision-graph validation and SQL compilation.
-16. Optional live order integration and end-to-end validation when deliberately enabled on a PoC-capable agent.
-17. JUnit publication and archival of test, lint, security, migration, integration, and end-to-end evidence.
+### 1.1 SOURCE
+*   **Checkout:** Fetches the repository from source control.
+*   **Environment Diagnostics & Repository Validation:** Verifies client versions (`docker`, `kubectl`, `kind`, `terraform`, etc.) and ensures all critical monorepo directory structures and configurations are completely intact.
 
-The pipeline has a 90-minute overall timeout plus tighter stage timeouts, timestamps, disabled concurrent runs, and retention of 20 builds for at most 30 days. A failure stops subsequent stages. If failure occurs after any test report is created, the pipeline-level `post` handler attempts to publish and archive that partial evidence.
+### 1.2 SOFTWARE QUALITY
+*   **Python Formatting & Ruff Linting:** Ensures styling checks (Black) and rigorous static rules (Ruff) pass for all 5 microservices (`customer-service`, `catalogue-service`, `order-service`, `analytics-service`, `api-gateway`).
+*   **Frontend Linting:** Enforces Prettier formatting checks and ESLint rules.
 
-## Agent prerequisites
+### 1.3 AUTOMATED TESTING
+*   **Python Unit Tests:** Executes individual Pytest test suites with separate JUnit XML outputs for all 5 services.
+*   **Frontend Unit & Component Tests:** Performs complete Vitest execution alongside targeted feature suites with full JUnit XML generation.
 
-The Jenkins agent must provide:
+### 1.4 SECURE SOFTWARE DEVELOPMENT
+*   **Bandit Static Scan:** Evaluates customer, catalogue, and order service code bases with automated JSON security audits.
+*   **Semgrep Static Analysis:** Evaluates the monorepo recursively for advanced code vulnerabilities using the standard containerized `returntocorp/semgrep` image.
 
-- Bash, Git, Python 3 with `venv`, Node.js 20.19 or later, and npm;
-- Docker CLI, Compose plugin, Buildx, and permission for the Jenkins identity to use the Docker daemon;
-- kubectl and kind;
-- Terraform compatible with `infrastructure/terraform/versions.tf`;
-- outbound access to the approved Python, npm, Terraform-provider, and container registries.
+### 1.5 BUILD
+*   **Container Image Builds:** Compiles Docker container images sequentially for `customer-service`, `catalogue-service`, `order-service`, `analytics-service`, `api-gateway`, and `frontend`, tagging each image with `ci-${BUILD_NUMBER}`.
 
-The agent must not solve missing access with `sudo`, a privileged container, a world-writable Docker socket, or embedded credentials. Registry and cloud identities require reviewed Jenkins credential bindings before those integrations are enabled; none are configured here.
+### 1.6 CONTAINER SECURITY
+*   **Trivy File System Scanning:** Evaluates the workspace directory for vulnerabilities using `aquasec/trivy`.
+*   **Trivy Image Scanning:** Recursively scans newly built service container images to prevent CVE leakage before cluster deployment.
 
-Docker validation creates locally tagged `ci-<build number>` images. Host-level image retention and garbage collection are an administrator responsibility and are intentionally not implemented as destructive pipeline cleanup.
+### 1.7 INFRASTRUCTURE VALIDATION
+*   **Terraform Validation:** Verifies Terraform code formatting recursively and initializes providers safely using `-backend=false` to execute static safety audits offline.
+*   **Kubernetes Manifest Validation:** Uses Kustomize and Kubeval/kubectl-Kustomize utilities to statically validate cluster bases and overlay environments, covering all application, database, logging (Loki, Promtail), monitoring (Prometheus, Grafana), and security (Wazuh-manager, Wazuh-agent) manifests.
 
-## Explicit non-goals
+### 1.8 POLICY AS CODE
+*   **OPA policy compliance:** Evaluates rendered Kubernetes manifests against custom Rego rules (`platform/security/rego/security.rego`) to ensure no forbidden security configurations exist (such as privileged containers in core namespaces).
 
-- No application, infrastructure, kind, Kubernetes, or cloud deployment.
-- No Terraform plan or apply.
-- No cluster creation or deletion.
-- No image publication.
-- No authentication or secret retrieval.
-- No claim that DevSecOps controls are complete.
+### 1.9 INTEGRATION & DEPLOYMENT
+*   **PoC Deployment to kind:** Automatically loads built container images directly into the local `kind` cluster using the `load-images.sh` script, patches overlay configurations to use the newly built image tags, deploys to Kubernetes, and monitors rollout status until 100% ready.
+*   **Integration Tests:** Conditionally executes Keycloak and database-level integration suites when opt-in variables are deliberately set.
 
-## Planned DevSecOps expansion
+### 1.10 POST DEPLOYMENT & REPORTING
+*   **Smoke Validation:** Executes `./scripts/smoke-test-order-platform.sh` to send active traffic through the API Gateway, validating real-world transactions.
+*   **Rollback on Failure:** The pipeline includes a strict `post.failure` catch block. If any stage or rollout status fails or times out, it automatically triggers a safe, non-destructive rollback using `kubectl rollout undo` on all core microservices to revert to the previous working deployment revision instantly.
+*   **Evidence Archiving:** Publishes overall test summaries in the Jenkins UI via JUnit and archives all machine-readable security reports.
 
-Bandit is an active, fail-closed gate for the customer, catalogue, and order services. Findings that make Bandit return a non-zero status fail the build; JSON reports are archived even when that happens. The following gates remain documented in the Jenkinsfile but intentionally have no executable stages yet:
+---
 
-- Semgrep;
-- Trivy filesystem and image scanning;
-- Python and npm dependency scanning;
-- OPA policy checks;
-- artifact provenance and registry publication;
-- approval-controlled PoC deployment, smoke testing, and rollback validation.
+## 2. Security Gate Severity Policy
 
-The expanded implementation must define severity thresholds, false-positive governance, credential bindings, evidence retention, approval boundaries, and failure behavior before any gate or deployment becomes active.
+To ensure high technical integrity, ShopSphere enforces a strict automated security gate policy:
 
-## Local command alignment
+*   **Failure Threshold:** Any security finding flagged as `CRITICAL` or `HIGH` by Bandit, Semgrep, Trivy, or OPA will automatically fail the pipeline build.
+*   **Zero Silent Ignores:** All security exceptions must be explicitly recorded in `platform/security/suppressions.json`.
+*   **Audit-Ready Suppressions:** Every suppression requires a recorded rule identifier, a comprehensive engineering justification explaining the mitigation or false-positive nature of the finding, and an active expiration date.
 
-The pipeline uses the same repository-level building blocks available to developers:
+---
 
-```bash
-make validate-kubernetes
-make validate-customer-service
-make validate-catalogue-service
-make validate-order-service
-terraform -chdir=infrastructure/terraform fmt -check -recursive
-terraform -chdir=infrastructure/terraform init -backend=false -input=false
-terraform -chdir=infrastructure/terraform validate
-```
+## 3. Jenkins Credentials Setup & Bindings
 
-Python commands execute inside an ephemeral workspace virtual environment. Frontend commands execute inside `frontend/` against the committed `package-lock.json`.
+To prevent hard-coded secrets, credentials must be registered in the Jenkins Global Credentials Store and mapped securely using Jenkins environment bindings:
 
-## Validation cadence and capability integration policy
+1.  **PostgreSQL Credentials:**
+    *   **Name inside Jenkins:** `postgres-admin-credentials` (stored as secret text)
+    *   **Environment variable:** `PGPASSWORD`
+2.  **Keycloak Client Credentials:**
+    *   **Name inside Jenkins:** `keycloak-smoke-client-secret` (stored as secret text)
+    *   **Environment variable:** `KEYCLOAK_CLIENT_SECRET`
+3.  **Kubernetes Config:**
+    *   **Name inside Jenkins:** `kind-kubeconfig` (stored as a secure file)
+    *   **Environment variable:** `KUBECONFIG` (loaded via `withCredentials([file(credentialsId: 'kind-kubeconfig', variable: 'KUBECONFIG')])`)
 
-All checkout, static analysis, unit test, frontend build, Docker build, Terraform, and Kubernetes validation stages run on every commit. They require no live ShopSphere workload.
-
-The `PoC customer integration tests` stage is the deliberate exception because it exercises live PoC services. Jenkins marks the stage as skipped unless `SHOPSPHERE_RUN_CUSTOMER_INTEGRATION=true`; this is pipeline policy, not a synthetic passing result. When enabled, the job must inject the complete environment contract described in `tests/integration/README.md`, including masked credentials for dedicated test-only Keycloak clients. Missing configuration or unavailable services fail the enabled stage rather than being ignored.
-
-The stage creates randomized simulated identities, exercises only Keycloak, API Gateway, customer-service, and the customer database boundary, then publishes `test-results/integration/customer-identity.xml`. It does not deploy workloads, modify PostgreSQL availability, use bootstrap administrator credentials, or test incomplete business modules.
-
-The separate `PoC catalogue and inventory integration tests` stage runs only when
-`SHOPSPHERE_RUN_CATALOGUE_INTEGRATION=true`. It uses randomized synthetic catalogue
-records and publishes `test-results/integration/catalogue-inventory.xml`. Normal API
-coverage is non-disruptive. Kubernetes observation is separately enabled, and Redis or
-Kafka outage/recovery tests require their own explicit opt-ins; a skipped outage test is
-reported as skipped and is never converted into a pass. The required environment and
-cleanup boundary are documented in `tests/integration/README.md`.
-
-Catalogue validation also installs the catalogue service's pinned dependency set and
-runs Black, Ruff, Bandit, Pytest, a dedicated Docker build, focused frontend catalogue
-tests, the full frontend production build, Redis/Kafka/catalogue Kubernetes manifest
-validation, and an offline Alembic revision-graph/SQL compilation check. Machine-readable
-Ruff, Bandit, migration, frontend, backend, and integration evidence is archived.
-
-Order validation installs the order service's pinned dependency set and runs Black,
-Ruff, Bandit, its full Pytest suite, offline Alembic graph/SQL validation, a dedicated
-Docker build, focused cart/checkout/order frontend tests, and order-service Kustomize
-validation. Catalogue validation additionally re-runs the focused inventory reservation
-suite and its persistence contract so the checkout dependency remains an explicit gate.
-
-Two live order gates are intentionally separate. Set
-`SHOPSPHERE_RUN_ORDER_INTEGRATION=true` only on an agent with the configured PoC context
-to run the deployed API Gateway/order smoke validation. Set
-`SHOPSPHERE_RUN_ORDER_E2E=true` only for a controlled PoC E2E job; this runs the scenario
-suite documented under `tests/end-to-end/order_processing`, including controlled Redis
-and Kafka recovery checks, and writes JUnit, JSON, and Markdown evidence. With either
-flag unset, Jenkins records `skipped/not applicable` with an environment-dependent
-reason. It does not create a passing test result. Enabled suites fail if prerequisites
-or validation fail.
-
-The pipeline writes capability status files under `test-results/status`. An enabled
-suite is pessimistically marked failed before execution and is reclassified from its
-JUnit XML afterward. A report containing only skipped tests becomes
-`skipped/not applicable`, not passed; partially skipped reports retain exact passed,
-failed, and skipped counts. Disabled live suites are explicitly classified
-`skipped/not applicable` with a reason.
-
-Jenkins credentials must be bound as masked environment variables by job configuration. The pipeline never echoes configuration values, credentials, access tokens, or refresh tokens.
+*Note: The pipeline strictly masks all environment variables, ensuring no tokens, passwords, or client secrets are ever echoed or printed to console output logs.*

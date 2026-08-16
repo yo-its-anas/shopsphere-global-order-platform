@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: wazuh-manager
+  namespace: shopsphere-security
+spec:
+  selector:
+    app.kubernetes.io/name: wazuh-manager
+  ports:
+    - name: agent-events
+      port: 1514
+      targetPort: 1514
+    - name: agent-enroll
+      port: 1515
+      targetPort: 1515
