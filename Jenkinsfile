@@ -670,8 +670,9 @@ mkdir -p test-results/security
 kubectl kustomize platform/kubernetes/overlays/poc > test-results/security/rendered-k8s.yaml
 
 # Evaluate with OPA Docker container
-docker run --rm -v "$WORKSPACE:/apps" openpolicyagent/opa eval \
+docker run --rm -v "$WORKSPACE:/apps" openpolicyagent/opa:0.68.0 eval \
     -d /apps/platform/security/rego/security.rego \
+    -d /apps/platform/security/rego/exceptions.rego \
     -i /apps/test-results/security/rendered-k8s.yaml \
     "data.shopsphere.security.violation" \
     --format json > test-results/security/opa-results.json || echo "[INFO] OPA compliance evaluation completed."

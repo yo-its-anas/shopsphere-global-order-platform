@@ -15,6 +15,10 @@ spec:
         - namespaceSelector:
             matchLabels:
               shopsphere.io/tier: monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              shopsphere.io/tier: applications
       ports:
         - protocol: TCP
           port: 9090
