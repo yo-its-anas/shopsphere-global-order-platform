@@ -380,12 +380,18 @@ class CustomerAccountService:
         identity_events = await self._identity_activity_provider.list_activity(
             profile.identity_provider_subject, 0, fetch_limit
         )
+        from datetime import timezone
+
         merged = sorted(
             (
                 *(self._normalize_domain_event(event) for event in audit_events),
                 *identity_events,
             ),
-            key=lambda item: item.timestamp,
+            key=lambda item: (
+                item.timestamp.astimezone(timezone.utc)
+                if item.timestamp.tzinfo
+                else item.timestamp.replace(tzinfo=timezone.utc)
+            ),
             reverse=True,
         )
         return merged[offset : offset + limit]
