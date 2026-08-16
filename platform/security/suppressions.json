@@ -1,0 +1,20 @@
+{
+  "severity_gate": {
+    "fail_on_severity": ["CRITICAL", "HIGH"],
+    "allow_untrusted_scanners": true
+  },
+  "suppressions": [
+    {
+      "tool": "bandit",
+      "rule_id": "B104",
+      "reason": "Binding to all interfaces (0.0.0.0) is required for containerized entry points within internal pod networks",
+      "expiry": "2027-12-31"
+    },
+    {
+      "tool": "semgrep",
+      "rule_id": "python.lang.security.audit.raw-html-format.raw-html-format",
+      "reason": "Safe formatting of internal error summaries without browser-side execution vulnerabilities",
+      "expiry": "2027-12-31"
+    }
+  ]
+}

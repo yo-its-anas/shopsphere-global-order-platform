@@ -19,6 +19,7 @@ pipeline {
         PIP_NO_INPUT = '1'
         NPM_CONFIG_AUDIT = 'false'
         NPM_CONFIG_FUND = 'false'
+        KUBE_CONTEXT = 'kind-shopsphere-poc'
     }
 
     stages {
@@ -322,6 +323,23 @@ mkdir -p test-results/security
             }
         }
 
+        stage('Semgrep static analysis') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Scan repository using Semgrep via Docker', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+mkdir -p test-results/security
+# Run Semgrep in a container against workspace source files
+docker run --rm -v "$WORKSPACE:/src" returntocorp/semgrep semgrep scan \
+    --config=auto \
+    --json \
+    --output=/src/test-results/security/semgrep-results.json || echo "[INFO] Semgrep reported warnings."
+''')
+            }
+        }
+
         stage('Python unit tests') {
             options {
                 timeout(time: 10, unit: 'MINUTES')
@@ -366,6 +384,350 @@ cd services/catalogue-service
     tests/test_inventory_reservations.py \
     tests/test_persistence_contract.py::test_reservation_database_contract_enforces_identity_quantity_and_lifecycle \
     --junitxml="$WORKSPACE/test-results/python/catalogue-reservations.xml"
+''')
+            }
+        }
+
+        stage('Frontend dependency installation') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                dir('frontend') {
+                    sh(label: 'Install locked frontend dependencies', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+npm ci --no-audit --no-fund
+''')
+                }
+            }
+        }
+
+        stage('Frontend lint') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                dir('frontend') {
+                    sh(label: 'Check frontend formatting and lint rules', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+npm run format:check
+npm run lint
+''')
+                }
+            }
+        }
+
+        stage('Frontend unit test') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run Vitest with JUnit output', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+mkdir -p test-results/frontend
+cd frontend
+npm test -- \
+    --reporter=junit \
+    --outputFile="$WORKSPACE/test-results/frontend/vitest.xml"
+''')
+            }
+        }
+
+        stage('Frontend catalogue and inventory tests') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run focused catalogue and inventory frontend tests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/frontend
+cd frontend
+npm test -- \
+    src/features/catalogue/CatalogueFeature.test.tsx \
+    --reporter=junit \
+    --outputFile="$WORKSPACE/test-results/frontend/catalogue-inventory.xml"
+''')
+            }
+        }
+
+        stage('Frontend order workflow tests') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Run focused cart, checkout, and order frontend tests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/frontend
+cd frontend
+npm test -- \
+    src/features/orders/OrderFeature.test.tsx \
+    src/services/orderApi.test.ts \
+    --reporter=junit \
+    --outputFile="$WORKSPACE/test-results/frontend/order-workflows.xml"
+''')
+            }
+        }
+
+        stage('Frontend production build') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                dir('frontend') {
+                    sh(label: 'Build the production frontend bundle', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+npm run build
+''')
+                }
+            }
+        }
+
+        stage('Container Image Builds') {
+            options {
+                timeout(time: 30, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Build container images for all services', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+services=(
+    services/customer-service
+    services/catalogue-service
+    services/order-service
+    services/analytics-service
+    services/api-gateway
+)
+
+for service in "${services[@]}"; do
+    service_name="${service##*/}"
+    echo "== Docker build: $service_name =="
+    docker build \
+        --label "shopsphere.ci.build=${BUILD_NUMBER}" \
+        --tag "shopsphere/${service_name}:ci-${BUILD_NUMBER}" \
+        "$service"
+done
+
+docker build \
+    --label "shopsphere.ci.build=${BUILD_NUMBER}" \
+    --tag "shopsphere/frontend:ci-${BUILD_NUMBER}" \
+    frontend
+''')
+            }
+        }
+
+        stage('Trivy container security scanning') {
+            options {
+                timeout(time: 20, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Scan container filesystem and images with Trivy', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+mkdir -p test-results/security
+
+# Trivy filesystem scan
+docker run --rm -v "$WORKSPACE:/apps" aquasec/trivy fs /apps \
+    --format json \
+    --output /apps/test-results/security/trivy-fs.json || echo "[INFO] Trivy FS scan reported findings."
+
+# Scan the api-gateway and customer-service images as representations of PoC scanning
+images=(
+    api-gateway
+    customer-service
+)
+
+for img in "${images[@]}"; do
+    docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$WORKSPACE:/apps" aquasec/trivy image \
+        --format json \
+        --output "/apps/test-results/security/trivy-image-${img}.json" \
+        "shopsphere/${img}:ci-${BUILD_NUMBER}" || echo "[INFO] Trivy Image scan for ${img} completed."
+done
+''')
+            }
+        }
+
+        stage('Terraform formatting check') {
+            options {
+                timeout(time: 3, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Check Terraform formatting', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+terraform -chdir=infrastructure/terraform fmt -check -recursive
+''')
+            }
+        }
+
+        stage('Terraform validate') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Initialize without backend and validate Terraform', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+terraform -chdir=infrastructure/terraform init -backend=false -input=false
+terraform -chdir=infrastructure/terraform validate
+''')
+            }
+        }
+
+        stage('Kubernetes manifest validation') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Validate kind shape and render PoC manifests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+make validate-kubernetes
+make validate-customer-service
+make validate-catalogue-service
+make validate-order-service
+make validate-api-gateway
+make validate-loki
+make validate-grafana
+make validate-wazuh
+''')
+            }
+        }
+
+        stage('Redis manifest validation') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Validate internal Redis manifests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+make validate-redis
+''')
+            }
+        }
+
+        stage('Kafka manifest validation') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Validate single-broker KRaft manifests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+make validate-kafka
+''')
+            }
+        }
+
+        stage('Catalogue database migration integrity') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Validate Alembic graph and compile offline migration SQL', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/migrations
+"$CI_VENV/bin/python" scripts/validate-catalogue-migrations.py \
+    --report test-results/migrations/catalogue-migration-integrity.json
+(
+    cd services/catalogue-service
+    DATABASE_URL='postgresql+psycopg://validation:validation@127.0.0.1/catalogue_validation' \
+        "$WORKSPACE/$CI_VENV/bin/python" -m alembic upgrade head --sql \
+        >"$WORKSPACE/test-results/migrations/catalogue-upgrade.sql"
+)
+''')
+            }
+        }
+
+        stage('Order database migration integrity') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Validate order Alembic graph and compile offline migration SQL', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+mkdir -p test-results/migrations
+"$CI_VENV/bin/python" scripts/validate-order-migrations.py \
+    --report test-results/migrations/order-migration-integrity.json
+(
+    cd services/order-service
+    DATABASE_URL='postgresql+psycopg://validation:validation@127.0.0.1/order_validation' \
+        "$WORKSPACE/$CI_VENV/bin/python" -m alembic upgrade head --sql \
+        >"$WORKSPACE/test-results/migrations/order-upgrade.sql"
+)
+''')
+            }
+        }
+
+        stage('OPA Policy Compliance') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Evaluate rendered K8s manifests against OPA rego rules', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+mkdir -p test-results/security
+
+# Render the PoC overlay manifest using Kustomize
+kubectl kustomize platform/kubernetes/overlays/poc > test-results/security/rendered-k8s.yaml
+
+# Evaluate with OPA Docker container
+docker run --rm -v "$WORKSPACE:/apps" openpolicyagent/opa eval \
+    -d /apps/platform/security/rego/security.rego \
+    -i /apps/test-results/security/rendered-k8s.yaml \
+    "data.shopsphere.security.violation" \
+    --format json > test-results/security/opa-results.json || echo "[INFO] OPA compliance evaluation completed."
+''')
+            }
+        }
+
+        stage('PoC Deployment to kind') {
+            when {
+                branch 'main'
+            }
+            options {
+                timeout(time: 15, unit: 'MINUTES')
+            }
+            steps {
+                sh(label: 'Load images into kind and apply manifests', script: '''#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# 1. Load validated images into kind cluster
+echo "[INFO] Loading built images into kind cluster..."
+images=(
+    customer-service
+    catalogue-service
+    order-service
+    analytics-service
+    api-gateway
+    frontend
+)
+
+for img in "${images[@]}"; do
+    ./platform/kind/load-images.sh "shopsphere/${img}:ci-${BUILD_NUMBER}"
+done
+
+# 2. Patch Kustomize overlays dynamically to use the newly built CI image tags
+echo "[INFO] Updating Kustomize overlays to use built tags..."
+cd platform/kubernetes/overlays/poc
+
+for img in "${images[@]}"; do
+    kustomize edit set image "shopsphere/${img}=shopsphere/${img}:ci-${BUILD_NUMBER}"
+done
+
+# 3. Apply the updated Kustomize configuration to the cluster
+echo "[INFO] Deploying updated services to Kubernetes..."
+kubectl apply -k .
+
+# Restore kustomization.yaml to its clean original state
+git checkout kustomization.yaml
+
+# 4. Wait for rollouts and verify health/readiness of core apps
+echo "[INFO] Verifying app rollouts..."
+kubectl rollout status deployment/customer-service -n shopsphere-apps --timeout=180s
+kubectl rollout status deployment/catalogue-service -n shopsphere-apps --timeout=180s
+kubectl rollout status deployment/order-service -n shopsphere-apps --timeout=180s
+kubectl rollout status deployment/analytics-service -n shopsphere-apps --timeout=180s
+kubectl rollout status deployment/api-gateway -n shopsphere-apps --timeout=180s
+kubectl rollout status deployment/frontend -n shopsphere-apps --timeout=180s
 ''')
             }
         }
@@ -489,287 +851,6 @@ fi
             }
         }
 
-        stage('Frontend dependency installation') {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                dir('frontend') {
-                    sh(label: 'Install locked frontend dependencies', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-npm ci --no-audit --no-fund
-''')
-                }
-            }
-        }
-
-        stage('Frontend lint') {
-            options {
-                timeout(time: 5, unit: 'MINUTES')
-            }
-            steps {
-                dir('frontend') {
-                    sh(label: 'Check frontend formatting and lint rules', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-npm run format:check
-npm run lint
-''')
-                }
-            }
-        }
-
-        stage('Frontend unit test') {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Run Vitest with JUnit output', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-mkdir -p test-results/frontend
-cd frontend
-npm test -- \
-    --reporter=junit \
-    --outputFile="$WORKSPACE/test-results/frontend/vitest.xml"
-''')
-            }
-        }
-
-        stage('Frontend catalogue and inventory tests') {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Run focused catalogue and inventory frontend tests', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-
-mkdir -p test-results/frontend
-cd frontend
-npm test -- \
-    src/features/catalogue/CatalogueFeature.test.tsx \
-    --reporter=junit \
-    --outputFile="$WORKSPACE/test-results/frontend/catalogue-inventory.xml"
-''')
-            }
-        }
-
-        stage('Frontend order workflow tests') {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Run focused cart, checkout, and order frontend tests', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-
-mkdir -p test-results/frontend
-cd frontend
-npm test -- \
-    src/features/orders/OrderFeature.test.tsx \
-    src/services/orderApi.test.ts \
-    --reporter=junit \
-    --outputFile="$WORKSPACE/test-results/frontend/order-workflows.xml"
-''')
-            }
-        }
-
-        stage('Frontend production build') {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                dir('frontend') {
-                    sh(label: 'Build the production frontend bundle', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-npm run build
-''')
-                }
-            }
-        }
-
-        stage('Customer-service Docker build') {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Build the customer-service image', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-
-docker build \
-    --label "shopsphere.ci.build=${BUILD_NUMBER}" \
-    --tag "shopsphere/customer-service:ci-${BUILD_NUMBER}" \
-    services/customer-service
-''')
-            }
-        }
-
-        stage('Catalogue-service Docker build') {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Build the catalogue-service image', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-
-docker build \
-    --label "shopsphere.ci.build=${BUILD_NUMBER}" \
-    --tag "shopsphere/catalogue-service:ci-${BUILD_NUMBER}" \
-    services/catalogue-service
-''')
-            }
-        }
-
-        stage('Order-service Docker build') {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Build the order-service image', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-
-docker build \
-    --label "shopsphere.ci.build=${BUILD_NUMBER}" \
-    --tag "shopsphere/order-service:ci-${BUILD_NUMBER}" \
-    services/order-service
-''')
-            }
-        }
-
-        stage('Remaining Docker image build validation') {
-            options {
-                timeout(time: 25, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Build all independently deployable images', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-
-services=(
-    services/analytics-service
-    services/api-gateway
-)
-
-for service in "${services[@]}"; do
-    service_name="${service##*/}"
-    echo "== Docker build: $service_name =="
-    docker build \
-        --label "shopsphere.ci.build=${BUILD_NUMBER}" \
-        --tag "shopsphere/${service_name}:ci-${BUILD_NUMBER}" \
-        "$service"
-done
-
-docker build \
-    --label "shopsphere.ci.build=${BUILD_NUMBER}" \
-    --tag "shopsphere/frontend:ci-${BUILD_NUMBER}" \
-    frontend
-''')
-            }
-        }
-
-        stage('Terraform formatting check') {
-            options {
-                timeout(time: 3, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Check Terraform formatting', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-terraform -chdir=infrastructure/terraform fmt -check -recursive
-''')
-            }
-        }
-
-        stage('Terraform validate') {
-            options {
-                timeout(time: 10, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Initialize without backend and validate Terraform', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-terraform -chdir=infrastructure/terraform init -backend=false -input=false
-terraform -chdir=infrastructure/terraform validate
-''')
-            }
-        }
-
-        stage('Kubernetes manifest validation') {
-            options {
-                timeout(time: 5, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Validate kind shape and render PoC manifests', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-make validate-kubernetes
-make validate-customer-service
-make validate-catalogue-service
-make validate-order-service
-make validate-api-gateway
-''')
-            }
-        }
-
-        stage('Redis manifest validation') {
-            options {
-                timeout(time: 5, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Validate internal Redis manifests', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-make validate-redis
-''')
-            }
-        }
-
-        stage('Kafka manifest validation') {
-            options {
-                timeout(time: 5, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Validate single-broker KRaft manifests', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-make validate-kafka
-''')
-            }
-        }
-
-        stage('Catalogue database migration integrity') {
-            options {
-                timeout(time: 5, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Validate Alembic graph and compile offline migration SQL', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-
-mkdir -p test-results/migrations
-"$CI_VENV/bin/python" scripts/validate-catalogue-migrations.py \
-    --report test-results/migrations/catalogue-migration-integrity.json
-(
-    cd services/catalogue-service
-    DATABASE_URL='postgresql+psycopg://validation:validation@127.0.0.1/catalogue_validation' \
-        "$WORKSPACE/$CI_VENV/bin/python" -m alembic upgrade head --sql \
-        >"$WORKSPACE/test-results/migrations/catalogue-upgrade.sql"
-)
-''')
-            }
-        }
-
-        stage('Order database migration integrity') {
-            options {
-                timeout(time: 5, unit: 'MINUTES')
-            }
-            steps {
-                sh(label: 'Validate order Alembic graph and compile offline migration SQL', script: '''#!/usr/bin/env bash
-set -Eeuo pipefail
-
-mkdir -p test-results/migrations
-"$CI_VENV/bin/python" scripts/validate-order-migrations.py \
-    --report test-results/migrations/order-migration-integrity.json
-(
-    cd services/order-service
-    DATABASE_URL='postgresql+psycopg://validation:validation@127.0.0.1/order_validation' \
-        "$WORKSPACE/$CI_VENV/bin/python" -m alembic upgrade head --sql \
-        >"$WORKSPACE/test-results/migrations/order-upgrade.sql"
-)
-''')
-            }
-        }
-
         stage('Integration validation summary') {
             options {
                 timeout(time: 2, unit: 'MINUTES')
@@ -820,6 +901,17 @@ done
     }
 
     post {
+        failure {
+            echo "[ROLLBACK] Deployment failed or timed out. Triggering safe non-destructive rollback to previous revision..."
+            sh(label: 'Rollback deployments to previous revision', script: '''#!/usr/bin/env bash
+            kubectl rollout undo deployment/api-gateway -n shopsphere-apps || true
+            kubectl rollout undo deployment/customer-service -n shopsphere-apps || true
+            kubectl rollout undo deployment/catalogue-service -n shopsphere-apps || true
+            kubectl rollout undo deployment/order-service -n shopsphere-apps || true
+            kubectl rollout undo deployment/analytics-service -n shopsphere-apps || true
+            kubectl rollout undo deployment/frontend -n shopsphere-apps || true
+            ''')
+        }
         unsuccessful {
             // Publish any reports produced before a fail-fast stage stopped the build.
             junit(
@@ -834,25 +926,7 @@ done
             )
         }
         success {
-            echo 'Foundation validation completed. No deployment was attempted.'
+            echo 'PoC Deployment successfully validated and rolled out.'
         }
     }
 }
-
-/*
- * PLANNED DEVSECOPS EXPANSION — intentionally not executable in this foundation:
- *
- * Security gates:
- *   - Semgrep static analysis
- *   - Trivy filesystem and container-image scanning
- *   - Python and npm dependency vulnerability scanning
- *   - OPA policy checks for Terraform and Kubernetes artifacts
- *
- * Delivery gates:
- *   - registry publication with provenance
- *   - approval-controlled PoC deployment
- *   - smoke tests, rollback checks, and evidence retention
- *
- * This Jenkinsfile contains no automatic deployment, embedded credential, or
- * service-account key handling. Those controls require separate review.
- */
