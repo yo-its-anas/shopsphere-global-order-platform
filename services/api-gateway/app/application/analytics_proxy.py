@@ -14,12 +14,8 @@ from app.core.metrics import ServiceMetrics
 from app.infrastructure.http_client import UpstreamHttpClient
 
 logger = logging.getLogger(__name__)
-_FORWARDED_REQUEST_HEADERS = frozenset(
-    {"authorization", "accept", "content-type"}
-)
-_FORWARDED_RESPONSE_HEADERS = frozenset(
-    {"content-type", "retry-after"}
-)
+_FORWARDED_REQUEST_HEADERS = frozenset({"authorization", "accept", "content-type"})
+_FORWARDED_RESPONSE_HEADERS = frozenset({"content-type", "retry-after"})
 
 
 class AnalyticsServiceProxy:

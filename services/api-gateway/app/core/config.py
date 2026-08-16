@@ -65,7 +65,9 @@ class Settings:
                 os.getenv("CATALOGUE_SERVICE_TIMEOUT_SECONDS", "5")
             )
             order_service_timeout_seconds = float(os.getenv("ORDER_SERVICE_TIMEOUT_SECONDS", "10"))
-            analytics_service_timeout_seconds = float(os.getenv("ANALYTICS_SERVICE_TIMEOUT_SECONDS", "5"))
+            analytics_service_timeout_seconds = float(
+                os.getenv("ANALYTICS_SERVICE_TIMEOUT_SECONDS", "5")
+            )
         except ValueError as exc:
             raise ValueError("Upstream timeout values must be numeric") from exc
 
