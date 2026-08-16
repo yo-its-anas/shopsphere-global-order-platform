@@ -728,7 +728,6 @@ kubectl rollout status deployment/catalogue-service -n shopsphere-apps --timeout
 kubectl rollout status deployment/order-service -n shopsphere-apps --timeout=180s
 kubectl rollout status deployment/analytics-service -n shopsphere-apps --timeout=180s
 kubectl rollout status deployment/api-gateway -n shopsphere-apps --timeout=180s
-kubectl rollout status deployment/frontend -n shopsphere-apps --timeout=180s
 ''')
             }
         }
