@@ -18,6 +18,7 @@ async def proxy_dashboard(
     proxy: AnalyticsServiceProxy = request.app.state.analytics_service_proxy
     return await proxy.forward(request, f"/api/v1/dashboard/{path}")
 
+
 @router.get("/operations/{path:path}")
 async def proxy_operations(
     request: Request,
