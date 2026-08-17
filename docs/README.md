@@ -29,5 +29,6 @@ This document acts as the global directory index for all version-controlled docu
 *   ✅ [International Standards Alignment](standards/international-standards-alignment.md) — Mapped alignment with ISO 12207, ISO 25010, ISO 27001, NIST SSDF, NIST CSF 2.0, OWASP Top 10, OWASP ASVS, CIS, COBIT, and ITIL 4 frameworks.
 *   ✅ [SRE Observability Validation Report](evidence/formal-validation-report.md) — Live metrics scraping, Loki log ingest, and failure alert testing log evidence.
 *   ✅ [Performance Baseline Report](tests/performance/performance_report.md) — Concurrent transaction latency percentiles ($p_{50}, p_{95}, p_{99}$).
+*   ✅ [Global Scaling Redesign Defense](viva/scaling-to-millions-defense.md) — Multi-zone GKE, Cloud SQL, and international GDPR sharding defense pack.
 *   ✅ [Viva Architecture Defense Pack](viva/architecture-defense.md) — SRE Socratic questions, short/deep defenses, and trade-off matrices for your panel review.
 
