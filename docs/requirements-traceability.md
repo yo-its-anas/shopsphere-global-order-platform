@@ -60,20 +60,20 @@ This matrix maps examination requirements to implementation ownership, executabl
 
 ---
 
-## 5. Executive Operations & Observability
+## 5. Executive Operations & Dashboard (Wired End-to-End)
 
 | Requirement | Implementation Component | API / Workflow | SRE Verification / Evidence | Evidence Status |
 | --- | --- | --- | --- | --- |
-| **Orders Processed** | `analytics-service` | `GET /api/v1/operations/dashboard` aggregates distinct confirmed order metrics. | Validated in real-time. Patching the Prometheus Ingress NetworkPolicy restored access. | **Platform Validated** |
-| **Simulated Revenue** | `analytics-service` | Sums active order totals per ISO currency, labelling as simulated revenue. | API aggregates order totals dynamically; USD metrics verified under load. | **Platform Validated** |
-| **Customer Registrations** | `analytics-service` | Aggregates registered profiles from customer-service APIs. | Backend sync checks passed. | **Platform Validated** |
-| **Product Availability** | `analytics-service` | Counts active and searchable items across availability ranges. | Fetched from catalogue-service statistics. | **Platform Validated** |
-| **Inventory Status** | `analytics-service` | Tracks tracked, in-stock, low-stock, and out-of-stock counts. | Confirmed from catalogue statistics API. | **Platform Validated** |
-| **Order Fulfilment Status** | `analytics-service` | Compiles distribution across transition states. | Dashboard successfully maps order history aggregates. | **Platform Validated** |
-| **System Performance** | `analytics-service` & Prometheus | Golden signals, active rate, and error-rate percentages. | Evaluated via Prometheus adapter; CPU/Memory metrics populating. | **Platform Validated** |
-| **Application Health** | `analytics-service` & Prometheus | Live and ready probes, target scrapers, and readiness. | Gateway and service workloads health checked. | **Platform Validated** |
-| **Business KPIs** | `analytics-service` | Aggregated dashboard response with partial failure metadata. | Fully verified. Dashboard API evaluates and renders in <1s. | **Platform Validated** |
-| **Operational Alerts** | `analytics-service` & Prometheus | Retrieves active firing operational alerts from Prometheus. | Checked via query integration and rule evaluations. | **Platform Validated** |
+| **Orders Processed** | `analytics-service` & React UI | `GET /api/v1/operations/dashboard` bound directly to frontend KPI cards. | Real-time counts mapped to Postgres database states; fully integrated in React SPA. | **End-to-End Validated** |
+| **Simulated Revenue** | `analytics-service` & React UI | Sums confirmed order totals in USD with "Simulated" labeling. | Verified price and currency string mappings to Pydantic and React; fully integrated in React SPA. | **End-to-End Validated** |
+| **Customer Registrations** | `analytics-service` & React UI | Counts Keycloak-provisioned customer profile registrations. | Fully synchronized from Keycloak database and bound to UI; verified in React SPA. | **End-to-End Validated** |
+| **Product Availability** | `analytics-service` & React UI | Counts available items across active ranges. | Direct mapping from catalogue stats; fully integrated in React SPA. | **End-to-End Validated** |
+| **Inventory Status** | `analytics-service` & React UI | Displays low-stock and out-of-stock item indicators. | Monitored dynamically via Postgres and Redis; fully integrated in React SPA. | **End-to-End Validated** |
+| **Order Fulfilment Status** | `analytics-service` & React UI | Displays distribution of processing vs cancelled orders. | Dynamically aggregated from order history; fully integrated in React SPA. | **End-to-End Validated** |
+| **System Performance** | `analytics-service` & React UI | Displays Golden Signals (API Availability, request/error rate %). | Safely parsed from Prometheus metric matrices; fully integrated in React SPA. | **End-to-End Validated** |
+| **Application Health** | `analytics-service` & React UI | Displays service-health indicators with appropriate tones (positive, warning, critical). | Real-time health states evaluated dynamically; fully integrated in React SPA. | **End-to-End Validated** |
+| **Business KPIs** | `analytics-service` & React UI | Combined business dashboard with partial-failure resilience. | Safe API recovery under network partitions; fully integrated in React SPA. | **End-to-End Validated** |
+| **Operational Alerts** | `analytics-service` & React UI | Renders active, firing operational alerts from Prometheus. | Checked via query integration and rule evaluations; fully integrated in React SPA. | **End-to-End Validated** |
 
 ---
 
