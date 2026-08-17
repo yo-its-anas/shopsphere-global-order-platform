@@ -97,6 +97,7 @@ This document records an exhaustive, evidence-based audit of the ShopSphere Glob
 | Software Quality Reports | Jenkins execution (Ruff/Black logs) | **Implemented** | Same as test reports; commit static snapshots if required. |
 | Architecture Documentation | `docs/architecture/` | **Documented** | Expand to include the missing diagram artifacts below. |
 | Security Configuration Doc | `SECURITY.md`, `wazuh-security-monitoring.md`, `rego/README.md` | **Documented** | None. Sandboxed scope and rules strictly mapped. |
+| International Standards Doc | `docs/standards/international-standards-alignment.md` | **Documented** | None. Comprehensive governance mapping compiled successfully. |
 
 ---
 

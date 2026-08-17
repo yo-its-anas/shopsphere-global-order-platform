@@ -29,6 +29,12 @@ This directory contains the authoritative domain designs, decision records, and 
 
 ---
 
-## 4. Architecture Decision Records (ADRs)
+## 4. International Standards Alignment
+
+*   [International Standards Alignment Matrix](../standards/international-standards-alignment.md) — Mapped audit of the PoC controls against ISO 12207, ISO 25010, ISO 27001, NIST SSDF, NIST CSF 2.0, OWASP Top 10, OWASP ASVS, CIS, COBIT, and ITIL 4 frameworks.
+
+---
+
+## 5. Architecture Decision Records (ADRs)
 
 Refer to [docs/adr/README.md](../adr/README.md) to review the authoritative Architecture Decision Records (ADRs 001–012) governing microservice boundaries, UTC structured logging, single-node kind topologies, keycloak RBAC, and reservation-based checkout flows.
