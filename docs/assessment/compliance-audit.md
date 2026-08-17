@@ -64,21 +64,21 @@ This document records an exhaustive, evidence-based audit of the ShopSphere Glob
 
 | Artefact | Repository Evidence | Validation Status | Recommended Action |
 | --- | --- | --- | --- |
-| Enterprise Software Architecture Diagram | Not located in `/docs/architecture/` | **Missing** | Create comprehensive holistic system diagram (PlantUML/Draw.io). |
-| High-Level Solution Architecture Diagram | Not located in `/docs/architecture/` | **Missing** | Create conceptual platform layer map. |
-| Detailed System Architecture Diagram | Not located in `/docs/architecture/` | **Missing** | Create granular infrastructure resource layout. |
-| Microservices Architecture Diagram | Not located in `/docs/architecture/` | **Missing** | Map HTTP, gRPC, and Kafka service boundaries explicitly. |
-| API Gateway Architecture Diagram | Not located in `/docs/architecture/` | **Missing** | Map gateway ingress routes and auth verification loops. |
-| Enterprise Network Architecture Diagram | Not located in `/docs/architecture/` | **Missing** | Detail VNet, subnets, firewalls, and NetworkPolicies. |
-| Network Flow Diagram | Not located in `/docs/architecture/` | **Missing** | Detail traffic traversal (Ingress → API Gateway → Pods). |
-| Data Flow Diagram Level 0 | Not located in `/docs/architecture/` | **Missing** | Create high-level context diagram for domain entities. |
-| Data Flow Diagram Level 1 | Not located in `/docs/architecture/` | **Missing** | Detail data traversal across databases, Redis, and Kafka. |
-| Software Component Diagram | Not located in `/docs/architecture/` | **Missing** | Map code package layouts inside service boundaries. |
-| UML Class Diagram | Not located in `/docs/architecture/` | **Missing** | Map SQLAlchemy ORM and Domain entity relations. |
-| UML Sequence Diagram for customer order workflow | `docs/architecture/order-processing-domain-design.md` | **Implemented** | None. Executed using Mermaid syntax. |
-| CI/CD Pipeline Architecture Diagram | Not located in `/docs/architecture/` | **Missing** | Map Jenkins stages, triggers, and deployment targets. |
-| DevSecOps Pipeline Diagram | Not located in `/docs/architecture/` | **Missing** | Detail static, container, and runtime security checkpoints. |
-| Database ERD | Not located in `/docs/architecture/` | **Missing** | Generate Entity Relationship Diagrams for PostgreSQL logical schemas. |
+| Enterprise Software Architecture Diagram | `docs/architecture/system-architecture-maps.md` (Diagram 1) | **Implemented** | None. Modeled accurately via Mermaid. |
+| High-Level Solution Architecture Diagram | `docs/architecture/system-architecture-maps.md` (Diagram 2) | **Implemented** | None. Modeled accurately via Mermaid. |
+| Detailed System Architecture Diagram | `docs/architecture/system-architecture-maps.md` (Diagram 3) | **Implemented** | None. Modeled accurately via Mermaid. |
+| Microservices Architecture Diagram | `docs/architecture/system-architecture-maps.md` (Diagram 4) | **Implemented** | None. Modeled accurately via Mermaid. |
+| API Gateway Architecture Diagram | `docs/architecture/system-architecture-maps.md` (Diagram 5) | **Implemented** | None. Modeled accurately via Mermaid. |
+| Enterprise Network Architecture Diagram | `docs/architecture/network-and-data-flows.md` (Diagram 6) | **Implemented** | None. Modeled accurately via Mermaid. |
+| Network Flow Diagram | `docs/architecture/network-and-data-flows.md` (Diagram 7) | **Implemented** | None. Modeled accurately via Mermaid. |
+| Data Flow Diagram Level 0 | `docs/architecture/network-and-data-flows.md` (Diagram 8) | **Implemented** | None. Modeled accurately via Mermaid. |
+| Data Flow Diagram Level 1 | `docs/architecture/network-and-data-flows.md` (Diagram 9) | **Implemented** | None. Modeled accurately via Mermaid. |
+| Software Component Diagram | `docs/architecture/network-and-data-flows.md` (Diagram 10) | **Implemented** | None. Modeled accurately via Mermaid. |
+| UML Class Diagram | `docs/architecture/network-and-data-flows.md` (Diagram 11) | **Implemented** | None. Modeled accurately via Mermaid. |
+| UML Sequence Diagram for customer order workflow | `docs/architecture/workflows-pipelines-and-database.md` (Diagram 12) | **Implemented** | None. Modeled accurately via Mermaid. |
+| CI/CD Pipeline Architecture Diagram | `docs/architecture/workflows-pipelines-and-database.md` (Diagram 13) | **Implemented** | None. Modeled accurately via Mermaid. |
+| DevSecOps Pipeline Diagram | `docs/architecture/workflows-pipelines-and-database.md` (Diagram 14) | **Implemented** | None. Modeled accurately via Mermaid. |
+| Database ERD | `docs/architecture/workflows-pipelines-and-database.md` (Diagram 15) | **Implemented** | None. Modeled accurately via Mermaid. |
 
 ---
 
@@ -105,8 +105,7 @@ This document records an exhaustive, evidence-based audit of the ShopSphere Glob
 ### 🔴 CRITICAL GAPS
 *(Could prevent meeting mandatory EduQual examination requirements)*
 
-1.  **Missing Visual Architectural Artifacts:** 14 out of the 15 mandatory structural diagrams (Enterprise, Network, CI/CD, DevSecOps, ERD, Class, Data Flow) are completely missing. Only the Order Sequence diagram exists. These must be drafted immediately (using PlantUML, Draw.io, or Mermaid) to satisfy grading rubrics.
-2.  **Missing Frontend Dashboard Bindings:** The `analytics-service` API operates flawlessly returning live business KPI metrics. However, the React frontend components currently render static mock data. The UI must be wired to consume the live `/api/v1/operations/dashboard` endpoints to claim end-to-end Executive Dashboard completion.
+1.  **Missing Frontend Dashboard Bindings:** The `analytics-service` API operates flawlessly returning live business KPI metrics. However, the React frontend components currently render static mock data. The UI must be wired to consume the live `/api/v1/operations/dashboard` endpoints to claim end-to-end Executive Dashboard completion.
 
 ### 🟡 IMPORTANT GAPS
 *(Should be resolved before formal presentation)*
