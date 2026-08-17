@@ -19,6 +19,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: order-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: analytics-service
       ports:
         - protocol: TCP
           port: 8000

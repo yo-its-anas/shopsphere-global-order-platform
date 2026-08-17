@@ -25,8 +25,11 @@ This document acts as the global directory index for all version-controlled docu
 ### 4.3 Quality, Standards & Compliance Audit Reports
 *   ✅ [Capstone Compliance Audit](assessment/compliance-audit.md) — Full requirements verification matrix.
 *   ✅ [Submission Integrity Audit](assessment/submission-integrity-audit.md) — Architectural and documentation consistency audit.
+*   ✅ [Final Pre-Submission Validation Report](assessment/final-readiness-report.md) — SRE pre-submission readiness verification.
+*   ✅ [Security & Submission Hygiene Audit](assessment/final-security-hygiene-audit.md) — Credentials leakage and scheduling terminology audit.
 *   ✅ [International Standards Alignment](standards/international-standards-alignment.md) — Mapped alignment with ISO 12207, ISO 25010, ISO 27001, NIST SSDF, NIST CSF 2.0, OWASP Top 10, OWASP ASVS, CIS, COBIT, and ITIL 4 frameworks.
 *   ✅ [SRE Observability Validation Report](evidence/formal-validation-report.md) — Live metrics scraping, Loki log ingest, and failure alert testing log evidence.
 *   ✅ [Performance Baseline Report](tests/performance/performance_report.md) — Concurrent transaction latency percentiles ($p_{50}, p_{95}, p_{99}$).
+*   ✅ [Global Scaling Redesign Defense](viva/scaling-to-millions-defense.md) — Multi-zone GKE, Cloud SQL, and international GDPR sharding defense pack.
 *   ✅ [Viva Architecture Defense Pack](viva/architecture-defense.md) — SRE Socratic questions, short/deep defenses, and trade-off matrices for your panel review.
 
