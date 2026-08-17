@@ -1,6 +1,6 @@
 # Architecture Maps & Decisions
 
-This directory contains the authoritative domain designs, decision records, and platform maps for the ShopSphere Enterprise Platform PoC. It cleanly separates single-node sandbox constraints from recommended future-state production architectures.
+This directory contains the authoritative domain designs, decision records, and platform maps for the ShopSphere Global Enterprise Platform PoC. It cleanly separates single-node sandbox constraints from recommended future-state production architectures.
 
 ---
 
@@ -11,7 +11,7 @@ This directory contains the authoritative domain designs, decision records, and 
 
 ---
 
-## 2. Platform Observability & Security Designs (Upgraded)
+## 2. Platform Observability & Security Designs
 
 *   [Observability & Operations Architecture](observability-architecture.md) — Governs the multi-tiered visibility layout. Strictly separates **Executive Dashboard** (business KPIs), **Grafana** (SRE technical metrics & Loki logs), and **Wazuh** (security monitoring).
 *   [Centralized Loki Ingestion & Logging](loki-logging-poc-and-evolution.md) — Maps the structured Promtail DaemonSet log harvesting flow, showing how correlation IDs and trace IDs are propagated across microservices without exposing credentials.
@@ -20,6 +20,21 @@ This directory contains the authoritative domain designs, decision records, and 
 
 ---
 
-## 3. Architecture Decision Records (ADRs)
+## 3. Structural Architectural Maps (PoC & Production)
+
+*   [System Architecture Maps (Diagrams 1–5)](system-architecture-maps.md) — Maps the holistic Enterprise, Solution, Physical System, decoupled Microservices, and Ingress Gateway structures of the PoC.
+*   [Network & Data Flows (Diagrams 6–11)](network-and-data-flows.md) — Maps single-node Network layout, Network flow sequences, Level 0 & Level 1 Data Flows, internal code Component packages, and domain UML Class models.
+*   [Workflows, Pipelines, & Database ERDs (Diagrams 12–15)](workflows-pipelines-and-database.md) — Maps dynamic checkout Sequences, Jenkins CI/CD pipelines, DevSecOps shift-left checkpoints, and relational database ERDs.
+*   [Recommended Production Enterprise Architecture (Diagrams 16–17)](production/recommended-enterprise-architecture.md) — Maps cloud-scale highly available GKE blueprints, cloud databases, and a direct side-by-side comparison with the PoC limitations.
+
+---
+
+## 4. International Standards Alignment
+
+*   [International Standards Alignment Matrix](../standards/international-standards-alignment.md) — Mapped audit of the PoC controls against ISO 12207, ISO 25010, ISO 27001, NIST SSDF, NIST CSF 2.0, OWASP Top 10, OWASP ASVS, CIS, COBIT, and ITIL 4 frameworks.
+
+---
+
+## 5. Architecture Decision Records (ADRs)
 
 Refer to [docs/adr/README.md](../adr/README.md) to review the authoritative Architecture Decision Records (ADRs 001–012) governing microservice boundaries, UTC structured logging, single-node kind topologies, keycloak RBAC, and reservation-based checkout flows.
