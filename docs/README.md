@@ -22,8 +22,10 @@ This document acts as the global directory index for all version-controlled docu
 
 ---
 
-## 3. Governance, Audit, & SRE Evidence Reports
-*   ✅ [Capstone Compliance Audit](assessment/compliance-audit.md) — Complete requirements verification matrix.
+### 4.3 Quality, Standards & Compliance Audit Reports
+*   ✅ [Capstone Compliance Audit](assessment/compliance-audit.md) — Full requirements verification matrix.
 *   ✅ [International Standards Alignment](standards/international-standards-alignment.md) — Mapped alignment with ISO 12207, ISO 25010, ISO 27001, NIST SSDF, NIST CSF 2.0, OWASP Top 10, OWASP ASVS, CIS, COBIT, and ITIL 4 frameworks.
-*   ✅ [SRE Observability Validation Report](evidence/formal-validation-report.md) — Live metrics scraping, Loki log ingestion, and controlled failure alerts log evidence.
+*   ✅ [SRE Observability Validation Report](evidence/formal-validation-report.md) — Live metrics scraping, Loki log ingest, and failure alert testing log evidence.
 *   ✅ [Performance Baseline Report](tests/performance/performance_report.md) — Concurrent transaction latency percentiles ($p_{50}, p_{95}, p_{99}$).
+*   ✅ [Viva Architecture Defense Pack](viva/architecture-defense.md) — SRE Socratic questions, short/deep defenses, and trade-off matrices for your panel review.
+
