@@ -148,7 +148,8 @@ graph LR
 Illustrates the physical PostgreSQL database models, data types, index constraints, and logical service divisions.
 
 ### Mermaid Diagram
-```erDiagram
+```mermaid
+erDiagram
     subgraph customer_db [Service: customer-service]
         customer_profiles {
             uuid id PK
