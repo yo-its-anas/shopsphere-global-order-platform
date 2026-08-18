@@ -202,12 +202,11 @@ graph TD
         end
     end
 
-    %% Dependencies
     V1 -->|Validate requests| SCH
     V1 -->|Invoke use cases| UC
     UC -->|Query domain rules| ENT
     UC -->|Interact with storage| REP_INT
-    DB_REP -.-|>|Implement| REP_INT
+    DB_REP -.->|Implement| REP_INT
     DB_REP -->|Fetch data| ORM
 ```
 
