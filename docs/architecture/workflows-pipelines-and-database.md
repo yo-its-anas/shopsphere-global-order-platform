@@ -150,61 +150,55 @@ Illustrates the physical PostgreSQL database models, data types, index constrain
 ### Mermaid Diagram
 ```mermaid
 erDiagram
-    subgraph customer_db [Service: customer-service]
-        customer_profiles {
-            uuid id PK
-            varchar identity_provider_subject UK
-            varchar email
-            varchar status
-            timestamp_utc created_at
-        }
-        customer_addresses {
-            uuid id PK
-            uuid customer_id FK
-            varchar street
-            varchar city
-            boolean is_default
-        }
-    end
+    customer_profiles {
+        uuid id PK
+        varchar identity_provider_subject UK
+        varchar email
+        varchar status
+        timestamp_utc created_at
+    }
+    customer_addresses {
+        uuid id PK
+        uuid customer_id FK
+        varchar street
+        varchar city
+        boolean is_default
+    }
 
-    subgraph catalogue_db [Service: catalogue-service]
-        products {
-            uuid product_id PK
-            varchar sku UK
-            varchar name
-            boolean is_searchable
-        }
-        product_prices {
-            uuid price_id PK
-            uuid product_id FK
-            numeric amount
-            varchar currency
-        }
-        inventory_items {
-            uuid inventory_id PK
-            uuid product_id FK
-            integer on_hand
-            integer reserved
-            integer version
-        }
-    end
+    products {
+        uuid product_id PK
+        varchar sku UK
+        varchar name
+        boolean is_searchable
+    }
+    product_prices {
+        uuid price_id PK
+        uuid product_id FK
+        numeric amount
+        varchar currency
+    }
+    inventory_items {
+        uuid inventory_id PK
+        uuid product_id FK
+        integer on_hand
+        integer reserved
+        integer version
+    }
 
-    subgraph order_db [Service: order-service]
-        orders {
-            uuid order_id PK
-            varchar order_number UK
-            varchar customer_subject FK
-            numeric total
-            varchar status
-        }
-        order_items {
-            uuid item_id PK
-            uuid order_id FK
-            uuid product_id FK
-            numeric unit_price
-            integer quantity
-        }
-    end
+    orders {
+        uuid order_id PK
+        varchar order_number UK
+        varchar customer_subject FK
+        numeric total
+        varchar status
+    }
+    order_items {
+        uuid item_id PK
+        uuid order_id FK
+        uuid product_id FK
+        numeric unit_price
+        integer quantity
+    }
 
     customer_profiles ||--o{ customer_addresses : "owns"
     products ||--o{ product_prices : "prices"
