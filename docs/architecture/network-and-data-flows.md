@@ -225,7 +225,8 @@ graph TD
 Represents the domain entities, properties, and relationships within the ShopSphere backend domain.
 
 ### Mermaid Diagram
-```classDiagram
+```mermaid
+classDiagram
     class CustomerProfile {
         +UUID id
         +string identity_provider_subject
