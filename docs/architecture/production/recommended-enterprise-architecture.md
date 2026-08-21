@@ -1,7 +1,7 @@
 # Recommended Production Architecture (Diagrams 16–17)
 
 > **CRITICAL ARCHITECTURAL WARNING**
-> 
+>
 > **THE DIAGRAMS IN THIS DOCUMENT DESCRIBE A RECOMMENDED PRODUCTION-REFERENCE ARCHITECTURE.**
 > **THIS ARCHITECTURE IS NOT IMPLEMENTED IN THE POC ENVIRONMENT.**
 
@@ -23,40 +23,65 @@ graph TD
     end
 
     subgraph MultiZoneCluster [Multi-Zone Google Kubernetes Engine - GKE]
+        subgraph Autoscaling [Cluster Autoscaling & Pod Elasticity]
+            HPA[Horizontal Pod Autoscaler - HPA]
+            CA[Cluster Autoscaler]
+        end
+
         subgraph ZoneA [Availability Zone A]
             subgraph AppsA [Namespace: apps]
-                GW_A[Ingress Gateway / API Gateway - Pod A]
-                OS_A[order-service - Pod A]
-                CAT_A[catalogue-service - Pod A]
+                subgraph ServicesA [Stateless ShopSphere Microservices - Zone A]
+                    GW_A[api-gateway]
+                    CS_A[customer-service]
+                    CAT_A[catalogue-service]
+                    OS_A[order-service]
+                    AS_A[analytics-service]
+                end
             end
         end
 
         subgraph ZoneB [Availability Zone B]
             subgraph AppsB [Namespace: apps]
-                GW_B[Ingress Gateway / API Gateway - Pod B]
-                OS_B[order-service - Pod B]
-                CAT_B[catalogue-service - Pod B]
+                subgraph ServicesB [Stateless ShopSphere Microservices - Zone B]
+                    GW_B[api-gateway]
+                    CS_B[customer-service]
+                    CAT_B[catalogue-service]
+                    OS_B[order-service]
+                    AS_B[analytics-service]
+                end
             end
         end
     end
 
+    subgraph SecurityTier [Production Security & Identity]
+        SM[Secret Manager]
+        KMS[Cloud KMS]
+        WI[Workload Identity]
+    end
+
     subgraph ManagedDataTier [Managed Database & Message Tiers]
-        subgraph CloudSQL [Managed Multi-AZ PostgreSQL]
+        subgraph CloudSQL [Cloud SQL for PostgreSQL - HA + Read Replicas + PITR]
             PG_M[(Primary Write Node)]
             PG_R[(Read Replica Zone B)]
             PG_M -->|Synchronous Replication| PG_R
         end
 
-        subgraph Memorystore [Managed Replicated Redis]
+        subgraph Memorystore [Memorystore for Redis - HA]
             RD_M[(Redis Master)]
             RD_S[(Redis Replica)]
             RD_M -->|Sync Replication| RD_S
         end
 
-        subgraph MSK [Managed Multi-Broker Kafka Cluster]
+        subgraph MSK [Managed / Multi-Broker Kafka Cluster]
             KB1[[Broker 1 - Zone A]]
             KB2[[Broker 2 - Zone B]]
         end
+    end
+
+    subgraph RecoveryTier [Disaster Recovery & Data Protection]
+        DR[Backups / PITR / DR]
+        CS_DR[Cloud Storage / cross-region recovery]
+        DR --> CS_DR
     end
 
     GLB -->|Route traffic| GW_A
@@ -66,18 +91,29 @@ graph TD
     GW_B --> OS_B
     GW_A --> CAT_A
     GW_B --> CAT_B
+    GW_A --> CS_A
+    GW_B --> CS_B
+    GW_A --> AS_A
+    GW_B --> AS_B
 
     %% Database Writes
     OS_A -->|Write| PG_M
     OS_B -->|Write| PG_M
     CAT_A -->|Read Replica| PG_R
     CAT_B -->|Read Replica| PG_R
+    CS_A -->|Write| PG_M
+    CS_B -->|Write| PG_M
 
     %% Cache & Kafka
     CAT_A --> RD_M
     CAT_B --> RD_M
     OS_A --> KB1
     OS_B --> KB2
+
+    %% Security & Storage mappings (logical dependencies)
+    ServicesA -.->|Fetch Secrets| SM
+    ServicesB -.->|Fetch Secrets| SM
+    PG_M -.->|Async Archive| DR
 ```
 
 ### Accompanying Metadata
